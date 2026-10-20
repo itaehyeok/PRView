@@ -1,7 +1,7 @@
 #!/bin/bash
-# PRayer 설치·업데이트. 같은 명령으로 둘 다 된다.
+# PRView 설치·업데이트. 같은 명령으로 둘 다 된다.
 #
-#   curl -fsSL https://raw.githubusercontent.com/itaehyeok/PRayer/main/Scripts/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/terry-yes/PRView/main/Scripts/setup.sh | bash
 #
 # 하는 일
 #   1. gh · claude 가 있는지 보고, 없으면 깔아 준다(brew)
@@ -11,8 +11,12 @@
 # 이미 깔려 있으면 버전만 견줘서 새 것일 때만 바꾼다.
 set -uo pipefail
 
-REPO="itaehyeok/PRayer"
-NAME="PRayer"
+# 0.6.0 부터 배포처(2026-10-20 이사). 옛 저장소 itaehyeok/PRayer 에도 이 스크립트를 올려 두므로
+# 옛 한 줄 명령으로 실행해도 여기서 받는다.
+REPO="terry-yes/PRView"
+# 화면에 보이는 이름. 앱 파일 이름은 PRayer.app 그대로다 — 깔린 앱의 업데이트가 그 이름을 찾는다.
+NAME="PRView"
+ZIP_PREFIX="PRView"
 APP="$HOME/Applications/PRayer.app"
 # 이름을 바꾸기 전 앱. 남겨 두면 Launchpad·Spotlight 에 옛 이름이 계속 뜨고, 둘을 같이 켜면
 # 같은 데이터를 서로 덮어쓴다. 데이터 폴더·설정은 새 앱이 처음 켤 때 스스로 옮긴다.
@@ -73,8 +77,8 @@ case "$TAG" in
   *) bad "받을 릴리스를 찾지 못했습니다. 릴리스가 올라와 있나요?"; exit 1 ;;
 esac
 LATEST="${TAG#v}"
-# 배포 스크립트(release.sh)가 PRayer-<버전>.zip 이름으로 올린다.
-URL="https://github.com/$REPO/releases/download/$TAG/$NAME-$LATEST.zip"
+# 배포 스크립트(release.sh)가 PRView-<버전>.zip 이름으로 올린다(안에는 PRayer.app).
+URL="https://github.com/$REPO/releases/download/$TAG/$ZIP_PREFIX-$LATEST.zip"
 
 CURRENT=""
 [ -d "$APP" ] && CURRENT="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || true)"
