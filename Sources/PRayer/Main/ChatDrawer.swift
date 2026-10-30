@@ -8,12 +8,20 @@ import SwiftUI
 /// 맨 아래 한 줄에서 바로 묻는다(2026-10-30 사용자 결정 — 항목별 "묻기"·인용 칩 없이 대화창 하나). 리뷰를 기억하는 대화라
 /// "필수로 단 두 번 요청 건" 처럼 말로 짚어도 어느 항목인지 안다. 터미널로 이어 가는 길은 머리 줄의 터미널 메뉴로 남겼다.
 ///
-/// 평소엔 입력 한 줄만 있고, 물으면 위로 열린다. 열린 높이는 경계를 끌어 바꾸고 앱이 기억한다.
+/// 평소엔 입력 한 줄만 있고, 물으면 위로 열린다. 열린 높이는 경계의 손잡이를 끌어 바꾸고 앱이 기억한다. 머리 줄의 최대화는
+/// 탭 내용을 가리고 대화만 보인다(PRDetailView 가 `isOpen`·`maximizedKey` 로 탭 내용을 뺀다).
 struct ChatDrawer: View {
     @Environment(AppModel.self) private var model
     let pr: PullRequestInfo
+    /// 탭 내용과 대화창이 나눠 쓰는 높이(PRDetailView 가 잰다). 손잡이를 끌어 올릴 수 있는 끝을 여기서 셈한다 —
+    /// 예전엔 640pt 로 박아 둬 큰 창에서도 그 이상 못 올렸다. 아직 모르면(0) 그 값을 끝으로 쓴다.
+    var availableHeight: CGFloat = 0
 
-    @AppStorage("chatDrawerExpanded") private var expanded = false
+    static let expandedKey = "chatDrawerExpanded"
+    static let maximizedKey = "chatDrawerMaximized"
+
+    @AppStorage(ChatDrawer.expandedKey) private var expanded = false
+    @AppStorage(ChatDrawer.maximizedKey) private var maximized = false
     @AppStorage("chatDrawerHeight") private var height: Double = ChatDrawer.defaultHeight
     /// 끌기 시작할 때의 높이. 끄는 동안의 이동량을 여기에 더한다.
     @State private var dragStartHeight: Double?
@@ -24,8 +32,28 @@ struct ChatDrawer: View {
 
     private enum CopiedItem { case command, sessionID }
 
-    private static let heightRange: ClosedRange<Double> = 140...640
+    private static let minimumHeight: Double = 140
+    private static let fallbackMaximumHeight: Double = 640
     private static let defaultHeight: Double = 280
+    /// 펼쳤을 때 대화 목록 말고 대화창이 차지하는 높이(손잡이·머리 줄·입력 줄 어림). 끌 수 있는 끝을 셀 때 뺀다.
+    private static let chromeHeight: Double = 110
+    /// 손잡이로 끌어 올려도 탭 내용은 이만큼 남긴다. 다 가리고 싶으면 최대화를 쓴다 — 끌어서 탭 내용이 0 이 되면
+    /// 그 안의 고정 높이 줄들이 넘쳐 대화창 위를 덮는다.
+    private static let minimumContentHeight: Double = 120
+
+    /// 끌어 올릴 수 있는 가장 큰 대화 목록 높이.
+    private var maximumHeight: Double {
+        guard availableHeight > 0 else { return Self.fallbackMaximumHeight }
+        return max(Self.minimumHeight, Double(availableHeight) - Self.chromeHeight - Self.minimumContentHeight)
+    }
+
+    /// 대화창이 펼쳐져 있는가 — 아래 `drawer(record:)` 와 같은 조건이다. 최대화여도 펼쳐져 있지 않으면 PRDetailView 는
+    /// 탭 내용을 그대로 둔다(대화가 없는 PR 로 옮겼을 때 빈 화면이 되지 않게).
+    static func isOpen(model: AppModel, pr: PullRequestInfo, expanded: Bool) -> Bool {
+        guard expanded, let record = model.record(for: pr) else { return false }
+        let busy = model.chatSessionID(for: record).map(model.isChatting) ?? false
+        return busy || !(model.chat(for: record)?.messages.isEmpty ?? true)
+    }
 
     var body: some View {
         if let record = model.record(for: pr) {
@@ -39,22 +67,26 @@ struct ChatDrawer: View {
         let chat = model.chat(for: record)
         let busy = sessionID.map(model.isChatting) ?? false
         let hasConversation = !(chat?.messages.isEmpty ?? true) || busy
-        let open = expanded && hasConversation
+        let open = Self.isOpen(model: model, pr: pr, expanded: expanded)
+        let fills = open && maximized
         return VStack(spacing: 0) {
             if open {
                 resizeHandle
                 header(record: record, sessionID: sessionID)
                 Divider()
                 messages(chat: chat, sessionID: sessionID, engine: record.engineKind)
-                    .frame(height: height)
+                    .frame(height: fills ? nil : min(height, maximumHeight))
+                    .frame(maxHeight: fills ? .infinity : nil)
                 Divider()
             } else {
                 Divider()
             }
             inputRow(record: record, sessionID: sessionID, busy: busy, hasConversation: hasConversation, open: open)
         }
+        .frame(maxHeight: fills ? .infinity : nil)
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(.easeOut(duration: 0.18), value: open)
+        .animation(.easeOut(duration: 0.18), value: fills)
     }
 
     // MARK: - 머리 줄
@@ -71,7 +103,16 @@ struct ChatDrawer: View {
                 terminalMenu(record: record, sessionID: sessionID)
             }
             Button {
+                maximized.toggle()
+            } label: {
+                Image(systemName: maximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+            }
+            .buttonStyle(.borderless)
+            .help(maximized ? "원래 높이로" : "최대화 — 탭 내용을 가리고 대화만 봅니다")
+            Button {
                 expanded = false
+                // 접었다 다시 열 때 갑자기 화면을 다 덮지 않게 최대화는 푼다.
+                maximized = false
             } label: {
                 Image(systemName: "chevron.down")
             }
@@ -83,17 +124,28 @@ struct ChatDrawer: View {
     }
 
     /// 경계를 위아래로 끌어 높이를 바꾼다. 대화창은 아래에 붙어 있어 위로 끌수록 커진다.
+    /// 선만 있으면 끌 수 있는 줄 몰라서(사용자 피드백) 가운데에 손잡이 모양을 얹는다 — 손잡이는 눌림을 받지 않고
+    /// 아래 선의 잡는 자리(9pt)가 받는다. 최대화 중에 끌면 최대화를 풀고 지금 보이는 높이에서 이어 끈다.
     private var resizeHandle: some View {
         ResizeDivider(help: "드래그로 대화창 높이 조절 · 더블클릭하면 기본 높이",
                       horizontal: true,
                       onDrag: { distance in
-                          let start = dragStartHeight ?? height
+                          let start = dragStartHeight ?? (maximized ? maximumHeight : min(height, maximumHeight))
                           dragStartHeight = start
-                          height = min(Self.heightRange.upperBound,
-                                       max(Self.heightRange.lowerBound, start - distance))
+                          if maximized { maximized = false }
+                          height = min(maximumHeight, max(Self.minimumHeight, start - distance))
                       },
                       onDragEnd: { dragStartHeight = nil },
-                      onReset: { height = Self.defaultHeight })
+                      onReset: {
+                          maximized = false
+                          height = Self.defaultHeight
+                      })
+            .overlay {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.45))
+                    .frame(width: 40, height: 5)
+                    .allowsHitTesting(false)
+            }
             .padding(.bottom, 8)
     }
 
