@@ -1,7 +1,7 @@
 #!/bin/bash
 # PRView 설치·업데이트. 같은 명령으로 둘 다 된다.
 #
-#   curl -fsSL https://raw.githubusercontent.com/terry-yes/PRView/main/Scripts/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/itaehyeok/PRView/main/Scripts/setup.sh | bash
 #
 # 하는 일
 #   1. gh · claude 가 있는지 보고, 없으면 깔아 준다(brew)
@@ -11,9 +11,9 @@
 # 이미 깔려 있으면 버전만 견줘서 새 것일 때만 바꾼다.
 set -uo pipefail
 
-# 0.6.0 부터 배포처(2026-10-20 이사). 옛 저장소 itaehyeok/PRayer 에도 이 스크립트를 올려 두므로
-# 옛 한 줄 명령으로 실행해도 여기서 받는다.
-REPO="terry-yes/PRView"
+# 소스와 배포본이 있는 저장소(2026-10-30 부터). 다리 저장소 terry-yes/PRView 에도 이 스크립트를 올려 두므로
+# 그쪽 한 줄 명령으로 실행해도 여기서 받는다. 옛 itaehyeok/PRayer 주소는 GitHub 이 이 저장소로 넘겨 준다.
+REPO="itaehyeok/PRView"
 # 화면에 보이는 이름. 앱 파일 이름은 PRayer.app 그대로다 — 깔린 앱의 업데이트가 그 이름을 찾는다.
 NAME="PRView"
 ZIP_PREFIX="PRView"

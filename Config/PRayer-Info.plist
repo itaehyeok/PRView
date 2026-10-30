@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  생성 Info.plist(GENERATE_INFOPLIST_FILE)에 넣을 수 없는 키만 여기 둔다. 나머지는 project.yml 의
+  INFOPLIST_KEY_* 가 채우고, Xcode 가 이 파일과 합친다.
+  LSHasLocalizedDisplayName: en.lproj/InfoPlist.strings 의 "PRView" 를 Finder·Dock 이 쓰게 한다(파일 이름은 PRayer.app 그대로).
+  (INFOPLIST_KEY_LSHasLocalizedDisplayName 은 지원되지 않아 조용히 빠진다 — 실측)
+  NS*FolderUsageDescription: macOS 가 이 폴더들에 처음 접근할 때 묻는 창에 함께 뜨는 이유.
+  응용 프로그램 폴더로 옮긴 뒤 원래 앱을 치울 때, 그리고 그 폴더에 둔 로컬 클론을 전체 리뷰할 때 묻는다.
+  (project.yml 은 빌드 번호를 gen.sh 가 다시 써서 여러 작업이 동시에 고치면 부딪힌다 — 여기 둔다.)
+  PRayerBetaNumber: release.sh --beta 가 빌드할 때 넘기는 베타 번호(0.5.0-beta.3 이면 3). 그 밖의 빌드에서는
+  정의되지 않은 변수라 빈 값이 된다. 앱 버전(CFBundleShortVersionString)은 숫자 세 자리만 두라는 애플 규칙이라
+  "-beta.3" 을 거기 붙이지 않고 따로 둔다.
+-->
+<plist version="1.0">
+<dict>
+	<key>LSHasLocalizedDisplayName</key>
+	<true/>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>다운로드 폴더에서 처음 연 PRView 를 응용 프로그램 폴더로 옮긴 뒤 정리하거나, 그 폴더에 있는 로컬 클론을 리뷰할 때 필요합니다.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>데스크탑에서 처음 연 PRView 를 응용 프로그램 폴더로 옮긴 뒤 정리하거나, 그 폴더에 있는 로컬 클론을 리뷰할 때 필요합니다.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>문서 폴더에 있는 로컬 클론을 리뷰하거나, 그 폴더에서 처음 연 PRView 를 응용 프로그램 폴더로 옮긴 뒤 정리할 때 필요합니다.</string>
+	<key>PRayerBetaNumber</key>
+	<string>$(PRAYER_BETA_NUMBER)</string>
+</dict>
+</plist>

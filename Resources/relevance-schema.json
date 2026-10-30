@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary_ko", "verdict", "related"],
+  "properties": {
+    "summary_ko": { "type": "string", "minLength": 10, "maxLength": 600 },
+    "verdict": { "enum": ["already_resolved", "under_discussion", "not_related"] },
+    "related": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["message_id", "relevance", "quotes", "why_ko"],
+        "properties": {
+          "message_id": { "type": "string", "maxLength": 20 },
+          "relevance": { "enum": ["same_issue", "resolution", "author_reply", "related"] },
+          "quotes": {
+            "type": "array",
+            "maxItems": 3,
+            "items": { "type": "string", "minLength": 4, "maxLength": 200 }
+          },
+          "why_ko": { "type": "string", "minLength": 5, "maxLength": 200 }
+        }
+      }
+    }
+  }
+}

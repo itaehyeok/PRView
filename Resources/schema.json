@@ -1,0 +1,125 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "summary_ko",
+    "strengths",
+    "code_comments"
+  ],
+  "properties": {
+    "code_comments": {
+      "type": "array",
+      "maxItems": 8,
+      "description": "작성자에게 남길 말은 전부 여기다 — 걱정·질문·부탁·사소한 것 모두. 하나하나가 바뀐 코드 줄에 달린다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "issue_key",
+          "importance",
+          "path",
+          "line",
+          "side",
+          "body",
+          "anchor_text",
+          "rationale_ko"
+        ],
+        "properties": {
+          "issue_key": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "importance": {
+            "enum": [
+              "required",
+              "recommended",
+              "informational"
+            ],
+            "description": "중요도. required(필수) = 머지 전에 고쳐야 한다(머지를 막는다). recommended(권장) = 고치면 좋지만 머지는 막지 않는다. informational(참고) = 알아 두거나 답하면 된다 — 질문·의도 확인·사소한 것."
+          },
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "start_line": {
+            "type": "integer"
+          },
+          "side": {
+            "enum": [
+              "LEFT",
+              "RIGHT"
+            ]
+          },
+          "body": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 400
+          },
+          "anchor_text": {
+            "type": "string"
+          },
+          "duplicates_existing": {
+            "type": "boolean"
+          },
+          "existing_note": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "rationale_ko": {
+            "type": "string",
+            "minLength": 40,
+            "maxLength": 700
+          },
+          "evidence": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "note"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 160
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "approve",
+        "comment",
+        "request_changes"
+      ]
+    },
+    "summary_ko": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "변경 요약 1문장 + 판정 1문장(평가와 판정을 한 문장에). 판정 문장에는 평가하는 말(잘·깔끔하게·빠짐없이·안전하게)을 넣는다 — '…정리해 승인합니다' 는 한 일을 적은 것이지 잘했다는 말이 아니다. 코드 코멘트의 내용을 쓰지 않는다 — 코드 코멘트는 그 줄에 따로 달린다. verdict 가 request_changes 면 무엇을 확인해야 하는지로 끝낸다. '머지를 막을 이슈는 없습니다'·'이슈 없습니다'·'무난하게' 같은 부정형·미지근한 말을 쓰지 않는다."
+    },
+    "strengths": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "maxLength": 110,
+        "description": "칭찬 한 가지. 요약 두 문장에 나온 사실(무엇을 바꿨는지 · 판정 근거)은 쓰지 않는다 — 요약에 없는 세부(경계 처리·뒷정리·테스트·이름 — 코드가 한 일이 먼저, 주석 칭찬은 한 리뷰에 하나까지)에서 고르고, 없으면 배열을 비운다. 끝에 평가하는 말(잘·깔끔·꼼꼼·빠짐없이·세심·좋·탄탄)을 둔다 — '…처리했습니다·챙겼습니다·막았습니다' 로만 끝내면 사실 설명이다. 코드 코멘트가 문제 삼은 코드는 칭찬하지 않는다. 항목끼리 끝맺음이 겹치지 않는다."
+      }
+    }
+  }
+}

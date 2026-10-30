@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "summary_ko", "evidence"],
+  "properties": {
+    "status": {
+      "enum": ["fixed_in_commit", "partially_fixed", "answered_in_comment", "untouched", "cannot_tell"]
+    },
+    "summary_ko": { "type": "string", "minLength": 20, "maxLength": 400 },
+    "evidence": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "ref", "note"],
+        "properties": {
+          "kind": { "enum": ["commit", "comment", "code"] },
+          "ref": { "type": "string", "maxLength": 80 },
+          "path": { "type": "string" },
+          "line": { "type": "integer" },
+          "note": { "type": "string", "maxLength": 200 }
+        }
+      }
+    }
+  }
+}

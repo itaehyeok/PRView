@@ -1,0 +1,99 @@
+name: PRayer
+options:
+  bundleIdPrefix: dev.itaehyeok
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    # 배포 버전. `Scripts/release.sh <버전>` 이 이 줄을 고쳐 커밋한다 —
+    # 버전이 올라간 사실이 히스토리에 남아야 어느 커밋이 나갔는지 나중에 찾을 수 있다.
+    MARKETING_VERSION: "0.6.4"
+    # 빌드 번호는 gen.sh 가 커밋 수로 채운다. 손으로 올리면 언젠가 잊는다.
+    CURRENT_PROJECT_VERSION: "5"
+    # 알림(UNUserNotificationCenter)은 ad-hoc(-) 서명에서 거부되므로 실제 개발자 인증서로 서명한다.
+    # 팀원 배포 시에는 각자 자기 인증서로 빌드하거나 Developer ID 서명·공증이 필요하다.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Apple Development"
+    CODE_SIGNING_REQUIRED: "YES"
+    CODE_SIGNING_ALLOWED: "YES"
+    # 팀 ID 를 여기 박아 두면 다른 사람은 그대로 빌드할 수 없다(자기 인증서와 팀이 다르다).
+    # Scripts/gen.sh 가 이 맥의 Apple Development 인증서에서 팀 ID 를 찾아 넣어 준다.
+    # 자동으로 못 찾거나 팀이 여럿이면 PRAYER_TEAM_ID 로 지정한다(README 참고).
+    DEVELOPMENT_TEAM: ${PRAYER_TEAM_ID}
+    PROVISIONING_PROFILE_SPECIFIER: ""
+    ONLY_ACTIVE_ARCH: "YES"
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: "NO"
+targets:
+  # 정적 라이브러리로 둔다. macOS versioned framework 를 앱/테스트 번들에 임베드하면
+  # 서명 단계에서 "bundle format unrecognized" 로 실패한다.
+  PRayerCore:
+    type: library.static
+    platform: macOS
+    sources:
+      - Sources/PRayerCore
+    settings:
+      base:
+        PRODUCT_NAME: PRayerCore
+        SWIFT_INSTALL_OBJC_HEADER: "NO"
+        # 정적 라이브러리는 서명 대상이 아니다. 서명을 걸면 매 빌드마다 .a 가 갱신돼
+        # 테스트 번들이 매번 재링크되고, xctest 가 번들 교체 중에 로드를 시도해 실패한다.
+        CODE_SIGNING_ALLOWED: "NO"
+  PRayer:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/PRayer
+      # xcodegen 에 타깃 최상위 resources: 키는 없다. 그렇게 쓰면 조용히 무시돼
+      # Contents/Resources 가 통째로 빠지고, review.md/schema.json 을 못 찾아
+      # makeEngine() 이 nil 을 돌려주며 모든 리뷰가 실패한다.
+      - path: Resources
+        buildPhase: resources
+      # 폰트는 폴더째로 넣어야 ATSApplicationFontsPath / 런타임 등록이 경로를 찾는다.
+      - path: Resources/Fonts
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: PRayerCore
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.itaehyeok.PRayer
+        PRODUCT_NAME: PRayer
+        GENERATE_INFOPLIST_FILE: "YES"
+        # 화면에 보이는 이름 "PRayer" 는 Resources/en.lproj/InfoPlist.strings 에 있다.
+        # 여기 값은 **파일 이름과 같아야 한다** — Finder 는 둘이 같을 때만 현지화 이름을 쓰고,
+        # 다르면 파일 이름을 보여 준다(실측: 여기에 이모지를 넣으니 Finder 에 PRayer 로 떴다).
+        INFOPLIST_KEY_CFBundleDisplayName: PRayer
+        # 생성 plist 로는 넣을 수 없는 키(LSHasLocalizedDisplayName)를 담은 파일. Xcode 가 합친다.
+        INFOPLIST_FILE: Config/PRayer-Info.plist
+        # 아이콘은 Scripts/make-icon.swift 가 애셋 카탈로그에 그린다.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        ENABLE_APP_SANDBOX: "NO"
+        ENABLE_HARDENED_RUNTIME: "YES"
+        COMBINE_HIDPI_IMAGES: "YES"
+      configs:
+        # 개발 빌드(build.sh·install.sh)는 DEV 띠 아이콘 — 배포본과 Dock·Finder 에서 바로 갈린다(make-icon.swift).
+        Debug:
+          ASSETCATALOG_COMPILER_APPICON_NAME: AppIconDev
+  PRayerCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/PRayerCoreTests
+    dependencies:
+      # 테스트 번들에 프레임워크를 임베드하면 versioned bundle 서명이 깨진다. 링크만 한다.
+      - target: PRayerCore
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.itaehyeok.PRayerCoreTests
+        GENERATE_INFOPLIST_FILE: "YES"
+        # 테스트 번들은 ad-hoc 서명으로 둔다. Apple Development 로 서명하면
+        # xctest 가 "Failed to create a bundle instance" 로 번들 로딩에 실패한다.
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""

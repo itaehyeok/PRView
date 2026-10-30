@@ -1,0 +1,3 @@
+/* 앱 메뉴·Dock·⌘Tab·Finder·알림에 표시하는 이름. */
+CFBundleName = "PRView";
+CFBundleDisplayName = "PRView";
