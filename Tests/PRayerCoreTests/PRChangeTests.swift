@@ -95,14 +95,14 @@ final class PRChangePrefsTests: XCTestCase {
         XCTAssertTrue(prefs.allows(.appeared(reviewRequested: true)))
         XCTAssertFalse(prefs.allows(.appeared(reviewRequested: false)),
                        "기본값은 나에게 요청된 PR 만 알린다")
+        XCTAssertTrue(prefs.allows(.reReviewRequested))
+        XCTAssertTrue(prefs.allows(.newCommitsOnReviewed))
         XCTAssertTrue(prefs.allows(.commentsOnMyPR(added: 1)))
         XCTAssertTrue(prefs.allows(.approvalsReached(count: 2)))
         XCTAssertTrue(prefs.allows(.conflictAppeared))
         // 켤 수는 있지만 기본으로는 오지 않는 것(사용자 결정, 2026-10-30).
         XCTAssertFalse(prefs.allows(.reviewRequested))
-        XCTAssertFalse(prefs.allows(.reReviewRequested))
         XCTAssertFalse(prefs.allows(.checksFailed))
-        XCTAssertFalse(prefs.allows(.newCommitsOnReviewed))
         XCTAssertFalse(prefs.allows(.merged))
     }
 

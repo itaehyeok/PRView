@@ -174,9 +174,9 @@ public enum PRChangeDetector {
     }
 }
 
-/// 어떤 변화를 알릴지. 기본값은 새 PR(나에게 요청된 것) · 내 PR 새 코멘트 · 머지 가능 · 충돌 넷이다
-/// (사용자 결정, 2026-10-30). 리뷰어 지정·재리뷰 요청·CI 실패는 켤 수 있지만 기본으로는 끈다 — 리뷰어는 대개
-/// PR 을 올릴 때 지정돼 "새 PR" 로 오고, CI 실패는 사용자가 받지 않아도 된다고 했다.
+/// 어떤 변화를 알릴지. 기본값은 리뷰할 PR 의 새 PR(나에게 요청된 것) · 재리뷰 요청 · 리뷰한 PR 새 커밋과,
+/// 내 PR 의 새 코멘트 · 머지 가능 · 충돌이다(사용자 결정, 2026-10-30). 리뷰어 지정·CI 실패·머지 완료는 켤 수 있지만
+/// 기본으로는 끈다 — 리뷰어는 대개 PR 을 올릴 때 지정돼 "새 PR" 로 오고, CI 실패는 사용자가 받지 않아도 된다고 했다.
 public struct PRChangeNotificationPrefs: Codable, Sendable, Equatable {
     public var newPR: Bool
     /// 새 PR 중 나에게 리뷰 요청이 온 것만 알린다.
@@ -194,12 +194,12 @@ public struct PRChangeNotificationPrefs: Codable, Sendable, Equatable {
         newPR: true,
         newPROnlyWhenReviewRequested: true,
         reviewRequested: false,
-        reReviewRequested: false,
+        reReviewRequested: true,
         commentsOnMyPR: true,
         approvalsReached: true,
         checksFailed: false,
         conflict: true,
-        newCommitsOnReviewed: false,
+        newCommitsOnReviewed: true,
         merged: false)
 
     public init(newPR: Bool, newPROnlyWhenReviewRequested: Bool, reviewRequested: Bool,
