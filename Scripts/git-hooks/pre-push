@@ -1,0 +1,55 @@
+#!/bin/bash
+# 공개 저장소로 나가기 전 검사. `git config core.hooksPath Scripts/git-hooks` 로 켠다(release.sh 는 꺼져 있으면 멈춘다).
+#
+# 올라갈 커밋마다 본다:
+#   1. 뿌리 — 이 저장소의 첫 커밋에서 이어진 이력인가. 소스를 공개할 때 예전 이력은 가져오지 않았다. 뿌리가 다른
+#      이력(예전 클론)을 올리면 그 이력이 통째로 공개된다.
+#   2. 작성자·커미터 메일 — GitHub noreply 주소인가. 개인·회사 메일이 이력에 남지 않게 한다.
+#   3. 내용 — 이 맥에 등록된 레포·사람 이름 같은 것이 메시지·변경에 들었는가. 대조 목록은 저장소 밖에 있어야
+#      하므로(목록 자체가 새는 길이 된다) PRVIEW_PUSH_SCANNER 가 가리키는 스크립트에 맡긴다. 없으면 건너뛴다.
+#
+# 한 번 올라간 커밋은 지워도 해시 주소로 계속 열린다. 걸리면 고쳐서 다시 커밋한다 — 검사를 끄고 올리지 않는다.
+set -uo pipefail
+
+ROOT="26ff88ebdad8a356571cd9aff72c9973808a4aa5"
+ZERO="0000000000000000000000000000000000000000"
+SCANNER="${PRVIEW_PUSH_SCANNER:-$HOME/.claude/skills/prayer-public-check/scripts/push_scan.py}"
+remote="$1"
+
+fail=0
+commits=()
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue   # 지우는 push
+  for root in $(git rev-list --max-parents=0 "$local_sha"); do
+    if [ "$root" != "$ROOT" ]; then
+      echo "❌ $local_ref 의 이력이 이 저장소와 뿌리가 다릅니다(첫 커밋 ${root:0:7}). 예전 이력을 올리려는 것 같습니다." >&2
+      fail=1
+    fi
+  done
+  # 원격에 아직 없는 커밋만 본다.
+  while read -r sha; do
+    [ -n "$sha" ] && commits+=("$sha")
+  done < <(git rev-list "$local_sha" --not --remotes="$remote")
+done
+[ "$fail" = 0 ] || exit 1
+[ "${#commits[@]}" -gt 0 ] || exit 0
+
+for sha in "${commits[@]}"; do
+  while IFS='|' read -r who mail; do
+    case "$mail" in
+      *@users.noreply.github.com|noreply@github.com) ;;
+      *)
+        echo "❌ ${sha:0:7} 의 $who 메일이 noreply 주소가 아닙니다: $mail" >&2
+        echo "   git config user.email <id>+<login>@users.noreply.github.com 으로 맞추고 커밋을 다시 만드세요." >&2
+        fail=1 ;;
+    esac
+  done < <(git show -s --format='작성자|%ae%n커미터|%ce' "$sha")
+done
+[ "$fail" = 0 ] || exit 1
+
+if [ -f "$SCANNER" ]; then
+  python3 "$SCANNER" "${commits[@]}" || exit 1
+else
+  echo "ℹ️  내용 검사 스크립트가 없어 건너뜁니다($SCANNER)." >&2
+fi
+exit 0

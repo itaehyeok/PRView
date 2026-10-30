@@ -111,6 +111,7 @@ Xcode에서 열려면 `PRayer.xcodeproj`. App Sandbox는 **꺼져 있어야** �
 ### 배포 (저장소 주인)
 
 ```bash
+git config core.hooksPath Scripts/git-hooks   # push 전 검사 — 클론마다 한 번
 bash Scripts/release.sh --beta                # 1) 시험판(pre-release)으로 — 앱 업데이트·setup.sh 는 고르지 않는다
 bash Scripts/beta.sh                          #    이 맥에 깔아 써 본다 (되돌리기: 이전 베타 이름)
 RELEASE_NOTES_FILE=notes.md bash Scripts/release.sh 0.6.4 --promote

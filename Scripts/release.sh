@@ -97,6 +97,12 @@ if [ "$DRY_RUN" = 0 ] && ! printf '%s' "$ORIGIN_URL" | grep -Eiq "[:/]${REPO}(\.
   echo "❌ origin 이 $REPO 여야 합니다(지금: ${ORIGIN_URL:-없음})." >&2
   exit 1
 fi
+# 공개 저장소로 push 하므로 push 전 검사(Scripts/git-hooks/pre-push)가 켜져 있어야 한다 — noreply 가 아닌
+# 메일로 만든 커밋, 이 저장소와 뿌리가 다른 이력, 이 맥에 등록된 레포·사람 이름이 섞인 커밋을 막는다. 새 클론에는 이 설정이 없다.
+if [ "$DRY_RUN" = 0 ] && [ "$(git config core.hooksPath)" != "Scripts/git-hooks" ]; then
+  echo "❌ push 전 검사가 꺼져 있습니다. 켜고 다시 실행하세요:  git config core.hooksPath Scripts/git-hooks" >&2
+  exit 1
+fi
 # 주인 계정 토큰으로 올린다. 이 맥의 gh 에는 다른 계정이 활성으로 같이 로그인돼 있어, 그대로 두면 맨 마지막
 # 게시에서 실패했다(v0.4.28 실측: 빌드·공증·태그 push 까지 끝낸 뒤 "Could not resolve to a Repository").
 # beta.sh 처럼 이 스크립트 안에서만 주인 계정 토큰을 쓴다 — `gh auth switch` 로 활성 계정을 바꾸면 켜 둔
