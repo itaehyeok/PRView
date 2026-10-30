@@ -246,7 +246,7 @@ public struct ReviewEngine: Sendable {
         }
 
         onPhase?(.running)
-        // 본 리뷰만 대화를 남긴다 — 리뷰 맨 아래 "Claude 에서 이어서 대화하기" 가 이 대화를 연다.
+        // 본 리뷰만 대화를 남긴다 — 상세 화면 하단 대화창(ReviewChatRunner)·터미널의 `--resume` 이 이 대화를 이어 간다.
         let run = try await execute(prompt: prep.prompt,
                                     workingDirectory: workingDirectory, allowedTools: tools,
                                     stdioDirectory: spoolDirectory, persistSession: true)

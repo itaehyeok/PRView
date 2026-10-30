@@ -953,17 +953,12 @@ struct AIReviewView: View {
         .foregroundStyle(isSelected ? Color.primary : Color.secondary)
     }
 
-    /// 리뷰 본문 열 — 본문 상자, 게시 조작부, 이어서 대화하기. 예전엔 이어서 대화하기가 두 열 아래에 가로로 걸쳐
-    /// 어느 쪽 것인지 흐렸다(사용자 피드백).
+    /// 리뷰 본문 열 — 본문 상자와 게시 조작부. 이 열 맨 아래에 있던 "이어서 대화하기"(명령 복사)는 상세 화면 하단 대화창으로
+    /// 옮겼다(ChatDrawer).
     private func bodyColumn(record: ReviewRecord, binding: Binding<ReviewRecord>) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             bodyCard(record: record, binding: binding)
             postControls(record: record, binding: binding)
-            // 게시 줄과 이어서 대화하기 사이를 띄운다 — 붙어 있어 한 덩어리처럼 보였다(사용자 피드백).
-            Divider()
-                .padding(.top, 24)
-            ResumeConversationSection(record: record)
-                .padding(.top, 8)
         }
     }
 

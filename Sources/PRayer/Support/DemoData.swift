@@ -63,6 +63,9 @@ enum DemoData {
             }
             model.records[pr.id] = record
             model.recordHistory[pr.id] = [record]
+            if pr.number == 128, let sessionID = record.sessionID {
+                model.chats[sessionID] = loginChat(sessionID: sessionID)
+            }
         }
         Log.info("데모 데이터로 켬 — GitHub·Claude 에 묻지 않는다", "app")
     }
@@ -336,9 +339,28 @@ enum DemoData {
                             bodyDraft: output.summaryKo,
                             usage: EngineUsage(model: "claude-opus-5-5", inputTokens: 12, cacheCreationTokens: 9_812,
                                                cacheReadTokens: 148_220, outputTokens: 2_416, costUSD: 0.21, durationMs: 74_000))
-        // 이어서 대화하기 칸이 "이어 갈 수 없음" 대신 평소 모양으로 보이게(실제로 이어 가지는 않는다).
+        // 하단 대화창이 "이어 갈 수 없음" 대신 평소 모양으로 보이게(실제로 이어 가지는 않는다).
         record.sessionID = "00000000-0000-4000-8000-000000000128"
         return record
+    }
+
+    /// #128 하단 대화창에 미리 넣어 두는 대화. 펼친 모습을 찍을 때 쓴다(`defaults write <번들> chatDrawerExpanded -bool true`).
+    static func loginChat(sessionID: String) -> ReviewChat {
+        let now = Date()
+        return ReviewChat(sessionID: sessionID, engine: .claude, messages: [
+            ChatMessage(role: .user, text: "필수로 단 두 번 요청 건, 버튼이 막혀 있지 않아?",
+                        date: now.addingTimeInterval(-5 * 60)),
+            ChatMessage(role: .assistant,
+                        text: "막혀 있지 않습니다. `isEnabled` 는 `state == .loading` 일 때만 꺼지는데, `state = .loading` 이 "
+                            + "`Task` 안에서 바뀌어서 첫 탭 직후엔 아직 `.enabled` 입니다. 그 사이에 두 번째 탭이 들어오면 "
+                            + "`login()` 이 한 번 더 불립니다.\n\n`Task` 를 만들기 전에 `state` 를 먼저 바꾸면 두 번째 탭은 "
+                            + "`guard` 에서 돌아갑니다.",
+                        date: now.addingTimeInterval(-4 * 60)),
+            ChatMessage(role: .user, text: "코멘트 문구 좀 더 짧게 써 줘", date: now.addingTimeInterval(-60)),
+            ChatMessage(role: .assistant,
+                        text: "`state = .loading` 을 `Task` 밖으로 옮겨 주세요. 지금은 버튼을 빠르게 두 번 누르면 로그인 요청이 두 번 나갑니다.",
+                        date: now.addingTimeInterval(-50)),
+        ], updatedAt: now)
     }
 
     // MARK: - AI 리뷰 (acme/sample-ios#133) — 머지를 막는 이슈가 없는 리뷰

@@ -45,7 +45,7 @@ open ~/Applications/PRayer.app
 bash Scripts/doctor.sh            # 준비 상태 점검
 bash Scripts/gen.sh               # project.yml → PRayer.xcodeproj
 bash Scripts/build.sh             # 빌드
-bash Scripts/test.sh              # 단위 테스트 (현재 1031개)
+bash Scripts/test.sh              # 단위 테스트 (현재 1045개)
 bash Scripts/install.sh           # 빌드 + 설치 (개발용, 이 맥에서만 열린다)
 bash Scripts/install.sh "머지 버튼"         # 곁가지 워크트리: "PRView - 머지 버튼" 작업본으로 설치(아래 "개발 빌드 이름")
 bash Scripts/dev-name.sh <앱> "머지 버튼"   # 세션 확인용 사본에 같은 꼴의 이름 붙이기
@@ -282,12 +282,18 @@ Finder 에 `PRView - <작업>` 으로 뜨게 한다** — 이름만 보고 어�
   **자동 게시 경로를 만들지 마라.**
 - Claude 프로세스에 도구를 주지 않는다(`--tools ""`). 전체 리뷰에서만 읽기 전용
   `Read`/`Grep`/`Glob` 을 연다. 자식 환경에서 GitHub 토큰을 제거한다.
-- **본 리뷰만 대화를 남긴다**(`persistSession`, 2026-10-06 사용자 결정). 리뷰 맨 아래 "Claude 에서 이어서
-  대화하기" 가 `claude --resume <ID>` 를 복사하게 해, 사용자가 리뷰한 그 대화를 터미널·Paseo 등에서 이어 간다.
-  실측(CLI 2.1.284): 대화를 만든 폴더가 아니어도 ID 로 열리고(그래서 명령에 `cd` 가 없다 — 워크트리가 정리돼도
-  된다), 리뷰 때의 시스템 프롬프트가 따라와 이어 간 대화도 리뷰 문체의 글로 답한다(JSON 아님). 설명·대조·
-  재확인·모델 확인은 `--no-session-persistence` 그대로 둔다 — 남기면 사용자의 `--resume` 목록이 앱이 부른
-  짧은 대화로 덮인다. ID 는 CLI 결과 JSON 에서 읽은 바깥 값이라 UUID 로 검사한 뒤에만 명령에 넣는다(`ClaudeSession`).
+- **본 리뷰만 대화를 남긴다**(`persistSession`, 2026-10-06 사용자 결정). 상세 화면 맨 아래 대화창(`ChatDrawer`,
+  2026-10-30 사용자 결정 — 탭과 상관없이 대화창 하나, 항목별 "묻기"·인용 칩은 두지 않는다)이 그 대화를 앱 안에서 이어
+  묻는다(`ReviewChatRunner`: `claude -p --resume <ID>` · `codex exec resume <ID>`, 도구는 리뷰처럼 끈다). 예전의
+  "Claude 에서 이어서 대화하기"(명령 복사)는 대화창 머리의 터미널 메뉴로 옮겼다. 실측(Claude Code 2.1.284 · Codex
+  0.166.0): 대화를 만든 폴더가 아니어도 ID 로 열리고(그래서 명령에 `cd` 가 없다 — 워크트리가 정리돼도 된다), 이어
+  물은 말은 **같은 ID 에 덧붙어** 터미널의 `--resume` 에도 이어진다. Claude 는 리뷰 때의 시스템 프롬프트가 따라오고,
+  읽기 도구를 쓴 전체 리뷰도 `--tools ""` 로 이어 물을 수 있다. **Codex 는 `--output-schema` 로 답하게 한 대화라
+  그냥 물으면 이어 묻는 답도 리뷰 JSON 꼴로 낸다** — 첫 질문 앞에 형식 안내 한 줄(`ReviewChatRunner.preamble`)을
+  붙여 글로 답하게 한다. 설명·대조·재확인·모델 확인은 `--no-session-persistence` 그대로 둔다 — 남기면 사용자의
+  `--resume` 목록이 앱이 부른 짧은 대화로 덮인다. ID 는 CLI 결과 JSON 에서 읽은 바깥 값이라 UUID 로 검사한 뒤에만
+  인자에 넣는다(`ClaudeSession`). 대화창에 그릴 말은 앱이 `review-chats.json` 에 따로 둔다(CLI 대화 파일은 diff·도구
+  호출이 섞이고 꼴이 버전마다 바뀌어 읽지 않는다).
 - 앱은 비밀번호·토큰을 입력받지 않는다. 슬랙도 마찬가지다 — claude.ai 커넥터를 빌린다(위 함정).
 - 슬랙 글도 **사용자가 "보내기" 를 누를 때만** 간다. 디버그 훅(`DebugLaunch`)도 창을 띄우고 검색까지만 한다.
 - 주석은 한국어로, **왜 그렇게 했는지**를 적는다. 무엇을 하는지는 코드가 말한다.

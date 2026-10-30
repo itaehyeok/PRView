@@ -108,6 +108,8 @@ struct PRDetailView: View {
             }
             // 내용이 적어도 위에서부터 채운다. 이게 없으면 빈 화면일 때 헤더까지 가운데로 내려온다.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // 리뷰한 대화를 이어 묻는 칸. 어느 탭에서든 맨 아래에 있다 — 변경 파일을 보면서도 묻게(ChatDrawer 주석 참고).
+            ChatDrawer(pr: pr)
         }
         .task(id: pr.id) {
             if tab == .diff { await model.loadDiff(for: pr) }
