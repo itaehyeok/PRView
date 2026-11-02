@@ -34,6 +34,10 @@ struct OnboardingView: View {
             footer
         }
         .frame(width: 640, height: 560)
+        // 디버그로 레포 단계부터 열면 "다음" 을 안 눌러 목록을 받지 않는다.
+        .task {
+            if DebugLaunch.onboardingStep == .repos { await model.loadRepoOptions() }
+        }
     }
 
     private var header: some View {
@@ -373,7 +377,7 @@ struct RepoPickerStep: View {
     /// 레포 관리(⚙︎) 팝오버. 설정 창과 같은 목록을 쓰되, 고른 레포만 보이다가 검색하면 찾은 레포가 아래에 붙는다 —
     /// 팝오버는 켜고 끄려고 자주 여는데, 접근 가능한 레포가 늘 다 깔려 있으면 고른 레포를 찾기 어렵다.
     var compact = false
-    @State private var search = ""
+    @State private var search = DebugLaunch.repoQuery ?? ""
     /// 팝오버 목록의 실제 높이. 줄이 다 들어가면 그 높이로 두고 스크롤 막대를 숨긴다(compactList).
     @State private var compactContentHeight: CGFloat = 0
     private static let compactMaxHeight: CGFloat = 380
