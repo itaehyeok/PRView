@@ -2184,9 +2184,10 @@ final class AppModel {
                                                   approvalThreshold: { [settings] pr in
                                                       settings.approvalThreshold(for: pr)
                                                   },
-                                                  lastSeenAt: PRChangeDetector.lastSeen(previous))
+                                                  lastSeenAt: PRChangeDetector.lastSeen(previous),
+                                                  viewerLogin: githubAccount?.login)
         // 교체가 아니라 누적이다. 탭마다 목록이 달라서 교체하면 기억을 잃는다(merged 주석 참고).
-        prSnapshots = PRChangeDetector.merged(previous: previous, current: prs)
+        prSnapshots = PRChangeDetector.merged(previous: previous, current: prs, viewerLogin: githubAccount?.login)
         Task { [prSnapshots, store] in await store.save(snapshots: prSnapshots) }
 
         guard hasSnapshotBaseline else {

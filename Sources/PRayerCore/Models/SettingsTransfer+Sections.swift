@@ -476,6 +476,7 @@ enum Describe {
         if p.reviewRequested { on.append("리뷰어 지정") }
         if p.reReviewRequested { on.append("재리뷰 요청") }
         if p.newCommitsOnReviewed { on.append("리뷰한 PR 새 커밋") }
+        if p.repliesToMyComments { on.append("내 코멘트 답글") }
         if p.commentsOnMyPR { on.append("내 PR 새 코멘트") }
         if p.approvalsReached { on.append("내 PR 머지 가능") }
         if p.conflict { on.append("내 PR 충돌") }

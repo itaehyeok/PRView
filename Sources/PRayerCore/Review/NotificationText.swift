@@ -49,6 +49,7 @@ public enum NotificationText {
         case .checksFailed: title = "CI 실패"
         case .conflictAppeared: title = "충돌"
         case .newCommitsOnReviewed: title = "리뷰한 PR 새 커밋"
+        case .repliesToMyComments: title = "내 코멘트 답글"
         case .merged: title = "머지 완료"
         }
         return titled(.incoming, title)

@@ -20,6 +20,7 @@ final class NotificationTextTests: XCTestCase {
         XCTAssertEqual(NotificationText.prChange(.checksFailed), "📥 CI 실패")
         XCTAssertEqual(NotificationText.prChange(.conflictAppeared), "📥 충돌")
         XCTAssertEqual(NotificationText.prChange(.newCommitsOnReviewed), "📥 리뷰한 PR 새 커밋")
+        XCTAssertEqual(NotificationText.prChange(.repliesToMyComments(count: 2)), "📥 내 코멘트 답글")
         XCTAssertEqual(NotificationText.prChange(.merged), "📥 머지 완료")
     }
 
@@ -31,7 +32,8 @@ final class NotificationTextTests: XCTestCase {
     func testOriginMarkSplitsIncomingFromRequested() {
         let all: [PRChange] = [.appeared(reviewRequested: true), .appeared(reviewRequested: false), .reviewRequested,
                                .reReviewRequested, .commentsOnMyPR(added: 1), .approvalsReached(count: 1),
-                               .checksFailed, .conflictAppeared, .newCommitsOnReviewed, .merged]
+                               .checksFailed, .conflictAppeared, .newCommitsOnReviewed,
+                               .repliesToMyComments(count: 1), .merged]
         let incoming = all.map(NotificationText.prChange) + [NotificationText.prChangeSummary(count: 4)]
         let requested = [NotificationText.reviewDone, NotificationText.reviewFailed, NotificationText.limitReached]
         for title in incoming { XCTAssertTrue(title.hasPrefix("📥 "), title) }
