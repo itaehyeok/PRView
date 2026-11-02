@@ -207,6 +207,14 @@ final class AppModel {
     var rechecks: [String: ItemRecheck] = [:]
     var recheckKeys: Set<String> = []
     var explainingKeys: Set<String> = []
+    /// 하단 대화창에서 이어 간 리뷰 대화. 세션 ID → 대화(`AppModel+Chat`).
+    var chats: [String: ReviewChat] = [:]
+    /// 답을 받는 중인 대화의 지금까지 글. 다 받으면 `chats` 로 옮기고 지운다.
+    var chatReplies: [String: String] = [:]
+    /// 답을 받는 중인 대화. 멈춤 버튼이 이걸 취소한다.
+    var chatTasks: [String: Task<Void, Never>] = [:]
+    /// 대화창에 쓰다 만 글. PR 을 옮겨 다녀와도 남게 모델에 둔다(상세 화면은 PR 마다 새로 만들어진다).
+    var chatDrafts: [String: String] = [:]
     /// 최근 3건이 아니라 전체 내역을 펼쳐 둔 PR. 목록이 갱신돼도 유지되도록 모델이 들고 있는다.
     var fullActivityPRs: Set<String> = []
     var repoOptions: [RepoOption] = []
@@ -1081,6 +1089,7 @@ final class AppModel {
         explanations = await store.loadExplanations()
         relevances = await store.loadRelevances()
         rechecks = await store.loadRechecks()
+        chats = await store.loadChats()
         slackRequests = await store.loadSlackRequests()
         ledger = await store.loadLedger()
         showOnboarding = !settings.onboardingCompleted

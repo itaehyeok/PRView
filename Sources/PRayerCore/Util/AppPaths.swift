@@ -57,6 +57,8 @@ public enum AppPaths {
     public static var myReplyReadFile: URL { support.appendingPathComponent("my-comment-replies.json") }
     public static var ledgerFile: URL { support.appendingPathComponent("token-ledger.json") }
     public static var explanationsFile: URL { support.appendingPathComponent("comment-explanations.json") }
+    /// 하단 대화창에서 리뷰 대화를 이어 간 말들(`ReviewChat`). 대화 자체는 CLI 가 따로 남긴다.
+    public static var chatsFile: URL { support.appendingPathComponent("review-chats.json") }
     /// 돌고 있는 리뷰 1건당 폴더 하나. 앱이 죽어도 결과가 남는다.
     public static var jobsDirectory: URL { support.appendingPathComponent("jobs", isDirectory: true) }
     public static var draftsDirectory: URL { support.appendingPathComponent("drafts", isDirectory: true) }

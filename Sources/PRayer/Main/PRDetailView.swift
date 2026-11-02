@@ -56,8 +56,19 @@ struct PRDetailView: View {
     /// 변경 파일 탭에서 본 리뷰 항목. 리뷰 탭에 "diff 에서 봄" 으로 표시한다.
     @State private var seenInDiff: Set<String> = []
 
+    /// 하단 대화창이 펼쳐졌는지·최대화했는지(ChatDrawer 와 같은 저장 값). 최대화면 탭 내용을 접는다.
+    @AppStorage(ChatDrawer.expandedKey) private var chatExpanded = false
+    @AppStorage(ChatDrawer.maximizedKey) private var chatMaximized = false
+    /// 탭 내용과 대화창이 나눠 쓰는 높이. 대화창이 끌어 올릴 수 있는 끝을 여기서 정한다.
+    @State private var bodyHeight: CGFloat = 0
+
     /// 탭 선택은 모델에 있다. PR 을 바꿔도 보던 탭이 유지된다(AppModel.detailTab 주석 참고).
     private var tab: DetailTab { model.detailTab }
+
+    /// 대화창이 펼쳐진 채 최대화돼 탭 내용 자리까지 쓰는가. 대화가 없는 PR 로 옮기면 펼쳐지지 않으니 탭 내용이 돌아온다.
+    private var chatFills: Bool {
+        chatMaximized && ChatDrawer.isOpen(model: model, pr: pr, expanded: chatExpanded)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,42 +83,22 @@ struct PRDetailView: View {
             Divider()
             // 내 PR 이면 탭 줄 바로 아래 머지 줄(MergeBar 주석 참고). 아래 줄도 MergeBar 가 긋는다.
             MergeBar(pr: pr)
-            Group {
-                switch tab {
-                case .overview:
-                    OverviewTab(pr: pr, expanded: $overviewExpanded) { key in
-                        follow = nil
-                        returnFlashPending = false
-                        scrollTargetKey = key
-                        commitBrowse.showWholePR()
-                        model.detailTab = .diff
-                    }
-                case .review:
-                    AIReviewView(pr: pr,
-                                 returnKey: reviewReturnKey,
-                                 flashOnAppear: returnFlashPending,
-                                 seenInDiff: seenInDiff,
-                                 onJumpToDiff: { key, origin in
-                                     follow = nil
-                                     scrollTargetKey = key
-                                     jumpToDiff(from: origin)
-                                 },
-                                 onFollow: { target in
-                                     follow = target
-                                     seenInDiff.insert(target.itemKey)
-                                     jumpToDiff(from: target.itemKey)
-                                 },
-                                 onReturned: { returnFlashPending = false })
-                case .diff:
-                    DiffTab(pr: pr,
-                            commitBrowse: $commitBrowse,
-                            scrollTargetKey: $scrollTargetKey,
-                            follow: $follow,
-                            onSeen: { seenInDiff.insert($0) })
-                }
+            // 탭 내용과 하단 대화창이 남은 높이를 나눠 쓴다. 대화창이 손잡이로 끌어 올릴 수 있는 끝을 정하려고 그 높이를 잰다.
+            VStack(spacing: 0) {
+                // 대화창을 최대화하면 탭 내용은 높이 0 으로 접어 대화만 보인다(ChatDrawer 주석 참고). 빼지 않고 접는 까닭:
+                // 빼면 탭 뷰가 다시 만들어져 원래 높이로 돌아왔을 때 보던 스크롤 자리를 잃는다.
+                tabContent
+                    // 내용이 적어도 위에서부터 채운다. 이게 없으면 빈 화면일 때 헤더까지 가운데로 내려온다.
+                    .frame(maxWidth: .infinity, maxHeight: chatFills ? 0 : .infinity, alignment: .top)
+                    .clipped()
+                    .opacity(chatFills ? 0 : 1)
+                    .allowsHitTesting(!chatFills)
+                    .accessibilityHidden(chatFills)
+                // 리뷰한 대화를 이어 묻는 칸. 어느 탭에서든 맨 아래에 있다 — 변경 파일을 보면서도 묻게(ChatDrawer 주석 참고).
+                ChatDrawer(pr: pr, availableHeight: bodyHeight)
             }
-            // 내용이 적어도 위에서부터 채운다. 이게 없으면 빈 화면일 때 헤더까지 가운데로 내려온다.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bodyHeight = $0 }
         }
         .task(id: pr.id) {
             if tab == .diff { await model.loadDiff(for: pr) }
@@ -129,6 +120,43 @@ struct PRDetailView: View {
         .task(id: pr.id) { await runDebugSweep() }
         // 코멘트 그림 중 비공개 첨부는 이 PR 의 본문·대화로 서명 주소를 얻는다(MarkdownImageView).
         .environment(\.markdownImagePR, MarkdownImagePR(repo: pr.repo, number: pr.number))
+    }
+
+    /// 고른 탭의 내용. 하단 대화창과 높이를 나눠 쓰려고 body 에서 떼어 냈다.
+    @ViewBuilder
+    private var tabContent: some View {
+        switch tab {
+        case .overview:
+            OverviewTab(pr: pr, expanded: $overviewExpanded) { key in
+                follow = nil
+                returnFlashPending = false
+                scrollTargetKey = key
+                commitBrowse.showWholePR()
+                model.detailTab = .diff
+            }
+        case .review:
+            AIReviewView(pr: pr,
+                         returnKey: reviewReturnKey,
+                         flashOnAppear: returnFlashPending,
+                         seenInDiff: seenInDiff,
+                         onJumpToDiff: { key, origin in
+                             follow = nil
+                             scrollTargetKey = key
+                             jumpToDiff(from: origin)
+                         },
+                         onFollow: { target in
+                             follow = target
+                             seenInDiff.insert(target.itemKey)
+                             jumpToDiff(from: target.itemKey)
+                         },
+                         onReturned: { returnFlashPending = false })
+        case .diff:
+            DiffTab(pr: pr,
+                    commitBrowse: $commitBrowse,
+                    scrollTargetKey: $scrollTargetKey,
+                    follow: $follow,
+                    onSeen: { seenInDiff.insert($0) })
+        }
     }
 
     /// `PRAYER_DEBUG_SCROLL_SWEEP`(DebugLaunch) — diff 를 위아래로 훑어 레이아웃 루프에 걸리는 자리를 찾는다.

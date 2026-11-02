@@ -10,6 +10,8 @@ public struct LedgerEntry: Codable, Sendable, Identifiable {
         case relevance
         /// 리뷰 이후 커밋·코멘트로 그 지적이 처리됐는지 다시 확인하는 보조 호출.
         case recheck
+        /// 하단 대화창에서 리뷰 대화를 이어 물은 것. 이 값을 모르는 옛 버전은 리뷰로 읽는다(아래 `init(from:)`).
+        case chat
     }
 
     public var id: UUID

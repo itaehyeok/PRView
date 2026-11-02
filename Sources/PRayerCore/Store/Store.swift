@@ -279,6 +279,27 @@ public actor Store {
 
     // MARK: - 토큰 원장
 
+    // MARK: - 리뷰 대화 (하단 대화창)
+
+    public func loadChats() -> [String: ReviewChat] {
+        guard let data = try? Data(contentsOf: AppPaths.chatsFile),
+              let list = try? decoder.decode([ReviewChat].self, from: data) else { return [:] }
+        return Dictionary(list.map { ($0.sessionID, $0) }, uniquingKeysWith: { _, new in new })
+    }
+
+    /// 다른 보조 결과처럼 30일 지난 것은 버린다 — 그쯤이면 CLI 쪽 대화도 정리돼 이어 갈 수 없다.
+    @discardableResult
+    public func save(chat: ReviewChat) -> [String: ReviewChat] {
+        var all = loadChats()
+        all[chat.sessionID] = chat
+        let cutoff = Date().addingTimeInterval(-30 * 24 * 3600)
+        all = all.filter { $0.value.updatedAt >= cutoff }
+        if let data = try? encoder.encode(Array(all.values)) {
+            try? data.write(to: AppPaths.chatsFile, options: .atomic)
+        }
+        return all
+    }
+
     // MARK: - 코멘트 설명 (한 번 만들면 다시 만들지 않는다)
 
     public func loadExplanations() -> [String: CommentExplanation] {

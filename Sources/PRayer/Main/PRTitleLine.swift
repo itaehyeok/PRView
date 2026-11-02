@@ -99,7 +99,7 @@ struct PRTitleLine: View {
         if let url = pr.htmlURL(host: model.settings.githubHost) { NSWorkspace.shared.open(url) }
     }
 
-    /// 눌렀다는 표시를 2초만 남긴다(ResumeConversationSection 과 같다). 복사는 되돌릴 일이 없어 창을 띄우지 않는다.
+    /// 눌렀다는 표시를 2초만 남긴다(ChatDrawer 의 터미널 명령 복사와 같다). 복사는 되돌릴 일이 없어 창을 띄우지 않는다.
     private func copy() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(Self.copyText(for: pr), forType: .string)
