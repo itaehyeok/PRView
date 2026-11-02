@@ -34,7 +34,7 @@ public struct RepoQuery: Sendable, Equatable {
         return RepoID(owner: owner, name: name)
     }
 
-    /// 이미 받아 둔 목록을 거를 때 쓴다. 서버를 기다리지 않고 타자마다 도는 쪽이다.
+    /// 받아 둔 목록(`RepoCatalog`)을 거를 때 쓴다. 서버에 묻지 않고 타자마다 돈다.
     public func matches(_ repo: RepoID) -> Bool {
         guard !isEmpty else { return true }
         if let owner {
@@ -46,21 +46,14 @@ public struct RepoQuery: Sendable, Equatable {
         return repo.full.localizedCaseInsensitiveContains(name)
     }
 
-    /// GitHub 검색에 보낼 검색어. nil 이면 보내지 않는다.
-    ///
-    /// `knownOwners` 는 이미 알고 있는 조직 이름이다. 슬래시 없이 조직 이름만 쳤을 때
-    /// `acme in:name` 으로 보내면 **이름에 acme 가 든 레포**만 나와 정작 그 조직의
-    /// 레포는 하나도 안 나온다. 아는 조직이면 `org:` 로 바꿔 보낸다.
-    public func searchTerms(knownOwners: [String] = []) -> [String]? {
-        if let owner {
-            var terms = ["org:\(owner)"]
-            if !name.isEmpty { terms.append(contentsOf: [name, "in:name"]) }
-            return terms
-        }
-        guard name.count >= 2 else { return nil }
-        if let org = knownOwners.first(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
-            return ["org:\(org)"]
-        }
-        return [name, "in:name"]
+    /// 거른 뒤 보일 순서. 이름이 친 말로 시작하는 레포를 위로 올리고, 같은 무리 안에서는 받은 순서
+    /// (최근 push 순)를 지킨다. 접근할 수 있는 레포가 수천 개라 `ios` 처럼 흔한 말에는 수십 개가 걸리는데,
+    /// 찾던 레포는 대개 이름이 그 말로 시작한다.
+    public func ranked(_ options: [RepoOption]) -> [RepoOption] {
+        let matched = options.filter { matches($0.repo) }
+        guard !name.isEmpty else { return matched }
+        let leading = matched.filter { $0.repo.name.range(of: name, options: [.caseInsensitive, .anchored]) != nil }
+        let others = matched.filter { $0.repo.name.range(of: name, options: [.caseInsensitive, .anchored]) == nil }
+        return leading + others
     }
 }

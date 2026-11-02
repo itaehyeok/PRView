@@ -52,35 +52,30 @@ final class RepoQueryTests: XCTestCase {
         XCTAssertNil(RepoQuery("/sample-ios").exactRepo)
     }
 
-    // MARK: 서버로 보낼 검색어
+    // MARK: 보일 순서
 
-    func testShortBareWordIsNotSentToTheServer() {
-        // 한 글자로 검색하면 수천 건이 온다. 거르기만 하고 보내지 않는다.
-        XCTAssertNil(RepoQuery("m").searchTerms())
-        XCTAssertNotNil(RepoQuery("me").searchTerms())
+    private func option(_ full: String) -> RepoOption {
+        RepoOption(repo: RepoID(full: full)!, isPrivate: true, isArchived: false, isFork: false,
+                   defaultBranch: "main", permission: "WRITE")
     }
 
-    func testBareWordSearchesNamesOnly() {
-        XCTAssertEqual(RepoQuery("sample").searchTerms(), ["sample", "in:name"])
+    /// 수천 개 중 흔한 말에 수십 개가 걸린다. 이름이 그 말로 시작하는 것이 찾던 것이라 위로 올린다.
+    func testNamesStartingWithTheWordComeFirst() {
+        let options = ["acme/web-ios-kit", "acme/sample-ios", "jamie/ios-notes", "acme/ios-app"].map(option)
+        XCTAssertEqual(RepoQuery("ios").ranked(options).map(\.repo.full),
+                       ["jamie/ios-notes", "acme/ios-app", "acme/web-ios-kit", "acme/sample-ios"])
     }
 
-    /// `acme in:name` 으로 보내면 **이름에 acme 가 든** 레포만 나와서,
-    /// 정작 그 조직 레포는 한 건도 안 나온다. 아는 조직이면 `org:` 로 바꿔 보낸다.
-    func testKnownOrganizationBecomesAnOrgQuery() {
-        XCTAssertEqual(RepoQuery("acme").searchTerms(knownOwners: ["acme"]), ["org:acme"])
-        XCTAssertEqual(RepoQuery("ACME").searchTerms(knownOwners: ["acme"]), ["org:acme"])
-        // 조직 이름의 일부만 친 것은 아직 조직이 아니다. 이름 검색으로 둔다.
-        XCTAssertEqual(RepoQuery("acm").searchTerms(knownOwners: ["acme"]), ["acm", "in:name"])
+    func testRankingKeepsTheReceivedOrderWithinEachGroup() {
+        // 받은 순서가 최근 push 순이다. 앞으로 올린 무리 안에서도, 나머지 안에서도 그 순서를 지킨다.
+        let options = ["acme/ios-b", "acme/x-ios", "acme/ios-a", "acme/y-ios"].map(option)
+        XCTAssertEqual(RepoQuery("IOS").ranked(options).map(\.repo.full),
+                       ["acme/ios-b", "acme/ios-a", "acme/x-ios", "acme/y-ios"])
     }
 
-    func testSlashedQueryScopesToTheOwner() {
-        XCTAssertEqual(RepoQuery("acme/ios").searchTerms(), ["org:acme", "ios", "in:name"])
-        // 오너만 치고 슬래시로 끝내면 그 조직 전체를 부른다(두 글자 제한과 무관하다).
-        XCTAssertEqual(RepoQuery("acme/").searchTerms(), ["org:acme"])
-    }
-
-    func testEmptyQuerySendsNothing() {
-        XCTAssertNil(RepoQuery("").searchTerms())
-        XCTAssertNil(RepoQuery("  ").searchTerms())
+    func testRankingDropsWhatDoesNotMatch() {
+        let options = ["acme/sample-ios", "acme/sample-ad-sdk", "itaehyeok/PRayer"].map(option)
+        XCTAssertEqual(RepoQuery("acme/").ranked(options).map(\.repo.full), ["acme/sample-ios", "acme/sample-ad-sdk"])
+        XCTAssertEqual(RepoQuery("").ranked(options).count, 3)
     }
 }

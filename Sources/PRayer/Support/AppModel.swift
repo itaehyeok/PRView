@@ -217,8 +217,23 @@ final class AppModel {
     var chatDrafts: [String: String] = [:]
     /// 최근 3건이 아니라 전체 내역을 펼쳐 둔 PR. 목록이 갱신돼도 유지되도록 모델이 들고 있는다.
     var fullActivityPRs: Set<String> = []
+    /// 레포 고르기 목록 — 접근할 수 있는 레포 전부(`loadRepoOptions`), 최근 push 순.
     var repoOptions: [RepoOption] = []
-    var organizations: [String] = []
+    /// `repoOptions` 가 끝까지 받은 목록인가(새로 받았거나 저장본). 처음 받는 중이거나 받다 실패하면 false 라
+    /// 화면이 "다 받지 못했다" 고 알린다 — 덜 찬 목록에서 못 찾은 레포가 "없는 레포" 로 보이면 안 된다.
+    var repoListComplete = false
+    /// 지금 목록을 받은 때(저장본이면 그걸 받은 때).
+    var repoListFetchedAt: Date?
+    /// 받는 중이면 몇 쪽 중 몇 쪽을 받았나. 아니면 nil.
+    var repoLoadProgress: RepoLoadProgress?
+    /// 마지막 받기가 끝까지 가지 못한 이유. 다시 받아 끝내면 지운다.
+    var repoLoadFailure: String?
+    @ObservationIgnored private var repoLoadTask: Task<Void, Never>?
+    /// `repoOptions` 가 어느 호스트·계정의 목록인가. 계정은 모를 수 있다(nil — 확인 전에 저장본을 보일 때).
+    @ObservationIgnored private var repoListHost: String?
+    @ObservationIgnored private var repoListLogin: String?
+    /// 호스트·계정이 바뀌어 목록을 비울 때마다 1씩 는다. 그 전에 시작한 받기의 결과를 버리는 데 쓴다.
+    @ObservationIgnored private var repoListGeneration = 0
     /// `gh` 에 로그인돼 있는 호스트들. 설정에서 고르게 한다.
     var githubHosts: [GitHubHost] = []
     /// 나와 있는 새 버전. 없으면 nil.
@@ -239,8 +254,6 @@ final class AppModel {
     @ObservationIgnored private var isCheckingUpdate = false
     /// 설정 창을 열면서 곧장 보여 줄 자리. 보여 주고 나면 설정 쪽이 nil 로 되돌린다.
     var settingsFocus: SettingsFocus?
-    /// 서버에 마지막으로 보낸 검색어. 같은 말을 다시 보내지 않으려고 들고 있다.
-    var lastRepoSearch: String?
     /// 필터는 앱을 다시 켜도 유지한다(검색어만 매번 비운다).
     /// 목록 탭. 닫힘·머지를 보려면 기간이 걸린 탭을 쓴다(무제한으로 긁으면 GitHub 이 502 를 낸다).
     var listScope: PRListScope = .open {
@@ -416,7 +429,6 @@ final class AppModel {
     var loadingCommitDiffKeys: Set<String> = []
     var commitDiffErrors: [String: String] = [:]
     var listTruncated = false
-    var repoListTruncated = false
     var pendingRefresh = false
     var didBootstrap = false
     var pendingRecords: [String: ReviewRecord] = [:]
@@ -1499,57 +1511,97 @@ final class AppModel {
 
     // MARK: - 레포
 
-    func loadRepoOptions() async {
+    /// 접근할 수 있는 레포를 **전부** 받는다(`RepoCatalog`). 레포 고르기의 검색은 이 목록 안에서만 돈다.
+    /// 저장해 둔 목록이 있으면 먼저 보여 주고 뒤에서 새로 받는다. 볼 레포는 사용자가 고른다 — 미리 골라 두지 않는다.
+    ///
+    /// 받기는 화면과 따로 돈다. 설정 창·팝오버의 `.task` 는 닫는 순간 취소되는데, 받기까지 같이 끊기면
+    /// 저장본이 영영 안 생긴다. 이미 받는 중이면 새로 부르지 않고 그걸 기다린다.
+    /// `maxAge`(초)를 주면 그보다 최근에 끝까지 받은 목록이 있을 때 다시 받지 않는다(자주 여는 팝오버).
+    func loadRepoOptions(maxAge: TimeInterval? = nil) async {
         guard !DemoMode.isOn else { return }
-        isLoadingRepos = true
-        defer { isLoadingRepos = false }
-        do {
-            let result = try await github.viewerRepositories()
-            repoOptions = result.repos.filter { !$0.isArchived }
-            organizations = result.organizations
-            repoListTruncated = result.truncated
-            // 볼 레포는 사용자가 고른다. 미리 골라 두지 않는다(쓰는 팀마다 다르다).
-        } catch is CancellationError {
-            // 취소는 실패가 아니다. `.task` 로 건 조회는 설정 창을 닫거나 탭을 옮기는 순간
-            // 뷰와 함께 취소되는데, 그걸 빨간 배너로 띄우면 아무 잘못이 없는데 에러가 뜬다(실측).
-        } catch {
-            banner = Banner(kind: .error, message: "레포 목록을 불러오지 못했습니다: \(error.localizedDescription)")
+        let host = settings.githubHost
+        // 계정은 앱을 켜고 몇 초 뒤에야 확인된다(실측 2~4초). 모를 때는 그 호스트의 저장본을 믿고 먼저 보여 준다 —
+        // 기다리면 그동안 목록이 비어 있다. 같은 맥에서 계정을 바꾸는 일은 드물고, 바뀐 걸 알게 되면 그때 비운다.
+        let login = githubAccount?.login
+        let accountChanged = login != nil && repoListLogin != nil && login != repoListLogin
+        if repoListHost != host || accountChanged {
+            // 호스트·계정이 바뀌었다. 앞 목록은 남의 것이다.
+            repoLoadTask?.cancel()
+            repoLoadTask = nil
+            repoListGeneration += 1
+            repoOptions = []
+            repoListComplete = false
+            repoListFetchedAt = nil
+            repoLoadFailure = nil
+            repoLoadProgress = nil
+            isLoadingRepos = false
+            repoListHost = host
+            repoListLogin = login
+            if let saved = await store.loadRepoCatalog(), saved.host == host, login == nil || saved.login == login {
+                showRepoCatalog(saved)
+                repoListLogin = saved.login
+            }
         }
+        if let running = repoLoadTask {
+            await running.value
+            return
+        }
+        if let maxAge, repoListComplete, let fetchedAt = repoListFetchedAt,
+           Date().timeIntervalSince(fetchedAt) < maxAge {
+            return
+        }
+        let generation = repoListGeneration
+        let task = Task { await fetchRepoCatalog(host: host, generation: generation) }
+        repoLoadTask = task
+        await task.value
     }
 
-    /// 레포 검색(서버). 접근 가능한 레포가 수천 개라 전량 열거는 하지 않는다.
-    ///
-    /// 찾은 것은 `repoOptions` 에 **보태기만** 한다. 지우면 타자를 치는 동안 이미 고른 레포가
-    /// 목록에서 사라졌다 나타난다. 화면에 뭘 보여 줄지는 `RepoQuery.matches` 가 정한다.
-    func searchRepos(_ query: RepoQuery) async {
-        guard !DemoMode.isOn else { return }
-        guard let terms = query.searchTerms(knownOwners: organizations) else { return }
-        // 타자마다 도는 경로라 같은 말로는 두 번 보내지 않는다(지웠다 다시 쳐도 호출이 쌓인다).
-        guard lastRepoSearch != query.raw else { return }
-        lastRepoSearch = query.raw
+    /// `generation` 은 시작할 때의 `repoListGeneration`. 받는 사이 호스트·계정이 바뀌면 결과를 버린다.
+    private func fetchRepoCatalog(host: String, generation: Int) async {
         isLoadingRepos = true
-        defer { isLoadingRepos = false }
+        repoLoadFailure = nil
+        // 저장본이 없으면(처음) 받는 대로 보여 준다. 있으면 다 받을 때까지 저장본을 둔다 —
+        // 덜 찬 목록으로 갈아 끼우면 보이던 레포가 사라졌다 돌아온다.
+        let showsPartial = !repoListComplete
+        let client = github
         do {
-            var found = try await github.searchRepositories(terms: terms)
-            // `org:` 는 개인 계정 레포를 못 잡는다. 정확한 이름을 쳤으면 그 레포만 직접 확인한다.
-            if let exact = query.exactRepo,
-               !found.contains(where: { $0.repo == exact }),
-               let option = try await github.repository(exact) {
-                found.insert(option, at: 0)
+            let repos = try await RepoCatalog.fetchAll(page: { try await client.repositoryPage($0) }) { [weak self] progress in
+                await self?.repoCatalogProgressed(progress, generation: generation, showsPartial: showsPartial)
             }
-            var merged = repoOptions
-            for option in found where !merged.contains(where: { $0.repo == option.repo }) {
-                merged.insert(option, at: 0)
+            guard repoListGeneration == generation else { return }
+            // 받는 사이에 계정이 확인됐을 수 있다. 끝까지 모르면 저장하지 않는다(저장본은 계정별이다).
+            let login = githubAccount?.login
+            let catalog = RepoCatalog(host: host, login: login ?? "", repos: repos, fetchedAt: Date())
+            showRepoCatalog(catalog)
+            if let login {
+                repoListLogin = login
+                await store.save(repoCatalog: catalog)
             }
-            repoOptions = merged
-            // 결과가 없다고 배너를 띄우지 않는다 — 치는 도중에는 안 나오는 게 정상이다.
+            Log.info("레포 목록 \(repos.count)개 받음", "github")
         } catch is CancellationError {
-            // 새 검색어가 들어오면 앞 검색이 취소된다. 에러가 아니다.
-            lastRepoSearch = nil
+            // 호스트·계정이 바뀌어 앞 받기를 멈췄다. 실패가 아니다.
         } catch {
-            lastRepoSearch = nil
-            banner = Banner(kind: .error, message: "레포 검색 실패: \(error.localizedDescription)")
+            guard repoListGeneration == generation else { return }
+            // 배너로 띄우지 않는다. 레포 고르기 목록 위에 "다 받지 못했다" 와 다시 받기를 둔다(OnboardingView).
+            repoLoadFailure = error.localizedDescription
+            Log.error("레포 목록 받기 실패: \(error.localizedDescription)", "github")
         }
+        guard repoListGeneration == generation else { return }
+        repoLoadProgress = nil
+        isLoadingRepos = false
+        repoLoadTask = nil
+    }
+
+    private func repoCatalogProgressed(_ progress: RepoCatalog.Progress, generation: Int, showsPartial: Bool) {
+        guard repoListGeneration == generation else { return }
+        repoLoadProgress = RepoLoadProgress(loadedPages: progress.loadedPages, totalPages: progress.totalPages)
+        if showsPartial { repoOptions = progress.repos.filter { !$0.isArchived } }
+    }
+
+    private func showRepoCatalog(_ catalog: RepoCatalog) {
+        repoOptions = catalog.repos.filter { !$0.isArchived }
+        repoListComplete = true
+        repoListFetchedAt = catalog.fetchedAt
     }
 
     /// 목록에 없는 레포를 이름으로 확인해 추가한다.
@@ -2398,6 +2450,12 @@ enum ExclusionCatalogState: Equatable {
     /// 받은 때·레포 수·못 받은 레포 수.
     case loaded(at: Date, repos: Int, failed: Int)
     case failed(String)
+}
+
+/// 레포 목록 받기 진행(`AppModel.loadRepoOptions`). 100개씩 한 쪽이다.
+struct RepoLoadProgress: Equatable {
+    var loadedPages: Int
+    var totalPages: Int
 }
 
 /// PR 스냅샷을 처음 받기 전의 확인. 크기는 창이 열린 뒤 GitHub 에 물어 채운다.

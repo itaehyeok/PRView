@@ -73,6 +73,8 @@ import PRayerCore
 /// - `PRAYER_DEBUG_HOVER_CODE=글자` — 코멘트 속 그 글자의 코드 링크에 마우스를 올린 것처럼 미리보기를 띄워 둔다.
 ///   스레드 파일 줄은 경로 전체를 준다.
 ///
+/// - `PRAYER_DEBUG_REPO_QUERY=말` — 레포 고르기 검색칸에 그 말을 넣는다(걸린 레포·줄 수 제한 모양 확인).
+///   `PRAYER_DEBUG_ONBOARDING_STEP=repos` 나 `PRAYER_DEBUG_OPEN_POPOVER=repos` 와 같이 준다.
 /// - `PRAYER_DEBUG_SEARCH=검색어` — 목록 검색칸에 그 말을 넣는다(전체 PR 검색 아래 구역 확인용).
 ///   `PRAYER_DEBUG_SCOPE=open:0|myApprovals:168|recentAll:720` 를 같이 주면 그 탭에서 친다(`PRListScope.storageValue` 꼴).
 ///
@@ -105,6 +107,7 @@ enum DebugLaunch {
     static var skipSheetMinLines: Int? { value("PRAYER_DEBUG_SKIP_SHEET").flatMap(Int.init) }
     static var snapshotConfirm: String? { value("PRAYER_DEBUG_SNAPSHOT_CONFIRM") }
     static var exclusionQuery: String? { value("PRAYER_DEBUG_EXCLUSION_QUERY") }
+    static var repoQuery: String? { value("PRAYER_DEBUG_REPO_QUERY") }
     static var cloneProgress: String? { value("PRAYER_DEBUG_CLONE_PROGRESS") }
     static var showApprovalRules: Bool { value("PRAYER_DEBUG_SHOW_APPROVAL_RULES") != nil }
     static var showAbout: Bool { value("PRAYER_DEBUG_ABOUT") != nil }
