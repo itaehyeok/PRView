@@ -374,15 +374,18 @@ struct RepoPickerStep: View {
     /// 팝오버는 켜고 끄려고 자주 여는데, 접근 가능한 레포가 늘 다 깔려 있으면 고른 레포를 찾기 어렵다.
     var compact = false
     @State private var search = ""
-    /// 타자가 멈춘 뒤에만 서버로 보내려고 들고 있는 예약.
-    @State private var searchTask: Task<Void, Never>?
     /// 팝오버 목록의 실제 높이. 줄이 다 들어가면 그 높이로 두고 스크롤 막대를 숨긴다(compactList).
     @State private var compactContentHeight: CGFloat = 0
     private static let compactMaxHeight: CGFloat = 380
+    /// 안 고른 레포는 이만큼만 그린다. 접근할 수 있는 레포가 수천 개라 두 글자만 쳐도 수백 개가 걸리는데,
+    /// 팝오버는 줄을 한꺼번에 다 그린다(VStack). 더 있으면 맨 아래에 몇 개 더 있는지 적는다.
+    private static let unpickedLimit = 50
 
     private var query: RepoQuery { RepoQuery(search) }
 
     var body: some View {
+        // 줄 목록은 한 번만 만든다. 수천 개를 거르는 일이라 줄마다 다시 부르면 타자가 느려진다.
+        let (rows, hidden) = visibleRows
         VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             if showsTitle {
                 Text("리뷰할 레포 선택")
@@ -402,17 +405,14 @@ struct RepoPickerStep: View {
             searchField
 
             // 팝오버는 검색할 때만 안 고른 레포를 보이므로, 그때만 이 안내가 뜻이 있다.
-            if model.repoListTruncated, !compact || !query.isEmpty {
-                Label("접근 가능한 레포가 많아 최근 push 순으로만 보여줍니다. 안 보이면 이름을 치면 GitHub 에서 찾아옵니다.",
-                      systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if !compact || !query.isEmpty {
+                loadStatus
             }
 
             // 고른 레포를 위로 올려서 **한 목록**으로 본다. 목록을 둘로 나눠 두면
             // 같은 레포가 화면에 두 번 나오고, 고른 것과 안 고른 것을 견주기 어렵다.
             if compact {
-                compactList
+                compactList(rows, hidden: hidden)
             } else {
                 ScrollViewReader { proxy in
                     List {
@@ -423,6 +423,7 @@ struct RepoPickerStep: View {
                                           isHighlighted: option.repo == highlightedRepo)
                                 .id(option.repo)
                         }
+                        if hidden > 0 { moreRow(hidden) }
                     }
                     .frame(minHeight: 240)
                     .animation(.easeOut(duration: 0.2), value: model.settings.repos.map(\.repo))
@@ -450,16 +451,18 @@ struct RepoPickerStep: View {
     ///
     /// 높이는 재서 정한다. `frame(maxHeight:)` 에 맡겼더니 줄이 둘뿐인데도 몇 pt 가 남아 스크롤 막대가
     /// 늘 떠 있었다(실측 — 마우스를 쓰는 맥은 막대가 항상 보인다).
-    private var compactList: some View {
+    private func compactList(_ rows: [RepoOption], hidden: Int) -> some View {
         let fits = compactContentHeight <= Self.compactMaxHeight
+        let lastID = rows.last?.id
         return ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 if rows.isEmpty { emptyRow }
                 ForEach(rows) { option in
                     RepoOptionRow(option: option, config: config(for: option.repo),
                                   showsClonePath: showsClonePaths, compact: true)
-                    if option.id != rows.last?.id { Divider() }
+                    if option.id != lastID || hidden > 0 { Divider() }
                 }
+                if hidden > 0 { moreRow(hidden) }
             }
             .padding(.vertical, 2)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { compactContentHeight = $0 }
@@ -474,19 +477,60 @@ struct RepoPickerStep: View {
         model.settings.repos.first { $0.repo == repo }
     }
 
-    /// 보일 줄. 고른 것이 위, 그 아래 안 고른 것. 팝오버는 검색할 때만 안 고른 것을 붙인다.
-    private var rows: [RepoOption] {
-        guard !compact || !query.isEmpty else { return picked }
+    /// 보일 줄과, 줄 수 제한(`unpickedLimit`)으로 안 그린 레포 수. 고른 것이 위, 그 아래 안 고른 것.
+    /// 팝오버는 검색할 때만 안 고른 것을 붙인다.
+    private var visibleRows: (rows: [RepoOption], hidden: Int) {
+        guard !compact || !query.isEmpty else { return (picked, 0) }
         let selected = Set(model.settings.repos.map(\.repo))
-        return picked + filtered.filter { !selected.contains($0.repo) }
+        let unpicked = model.repoOptions.filter { query.matches($0.repo) && !selected.contains($0.repo) }
+        return (picked + unpicked.prefix(Self.unpickedLimit), max(unpicked.count - Self.unpickedLimit, 0))
+    }
+
+    private func moreRow(_ hidden: Int) -> some View {
+        Text(query.isEmpty
+             ? "레포 \(hidden.formatted())개가 더 있습니다 — 이름으로 검색하세요."
+             : "\(hidden.formatted())개가 더 있습니다 — 더 쳐서 좁히세요.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    /// 목록을 처음 받는 중이거나 끝까지 받지 못했을 때 알린다. 덜 찬 목록에서 못 찾은 레포를
+    /// "없는 레포" 로 읽으면 안 된다. 저장본을 보여 주며 뒤에서 새로 받는 동안은 조용히 둔다(칸 옆 회전 표시만).
+    @ViewBuilder
+    private var loadStatus: some View {
+        if let failure = model.repoLoadFailure {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Label(loadFailureText, systemImage: "exclamationmark.triangle")
+                    .help(failure)
+                Button("다시 받기") { Task { await model.loadRepoOptions() } }
+                    .buttonStyle(.link)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else if !model.repoListComplete, let progress = model.repoLoadProgress {
+            HStack(spacing: 8) {
+                ProgressView(value: Double(progress.loadedPages), total: Double(max(progress.totalPages, 1)))
+                    .frame(width: 80)
+                Text("접근할 수 있는 레포를 받는 중입니다 · \(model.repoOptions.count.formatted())개")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var loadFailureText: String {
+        if model.repoListComplete, let fetchedAt = model.repoListFetchedAt {
+            return "새 목록을 받지 못해 \(fetchedAt.formatted(date: .abbreviated, time: .shortened))에 받은 목록을 보여 줍니다. 그 뒤에 생긴 레포는 안 보일 수 있습니다."
+        }
+        if model.repoOptions.isEmpty { return "레포 목록을 받지 못했습니다." }
+        return "레포 목록을 다 받지 못했습니다(\(model.repoOptions.count.formatted())개까지). 찾는 레포가 안 보일 수 있습니다."
     }
 
     /// 목록에 올려 둔 레포(켜 둔 것과 꺼 둔 것 모두), 이름순. 켜고 끌 때 줄이 자리를 옮기지 않게
     /// 켬·끔으로는 나누지 않는다 — 누른 줄이 움직이면 다음 클릭이 엉뚱한 줄에 간다.
     ///
-    /// 고른 레포가 `repoOptions` 에 **없을 수 있다.** 그 목록은 최근 push 순으로 잘려서
-    /// 오기 때문에(화면의 "접근 가능한 레포가 많아…" 안내가 그 뜻이다), 한동안 push 가
-    /// 없던 레포는 골라 뒀어도 빠진다. 그러면 체크된 줄이 아예 안 그려져서 "선택이
+    /// 고른 레포가 `repoOptions` 에 **없을 수 있다.** 목록을 아직 처음 받는 중이거나, 레포가 보관(archived)됐거나,
+    /// 권한이 빠지면 골라 뒀어도 목록에 없다. 그러면 체크된 줄이 아예 안 그려져서 "선택이
     /// 풀렸나?" 로 보인다(실측). 없으면 설정에서 만들어 채운다.
     private var picked: [RepoOption] {
         var byRepo = [RepoID: RepoOption]()
@@ -502,8 +546,8 @@ struct RepoPickerStep: View {
             .sorted { $0.repo.full < $1.repo.full }
     }
 
-    /// 오너·이름 구분 없이 한 칸에서 받는다. 치는 대로 이미 받아 둔 목록을 거르고,
-    /// 타자가 멎으면 GitHub 에도 물어본다(검색 버튼이 없다).
+    /// 오너·이름 구분 없이 한 칸에서 받는다. 치는 대로 받아 둔 목록(접근할 수 있는 레포 전부)을 거른다.
+    /// GitHub 검색에는 묻지 않는다 — 그러면 나와 관계없는 공개 레포가 후보에 섞인다(`RepoCatalog`).
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
@@ -516,7 +560,6 @@ struct RepoPickerStep: View {
             }
             .labelsHidden()
             .textFieldStyle(.plain)
-            .onSubmit { runSearch(now: true) }
             if !search.isEmpty {
                 Button {
                     search = ""
@@ -536,8 +579,6 @@ struct RepoPickerStep: View {
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Color(nsColor: .separatorColor))
         }
-        .onChange(of: search) { _, _ in runSearch(now: false) }
-        .onDisappear { searchTask?.cancel() }
     }
 
     @ViewBuilder
@@ -548,11 +589,13 @@ struct RepoPickerStep: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         } else if search.isEmpty {
-            Text(model.isLoadingRepos ? "레포를 불러오는 중입니다." : "접근할 수 있는 레포가 없습니다.")
+            // 끝까지 받기 전에는 "없다" 고 하지 않는다. 받지 못했으면 위 줄(loadStatus)이 다시 받기를 준다.
+            Text(model.repoListComplete ? "접근할 수 있는 레포가 없습니다."
+                 : model.repoLoadFailure == nil ? "레포를 불러오는 중입니다." : "레포 목록을 받지 못했습니다.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-        } else if model.isLoadingRepos {
-            Text("\(query.raw) 를 GitHub 에서 찾는 중입니다.")
+        } else if !model.repoListComplete, model.repoLoadFailure == nil {
+            Text("레포 목록을 받는 중입니다. 받는 대로 \(query.raw) 에 맞는 레포가 나타납니다.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         } else {
@@ -560,31 +603,13 @@ struct RepoPickerStep: View {
                 Text("\(query.raw) 로 찾은 레포가 없습니다.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                // 검색에 안 잡히는 레포도 있다(권한·개인 계정). 이름을 정확히 쳤으면 길을 열어 준다.
+                // 목록을 받은 뒤에 권한이 생긴 레포는 다음에 새로 받을 때까지 없다. 이름을 정확히 쳤으면 길을 열어 준다.
                 if let exact = query.exactRepo {
                     Button("그래도 \(exact.full) 추가") { Task { await model.addRepoByName(exact) } }
                         .buttonStyle(.link)
                 }
             }
         }
-    }
-
-    /// 타자 한 글자마다 GitHub 을 때리지 않는다. 멎고 나서 한 번만 보낸다.
-    private func runSearch(now: Bool) {
-        searchTask?.cancel()
-        let query = self.query
-        guard !query.isEmpty else { return }
-        searchTask = Task {
-            if !now {
-                try? await Task.sleep(for: .milliseconds(350))
-                guard !Task.isCancelled else { return }
-            }
-            await model.searchRepos(query)
-        }
-    }
-
-    private var filtered: [RepoOption] {
-        model.repoOptions.filter { query.matches($0.repo) }
     }
 }
 

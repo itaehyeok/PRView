@@ -277,6 +277,17 @@ public actor Store {
         try? encoder.encode(rememberedModels).write(to: AppPaths.rememberedModelsFile, options: .atomic)
     }
 
+    // MARK: - 레포 목록 (끝까지 받은 것만 남긴다)
+
+    public func loadRepoCatalog() -> RepoCatalog? {
+        guard let data = try? Data(contentsOf: AppPaths.repoCatalogFile) else { return nil }
+        return try? decoder.decode(RepoCatalog.self, from: data)
+    }
+
+    public func save(repoCatalog: RepoCatalog) {
+        try? encoder.encode(repoCatalog).write(to: AppPaths.repoCatalogFile, options: .atomic)
+    }
+
     // MARK: - 토큰 원장
 
     // MARK: - 리뷰 대화 (하단 대화창)

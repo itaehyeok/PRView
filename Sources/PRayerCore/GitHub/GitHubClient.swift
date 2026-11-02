@@ -21,7 +21,7 @@ public struct GitHubAccount: Sendable, Equatable {
     }
 }
 
-public struct RepoOption: Sendable, Hashable, Identifiable {
+public struct RepoOption: Sendable, Hashable, Identifiable, Codable {
     public var repo: RepoID
     public var isPrivate: Bool
     public var isArchived: Bool
@@ -40,15 +40,6 @@ public struct RepoOption: Sendable, Hashable, Identifiable {
         self.defaultBranch = defaultBranch
         self.permission = permission
     }
-}
-
-public struct ViewerRepositories: Sendable {
-    public var login: String
-    public var repos: [RepoOption]
-    public var organizations: [String]
-    public var totalCount: Int?
-    /// 목록이 잘렸는지. 조직 레포가 많으면 페이지 상한에 걸린다.
-    public var truncated: Bool
 }
 
 /// GitHub 리뷰 게시 payload. `event` 는 항상 명시한다(생략하면 PENDING 리뷰가 생긴다).
@@ -278,19 +269,10 @@ public struct GitHubClient: Sendable {
     }
 
     /// `gh api -i user` 응답(헤더 + JSON 본문)에서 계정과 토큰 스코프를 뽑는다.
-    /// 주의: HTTP 헤더는 CRLF 로 끝나고 Swift 에서 "\r\n" 은 **단일 Character** 다.
-    /// `split(separator: "\n")` 으로는 줄이 나뉘지 않으므로 `isNewline` 으로 나눠야 한다.
     public static func parseAccount(from response: String) -> GitHubAccount? {
-        var bodyStart: String.Index?
-        for separator in ["\r\n\r\n", "\n\n", "\r\r"] {
-            if let range = response.range(of: separator) {
-                bodyStart = range.upperBound
-                break
-            }
-        }
-        let headerText = bodyStart.map { String(response[response.startIndex..<$0]) } ?? ""
+        let (headers, body) = splitHTTPResponse(response)
         var scopes: [String] = []
-        for line in headerText.split(whereSeparator: \.isNewline) {
+        for line in headers {
             guard line.lowercased().hasPrefix("x-oauth-scopes:") else { continue }
             let value = line.drop(while: { $0 != ":" }).dropFirst()
             scopes = value
@@ -298,10 +280,25 @@ public struct GitHubClient: Sendable {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
         }
-        let body = bodyStart.map { String(response[$0...]) } ?? response
         struct User: Decodable { let login: String }
         guard let user = try? JSONDecoder().decode(User.self, from: Data(body.utf8)) else { return nil }
         return GitHubAccount(login: user.login, scopes: scopes)
+    }
+
+    /// `gh api -i` 응답을 헤더 줄들과 본문으로 나눈다. 빈 줄이 없으면 전부 본문이다.
+    /// 주의: HTTP 헤더는 CRLF 로 끝나고 Swift 에서 "\r\n" 은 **단일 Character** 다.
+    /// `split(separator: "\n")` 으로는 줄이 나뉘지 않으므로 `isNewline` 으로 나눠야 한다.
+    static func splitHTTPResponse(_ response: String) -> (headers: [Substring], body: String) {
+        var bodyStart: String.Index?
+        for separator in ["\r\n\r\n", "\n\n", "\r\r"] {
+            if let range = response.range(of: separator) {
+                bodyStart = range.upperBound
+                break
+            }
+        }
+        guard let bodyStart else { return ([], response) }
+        return (response[response.startIndex..<bodyStart].split(whereSeparator: \.isNewline),
+                String(response[bodyStart...]))
     }
 
     // MARK: - 조회
@@ -591,26 +588,18 @@ public struct GitHubClient: Sendable {
         return (data.repository?.pullRequests?.nodes ?? []).map { $0?.files?.nodes?.compactMap { $0 } ?? [] }
     }
 
-    /// 레포 목록에 없는 이름을 직접 찾는다(조직 레포가 많아 목록이 잘리는 경우 대비).
-    /// 검색어 조립은 `RepoQuery.searchTerms` 가 한다 — 한 칸에 오너와 이름이 같이 들어온다.
-    public func searchRepositories(terms: [String], limit: Int = 20) async throws -> [RepoOption] {
-        guard !terms.isEmpty else { return [] }
-        let data = try await graphQL(GraphQL.searchRepos,
-                                    variables: ["q": .string(terms.joined(separator: " ")), "n": .int(limit)],
-                                    as: SearchReposData.self,
-                                    timeout: 30)
-        return (data.search?.nodes ?? []).compactMap { node in
-            guard let full = node.nameWithOwner, let repo = RepoID(full: full) else { return nil }
-            return RepoOption(repo: repo,
-                              isPrivate: node.isPrivate ?? false,
-                              isArchived: node.isArchived ?? false,
-                              isFork: node.isFork ?? false,
-                              defaultBranch: node.defaultBranchRef?.name,
-                              permission: node.viewerPermission)
+    /// 접근할 수 있는 레포 목록의 한 쪽(`RepoCatalog`). 게이트웨이 오류(502 등)는 잠깐 뒤 다시 묻는다.
+    public func repositoryPage(_ page: Int) async throws -> RepoPage {
+        try await withGatewayRetry(context: "레포 목록 \(page)쪽") {
+            let result = try await gh(["api", "-i", RepoCatalog.pagePath(page)], timeout: 60)
+            guard result.succeeded else {
+                throw GitHubError.cli(GitHubClient.failureMessage(result, context: "레포 목록 \(page)쪽"))
+            }
+            return try RepoCatalog.parsePage(result.stdout)
         }
     }
 
-    /// 목록에 없는 레포를 이름으로 직접 확인한다.
+    /// 목록에 없는 레포를 이름으로 직접 확인한다. 목록을 받은 뒤에 권한이 생긴 레포가 여기로 들어온다.
     public func repository(_ repo: RepoID) async throws -> RepoOption? {
         let data = try await graphQL(GraphQL.singleRepo,
                                     variables: ["owner": .string(repo.owner), "name": .string(repo.name)],
@@ -791,42 +780,6 @@ public struct GitHubClient: Sendable {
             throw GitHubError.cli(GitHubClient.failureMessage(result, context: "커밋 비교"))
         }
         return .compared(try JSONDecoder().decode(CommitComparison.self, from: Data(result.stdout.utf8)))
-    }
-
-    /// 최근 push 순으로 일부만 받는다. 페이지를 키우면 레포가 많은 계정에서 GitHub 이 502 를 낸다.
-    public func viewerRepositories(maxPages: Int = 2) async throws -> ViewerRepositories {
-        var cursor: String?
-        var options: [RepoOption] = []
-        var login = ""
-        var orgs: [String] = []
-        var total: Int?
-        for _ in 0..<maxPages {
-            var variables: [String: GQLValue] = [:]
-            if let cursor { variables["after"] = .string(cursor) }
-            let data = try await graphQL(GraphQL.viewerRepos, variables: variables, as: ViewerReposData.self)
-            guard let viewer = data.viewer else { break }
-            login = viewer.login ?? login
-            total = viewer.repositories?.totalCount ?? total
-            if orgs.isEmpty {
-                orgs = (viewer.organizations?.nodes ?? []).compactMap(\.login)
-            }
-            for node in viewer.repositories?.nodes ?? [] {
-                guard let full = node.nameWithOwner, let repo = RepoID(full: full) else { continue }
-                options.append(RepoOption(repo: repo,
-                                          isPrivate: node.isPrivate ?? false,
-                                          isArchived: node.isArchived ?? false,
-                                          isFork: node.isFork ?? false,
-                                          defaultBranch: node.defaultBranchRef?.name,
-                                          permission: node.viewerPermission))
-            }
-            guard let page = viewer.repositories?.pageInfo, page.hasNextPage == true, let end = page.endCursor else { break }
-            cursor = end
-        }
-        return ViewerRepositories(login: login,
-                                  repos: options,
-                                  organizations: orgs.sorted(),
-                                  totalCount: total,
-                                  truncated: total.map { options.count < $0 } ?? false)
     }
 
     /// 승인 임계값. 룰셋 → 클래식 보호 → GraphQL 순으로 시도하고 못 읽으면 nil.

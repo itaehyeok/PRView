@@ -51,36 +51,4 @@ final class RepoQueryTests: XCTestCase {
         XCTAssertNil(RepoQuery("acme/").exactRepo)
         XCTAssertNil(RepoQuery("/sample-ios").exactRepo)
     }
-
-    // MARK: 서버로 보낼 검색어
-
-    func testShortBareWordIsNotSentToTheServer() {
-        // 한 글자로 검색하면 수천 건이 온다. 거르기만 하고 보내지 않는다.
-        XCTAssertNil(RepoQuery("m").searchTerms())
-        XCTAssertNotNil(RepoQuery("me").searchTerms())
-    }
-
-    func testBareWordSearchesNamesOnly() {
-        XCTAssertEqual(RepoQuery("sample").searchTerms(), ["sample", "in:name"])
-    }
-
-    /// `acme in:name` 으로 보내면 **이름에 acme 가 든** 레포만 나와서,
-    /// 정작 그 조직 레포는 한 건도 안 나온다. 아는 조직이면 `org:` 로 바꿔 보낸다.
-    func testKnownOrganizationBecomesAnOrgQuery() {
-        XCTAssertEqual(RepoQuery("acme").searchTerms(knownOwners: ["acme"]), ["org:acme"])
-        XCTAssertEqual(RepoQuery("ACME").searchTerms(knownOwners: ["acme"]), ["org:acme"])
-        // 조직 이름의 일부만 친 것은 아직 조직이 아니다. 이름 검색으로 둔다.
-        XCTAssertEqual(RepoQuery("acm").searchTerms(knownOwners: ["acme"]), ["acm", "in:name"])
-    }
-
-    func testSlashedQueryScopesToTheOwner() {
-        XCTAssertEqual(RepoQuery("acme/ios").searchTerms(), ["org:acme", "ios", "in:name"])
-        // 오너만 치고 슬래시로 끝내면 그 조직 전체를 부른다(두 글자 제한과 무관하다).
-        XCTAssertEqual(RepoQuery("acme/").searchTerms(), ["org:acme"])
-    }
-
-    func testEmptyQuerySendsNothing() {
-        XCTAssertNil(RepoQuery("").searchTerms())
-        XCTAssertNil(RepoQuery("  ").searchTerms())
-    }
 }

@@ -85,6 +85,8 @@ public enum AppPaths {
     public static var codexCatalogFile: URL { support.appendingPathComponent("codex-models.json") }
     /// '과거 버전 고르기' 에 쌓은 모델 이름. CLI 가 바뀌어도 이어 가도록 위 표와 따로 둔다.
     public static var rememberedModelsFile: URL { support.appendingPathComponent("remembered-models.json") }
+    /// 마지막으로 끝까지 받은 레포 목록(`RepoCatalog`). 다음에 레포 고르기를 열 때 먼저 보여 준다.
+    public static var repoCatalogFile: URL { support.appendingPathComponent("repo-catalog.json") }
     static let logFileName = "prayer.log"
     public static var logFile: URL { support.appendingPathComponent(logFileName) }
     /// 경고·실패를 종류별로 쌓는 문제 기록(ProblemLog). 이 맥에만 남는다.

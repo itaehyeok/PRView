@@ -47,7 +47,7 @@ enum DemoData {
         model.claudeStatus = EngineStatus(path: settings.claudePath, version: AppInfo.verifiedClaudeVersion,
                                           loggedIn: true, accountLabel: "demo@example.com")
         model.repoOptions = repoOptions
-        model.organizations = ["acme"]
+        model.repoListComplete = true
         model.prs = prs(now: Date())
         model.exclusionCatalog = exclusionCatalog
         model.exclusionCatalogState = .loaded(at: Date(), repos: 2, failed: 0)

@@ -34,7 +34,7 @@ public struct RepoQuery: Sendable, Equatable {
         return RepoID(owner: owner, name: name)
     }
 
-    /// 이미 받아 둔 목록을 거를 때 쓴다. 서버를 기다리지 않고 타자마다 도는 쪽이다.
+    /// 받아 둔 목록(`RepoCatalog`)을 거를 때 쓴다. 서버에 묻지 않고 타자마다 돈다.
     public func matches(_ repo: RepoID) -> Bool {
         guard !isEmpty else { return true }
         if let owner {
@@ -44,23 +44,5 @@ public struct RepoQuery: Sendable, Equatable {
         }
         // 슬래시가 없으면 오너에 걸려도 이름에 걸려도 남긴다.
         return repo.full.localizedCaseInsensitiveContains(name)
-    }
-
-    /// GitHub 검색에 보낼 검색어. nil 이면 보내지 않는다.
-    ///
-    /// `knownOwners` 는 이미 알고 있는 조직 이름이다. 슬래시 없이 조직 이름만 쳤을 때
-    /// `acme in:name` 으로 보내면 **이름에 acme 가 든 레포**만 나와 정작 그 조직의
-    /// 레포는 하나도 안 나온다. 아는 조직이면 `org:` 로 바꿔 보낸다.
-    public func searchTerms(knownOwners: [String] = []) -> [String]? {
-        if let owner {
-            var terms = ["org:\(owner)"]
-            if !name.isEmpty { terms.append(contentsOf: [name, "in:name"]) }
-            return terms
-        }
-        guard name.count >= 2 else { return nil }
-        if let org = knownOwners.first(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
-            return ["org:\(org)"]
-        }
-        return [name, "in:name"]
     }
 }

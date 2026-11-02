@@ -157,11 +157,9 @@ struct RepoManageButton: View {
                 RepoPickerStep(showsTitle: false, showsClonePaths: true, compact: true)
             }
             .frame(width: 420)
-            // 검색은 받아 둔 레포·조직 목록을 바탕으로 한다(조직을 알아야 org: 로 찾는다).
-            // 설정 창은 열 때마다 받지만, 팝오버는 자주 여닫으니 앱을 켜고 처음 열 때 한 번만 받는다.
-            .task {
-                if model.repoOptions.isEmpty { await model.loadRepoOptions() }
-            }
+            // 검색은 받아 둔 레포 목록 안에서만 돈다. 설정 창은 열 때마다 새로 받지만, 팝오버는 자주 여닫으니
+            // 받은 지 10분이 지났을 때만 다시 받는다 — 그 사이 생긴 레포도 다음에 열면 들어온다.
+            .task { await model.loadRepoOptions(maxAge: 600) }
         }
         // 툴바 밖이라 기본 버튼 모양(테두리)을 빼고 아이콘만 둔다.
         .buttonStyle(.borderless)

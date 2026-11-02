@@ -110,14 +110,17 @@ final class IntegrationTests: XCTestCase {
         }
     }
 
-    /// blocker 회귀: 조직 소유 레포가 목록에 잡히는지(ownerAffiliations 누락 시 0건이었다).
-    func testViewerRepositoriesIncludeOrganizationRepos() async throws {
+    /// 접근할 수 있는 레포를 끝까지 받는지, 테스트 레포(보통 조직 레포)가 그 안에 있는지.
+    func testRepoCatalogIncludesTheTestRepo() async throws {
         try requireIntegration()
-        let result = try await client.viewerRepositories()
-        XCTAssertFalse(result.repos.isEmpty)
-        let orgRepos = result.repos.filter { $0.repo.owner == "acme" }
-        XCTAssertFalse(orgRepos.isEmpty, "조직 레포가 하나도 없습니다 — ownerAffiliations 확인 필요")
-        print("레포 \(result.repos.count)건 (전체 \(result.totalCount.map(String.init) ?? "?"), 잘림 \(result.truncated)), acme \(orgRepos.count)건, org \(result.organizations.count)개")
+        let client = self.client
+        let started = Date()
+        let repos = try await RepoCatalog.fetchAll(page: { try await client.repositoryPage($0) })
+        XCTAssertFalse(repos.isEmpty)
+        XCTAssertEqual(Set(repos.map(\.repo)).count, repos.count, "같은 레포가 두 번 왔습니다")
+        XCTAssertTrue(repos.contains { $0.repo == repo }, "\(repo.full) 가 목록에 없습니다")
+        let owners = Set(repos.map(\.repo.owner)).count
+        print("레포 \(repos.count)건, 오너 \(owners)곳, \(String(format: "%.1f", Date().timeIntervalSince(started)))초")
         // 목록에 없더라도 이름으로 직접 확인할 수 있어야 한다.
         let direct = try await client.repository(repo)
         XCTAssertEqual(direct?.repo, repo)

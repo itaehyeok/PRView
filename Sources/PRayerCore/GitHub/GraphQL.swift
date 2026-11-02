@@ -151,39 +151,6 @@ enum GraphQL {
     }
     """
 
-    static let viewerRepos = """
-    query ViewerRepos($after: String) {
-      viewer {
-        login
-        repositories(first: 30, after: $after,
-                     affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER],
-                     ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER],
-                     orderBy: { field: PUSHED_AT, direction: DESC }) {
-          totalCount
-          nodes { nameWithOwner isArchived isPrivate isFork viewerPermission defaultBranchRef { name } }
-          pageInfo { hasNextPage endCursor }
-        }
-        organizations(first: 30) { nodes { login } }
-      }
-    }
-    """
-
-    /// 접근 가능한 레포가 수천 개인 계정에서는 전량 열거가 502 로 끊긴다(실측: first:100×6 → HTTP 502).
-    /// 이름으로 찾는 경로는 검색 API 를 쓴다.
-    static let searchRepos = """
-    query SearchRepos($q: String!, $n: Int!) {
-      search(query: $q, type: REPOSITORY, first: $n) {
-        repositoryCount
-        nodes {
-          ... on Repository {
-            nameWithOwner isArchived isPrivate isFork viewerPermission defaultBranchRef { name }
-          }
-        }
-      }
-    }
-    """
-
-    /// 목록에 없는 레포(조직 레포가 많아 잘린 경우 등)를 이름으로 직접 확인한다.
     /// 최근 PR 마다 바뀐 파일 — 제외 규칙 자동완성이 "PR 에서 자주 바뀐 것" 을 위로 올릴 때 쓴다(ExclusionCatalog).
     /// PR 50개 × 파일 100개를 한 번에 받는다(실측: 3초, rate limit 비용 1). 파일이 100개 넘는 PR 은 앞 100개만 센다.
     static let recentPRFiles = """
@@ -196,6 +163,7 @@ enum GraphQL {
     }
     """
 
+    /// 목록에 없는 레포(목록을 받은 뒤에 권한이 생긴 경우 등)를 이름으로 직접 확인한다.
     static let singleRepo = """
     query SingleRepo($owner: String!, $name: String!) {
       repository(owner: $owner, name: $name) {
@@ -581,19 +549,7 @@ struct HeadStateData: Decodable {
     let repository: Repository?
 }
 
-struct SearchReposData: Decodable {
-    struct Search: Decodable {
-        let repositoryCount: Int?
-        let nodes: [ViewerReposData.RepoNode]?
-    }
-    let search: Search?
-}
-
 struct SingleRepoData: Decodable {
-    let repository: ViewerReposData.RepoNode?
-}
-
-struct ViewerReposData: Decodable {
     struct RepoNode: Decodable {
         struct BranchRef: Decodable { let name: String? }
         let nameWithOwner: String?
@@ -603,16 +559,7 @@ struct ViewerReposData: Decodable {
         let viewerPermission: String?
         let defaultBranchRef: BranchRef?
     }
-    struct PageInfo: Decodable { let hasNextPage: Bool?; let endCursor: String? }
-    struct Repositories: Decodable { let totalCount: Int?; let nodes: [RepoNode]?; let pageInfo: PageInfo? }
-    struct OrgNode: Decodable { let login: String? }
-    struct Organizations: Decodable { let nodes: [OrgNode]? }
-    struct Viewer: Decodable {
-        let login: String?
-        let repositories: Repositories?
-        let organizations: Organizations?
-    }
-    let viewer: Viewer?
+    let repository: RepoNode?
 }
 
 struct ApprovalRulesData: Decodable {
