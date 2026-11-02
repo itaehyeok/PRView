@@ -322,6 +322,14 @@ struct AIReviewView: View {
                     try? await Task.sleep(for: .seconds(3))
                     scrollRequest = record.issues[index].key
                 }
+                .task(id: record.id) {
+                    // 확인용: 그 번째 코드 코멘트의 담기 체크를 누른 것처럼 담는다(담겨 있으면 뺀다). 위에서 내려 둔 뒤에 누르게
+                    // 5초 기다린다 — 좌표 클릭(PRAYER_DEBUG_KEYS)은 스크롤이 멈추는 자리가 실행마다 달라 옆 버튼을 눌렀다.
+                    guard let index = DebugLaunch.basketIndex, record.issues.indices.contains(index) else { return }
+                    try? await Task.sleep(for: .seconds(5))
+                    let issue = record.issues[index]
+                    moveBasket(issue, into: !(model.record(for: pr)?.basketKeys.contains(issue.key) ?? false))
+                }
                 .onChange(of: scrollRequest) { _, key in
                     guard let key else { return }
                     scrollRequest = nil
