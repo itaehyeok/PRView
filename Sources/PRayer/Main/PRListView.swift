@@ -787,6 +787,10 @@ struct PRRow: View {
         .fixedSize(horizontal: true, vertical: false)
         ApprovalPill(count: pr.approvalCount, threshold: model.settings.approvalThreshold(for: pr),
                      changesRequested: pr.reviewDecision == "CHANGES_REQUESTED")
+        let replies = model.unreadReplyCount(for: pr)
+        if replies > 0 {
+            ReplyChip(count: replies)
+        }
     }
 
     private struct StatusTag {
@@ -1293,6 +1297,28 @@ struct ApprovalPill: View {
         .foregroundStyle(count >= threshold ? .green : .secondary)
         .lineLimit(1)
         .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+/// 내 코멘트에 온, 아직 안 본 답글 수(AppModel+Replies). PR 을 열면 사라진다(시안 A, 2026-11-02 사용자 결정).
+/// 다른 칩(옅은 바탕)과 달리 꽉 채운다 — 읽으면 없어지는 "확인할 것" 표시라 훑을 때 먼저 걸려야 한다.
+struct ReplyChip: View {
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text("답글 \(count)")
+                .font(.caption2.weight(.semibold))
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 1)
+        .foregroundStyle(.white)
+        .background(Color.accentColor, in: Capsule())
+        .fixedSize()
+        .help("내 코멘트에 새 답글 \(count)건 — PR 을 열면 읽은 것으로 바뀝니다")
     }
 }
 

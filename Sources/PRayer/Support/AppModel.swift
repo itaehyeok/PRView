@@ -317,6 +317,7 @@ final class AppModel {
         // 같이 고른 것 밖으로 옮겨 가면(다른 목록의 행 클릭·알림으로 열기) 같이 고른 것을 푼다 —
         // 안 풀면 보이지 않는 곳에 고른 것이 남아 다음 우클릭이 엉뚱한 PR 까지 보내거나 리뷰한다.
         didSet {
+            if oldValue != selectedPRID { openRepliesOfSelectedPR() }
             guard let selectedPRID else { return }
             // 통계를 보다가 PR 을 고르면(행 클릭·방향키·알림) 상세 칸이 그 PR 로 돌아간다(AppModel+TeamStats).
             if showingTeamStats {
@@ -414,6 +415,10 @@ final class AppModel {
     var prSnapshots: [String: PRSnapshot] = [:]
     /// 첫 조회는 기준선이라 알리지 않는다(앱을 처음 켰을 때 모든 PR 이 "새 PR" 로 쏟아지는 것 방지).
     var hasSnapshotBaseline = false
+    /// 내 코멘트 답글을 어디까지 봤나(AppModel+Replies). 디스크에서 읽기 전에는 nil — 그동안은 칩을 그리지 않는다.
+    var myReplyRead: MyReplyReadState?
+    /// PR 을 열 때 아직 안 본 답글이었던 것(`MyCommentReply.id`). 열어 둔 동안만 개요 탭에 "새 답글" 로 남는다.
+    var freshReplyIDs: [String: Set<String>] = [:]
     /// 지금 화면에 있는 목록이 아직 이번 조회 결과가 아닌가 — 지난번 캐시이거나, 처음이라 비어 있다
     /// (조회가 끝나면 false). 목록 머리 줄의 "가져오는 중" 과 빈 목록의 빈 행 자리가 본다.
     /// 처음 값이 true 인 것은 앱을 처음 켜 캐시가 없을 때도 첫 결과 전에는 "없습니다" 대신
@@ -1022,6 +1027,8 @@ final class AppModel {
         // README 캡처용 데모 모드 — 디스크의 설정·초안을 읽지 않고, 묻지도 않는다(DemoData).
         if DemoData.isOn {
             DemoData.load(into: self)
+            // 데모 답글이 모두 안 읽은 것으로 보이게(디스크의 읽음 기록은 읽지 않는다).
+            myReplyRead = MyReplyReadState(since: .distantPast)
             return
         }
         #endif
@@ -1032,6 +1039,7 @@ final class AppModel {
             prSnapshots = snapshots
             hasSnapshotBaseline = true
         }
+        await loadMyReplyRead()
         filter = PRFilter.load()
         // 모델 목록을 수확보다 먼저 읽는다 — 수확이 Codex 계열(`codex:sol`)을 실제 모델로 풀 때 쓴다. 늦게 읽으면
         // 초안에 계열 이름이 그대로 남는다(실측 2026-10-29: 머리 줄에 "codex:codex:sol").
@@ -2189,6 +2197,7 @@ final class AppModel {
         // 교체가 아니라 누적이다. 탭마다 목록이 달라서 교체하면 기억을 잃는다(merged 주석 참고).
         prSnapshots = PRChangeDetector.merged(previous: previous, current: prs, viewerLogin: githubAccount?.login)
         Task { [prSnapshots, store] in await store.save(snapshots: prSnapshots) }
+        absorbRepliesOfSelectedPR()
 
         guard hasSnapshotBaseline else {
             // 기준선을 처음 만드는 중이면 알리지 않는다.

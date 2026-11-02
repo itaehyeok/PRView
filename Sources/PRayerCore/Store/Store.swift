@@ -223,6 +223,15 @@ public actor Store {
         try? encoder.encode(snapshots).write(to: AppPaths.snapshotsFile, options: .atomic)
     }
 
+    public func loadMyReplyRead() -> MyReplyReadState? {
+        guard let data = try? Data(contentsOf: AppPaths.myReplyReadFile) else { return nil }
+        return try? decoder.decode(MyReplyReadState.self, from: data)
+    }
+
+    public func save(myReplyRead: MyReplyReadState) {
+        try? encoder.encode(myReplyRead).write(to: AppPaths.myReplyReadFile, options: .atomic)
+    }
+
     // MARK: - 슬랙 리뷰 요청 기록 (키: PR id)
 
     public func loadSlackRequests() -> [String: SlackRequestEntry] {

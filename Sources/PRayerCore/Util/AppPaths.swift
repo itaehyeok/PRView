@@ -53,6 +53,8 @@ public enum AppPaths {
     /// 설정 가져오기 직전의 설정. 마지막 한 번만 남긴다 — 되돌리기를 놓쳤을 때 이 파일을 settings.json 자리에 두면 된다.
     public static var settingsBeforeImportFile: URL { support.appendingPathComponent("settings-before-import.json") }
     public static var snapshotsFile: URL { support.appendingPathComponent("pr-snapshots.json") }
+    /// 내 코멘트 답글을 어디까지 봤나(`MyReplyReadState`).
+    public static var myReplyReadFile: URL { support.appendingPathComponent("my-comment-replies.json") }
     public static var ledgerFile: URL { support.appendingPathComponent("token-ledger.json") }
     public static var explanationsFile: URL { support.appendingPathComponent("comment-explanations.json") }
     /// 돌고 있는 리뷰 1건당 폴더 하나. 앱이 죽어도 결과가 남는다.
