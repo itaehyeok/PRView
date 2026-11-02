@@ -49,7 +49,7 @@ bash Scripts/test.sh              # 단위 테스트 (현재 1064개)
 bash Scripts/install.sh           # 빌드 + 설치 (개발용, 이 맥에서만 열린다)
 bash Scripts/install.sh "머지 버튼"         # 곁가지 워크트리: "PRView - 머지 버튼" 작업본으로 설치(아래 "개발 빌드 이름")
 bash Scripts/dev-name.sh <앱> "머지 버튼"   # 세션 확인용 사본에 같은 꼴의 이름 붙이기
-bash Scripts/release.sh --beta            # 서명·공증 → 이 저장소에 시험판으로 다음 베타(0.5.0-beta.N, 번호는 자동)
+bash Scripts/release.sh --beta            # 서명·공증 → 이 저장소에 시험판으로 다음 베타(0.5.0-beta.N, 번호는 자동) · 돌리기 전에 사용 통계 확인(아래 '사용 통계')
 bash Scripts/beta.sh                      # 가장 새 베타를 이 맥에 깐다(켜진 앱을 내리고 바꿔 끼움)
 bash Scripts/release.sh 0.5.0 --promote   # 0.5.0 의 마지막 베타 zip 을 그대로 공개 0.5.0 으로(RELEASE_NOTES_FILE 필수)
 bash Scripts/release.sh 0.6.0 --beta      # 공개한 뒤 새 목표의 첫 베타(목표 번호는 사용자가 정한다)
@@ -127,6 +127,17 @@ Finder 에 `PRView - <작업>` 으로 뜨게 한다** — 이름만 보고 어�
   들인다. `Settings` 에 칸을 더하면 공유할 값인지 정하고, 공유한다면 담기(`payload`)·검사(`sanitized`)·
   목록(`sections`, 제목·설명)·적용(`apply`)에 같이 넣는다. 그 맥에서만 맞는 값(실행 파일 경로·온보딩 상태)은
   담지 않고, 경로는 `~` 로 담는다. 목록 값은 합치기만 한다(받은 파일에 없다고 지우지 않는다)
+- **사용 통계**(`UsageStats`·`AppModel+Usage`, 2026-11-02) — 기능별 하루 횟수를 `usage-stats.json` 에 모아 다 지난 날을
+  하루 한 번 TelemetryDeck 으로 HTTP 로 보낸다(SDK 는 기기 정보를 붙여서 안 쓴다). 기본 켬이고 화면 안내는 없다 — 설정 ›
+  알림·기타 맨 아래와 README 에만 있다(메인 창 안내 줄은 만들었다 뺐다, 사용자 결정). 끄면 안 보낸 것도 버린다. App ID·namespace 는 `Local.env` 의 `PRAYER_TELEMETRY_APP_ID`·`_NAMESPACE`
+  를 release.sh 가 배포 빌드 Info.plist 에만 넣는다 — 개발 빌드는 비어서 안 센다(보내 보려면 같은 이름 환경변수, 테스트 표시가
+  붙는다). 설정 공유에 담지 않는다.
+  **세는 줄은 기능을 만들 때가 아니라 베타를 올리기 전에 한 번에 붙인다**(2026-11-02 사용자 결정 — 통계는 배포판에서만
+  나가서 언제 붙여도 잃는 것이 없다). `release.sh --beta` 를 돌리기 전에 지난 베타 이후의 기능 커밋을 훑는다:
+  `git fetch --tags` 뒤 `git log --oneline "$(git describe --tags --abbrev=0 --match 'v*-beta.*')"..HEAD --grep '^feat'`.
+  사람이 직접 하는 새 동작(버튼·메뉴·단축키)이 있으면 `UsageStats.Event` 에 이름(`영역.동작`, 예: `pr.merge`)을 더하고
+  그 동작이 일어난 자리에서 `recordUsage(_:)` 한 줄 — 실패할 수 있으면 성공한 뒤에. 화면을 연 것만으로는 세지 않는다.
+  붙인 것은 따로 커밋한 뒤 배포한다. **한 번 내보낸 이벤트 이름은 바꾸지 않는다**(대시보드 칸 이름이다)
 - `Tests/PRayerCoreTests` — Core 단위 테스트. UI 는 테스트하지 않는다.
   `ReviewStyleCheck` 는 모델 출력이 사용자가 정한 문체를 지켰는지 재는 판정기다
   (✗ 는 위반, △ 는 사람이 읽을 것). `--review-batch` 와 저장된 초안 채점이 이걸 쓴다
