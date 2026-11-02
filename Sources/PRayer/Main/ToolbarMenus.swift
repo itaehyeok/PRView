@@ -313,103 +313,6 @@ struct HoverHint: View {
     }
 }
 
-// MARK: - 큐
-
-struct QueueToolbarMenu: View {
-    @Environment(AppModel.self) private var model
-    @State private var showsCapHint = false
-
-    private var active: [ReviewJob] { model.jobs.filter(\.isActive) }
-
-    private func capHint(_ cap: Int) -> String {
-        "최근 5시간 동안 쓴 토큰이 정해 둔 상한(\(cap / 1000)k)을 넘었습니다. 리뷰를 막지는 않습니다 — "
-            + "Claude 사용 한도에 걸리기 전에 알려 주는 표시입니다. 상한은 설정 → ‘대상 제외’ → 사용량 방어에서 바꿉니다."
-    }
-
-    var body: some View {
-        ToolbarPopover {
-            ToolbarButtonLabel(title: "리뷰 \(active.count)", tint: .primary, showsChevron: true) {
-                Image(systemName: "bolt.fill").foregroundStyle(.orange)
-            }
-        } content: {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("돌고 있는 리뷰 \(active.count)건")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                ForEach(active) { job in
-                    QueueRow(job: job)
-                }
-                Divider()
-                let cap = model.settings.fiveHourTokenCap
-                HStack(spacing: 6) {
-                    Text("5시간 토큰 \(model.fiveHourTokens / 1000)k")
-                        .font(.caption.monospacedDigit())
-                    if cap > 0 {
-                        Text("/ 상한 \(cap / 1000)k")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                        if model.fiveHourTokens >= cap {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                                .help(capHint(cap))
-                                .onHover { inside in withAnimation(.easeOut(duration: 0.12)) { showsCapHint = inside } }
-                        }
-                    }
-                }
-                if showsCapHint, cap > 0, model.fiveHourTokens >= cap {
-                    HoverHint(text: capHint(cap))
-                }
-            }
-        }
-        .help("리뷰 큐")
-    }
-}
-
-private struct QueueRow: View {
-    @Environment(AppModel.self) private var model
-    let job: ReviewJob
-
-    private var elapsed: TimeInterval {
-        guard let startedAt = job.startedAt else { return 0 }
-        return max(0, model.clockTick.timeIntervalSince(startedAt))
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            if job.state == .running {
-                ProgressView().controlSize(.small)
-            } else {
-                Image(systemName: "clock").foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text(verbatim: "#\(job.number)").font(.callout.weight(.medium))
-                    if job.deep { Tag(text: "전체 리뷰", color: .purple) }
-                }
-                if job.state == .running {
-                    HStack(spacing: 6) {
-                        Text(job.progressTitle).font(.caption)
-                        if let fraction = job.cloneFraction {
-                            Text("\(Int((fraction * 100).rounded()))%")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(String(format: "%d:%02d", Int(elapsed) / 60, Int(elapsed) % 60))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    PhaseTrack(current: job.phase, deep: job.deep, clonedSnapshot: job.clonedSnapshot)
-                } else {
-                    Text("대기 중").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 4)
-            Button("취소") { model.cancel(jobID: job.id) }
-                .buttonStyle(.link)
-                .font(.caption)
-        }
-    }
-}
-
 // MARK: - 상태
 
 struct StatusToolbarMenu: View {
@@ -679,14 +582,11 @@ private struct PreviewSampleLabel: View {
     .frame(width: 600, alignment: .leading)
 }
 
-/// 툴바에 실제로 쓰이는 두 버튼(레포 메뉴는 툴바 아래 레포 줄로 옮겼다). 빈 `AppModel` 이라 큐 내용은 없지만 라벨 배치는 같다.
-#Preview("메뉴 2종") {
-    HStack(spacing: 10) {
-        QueueToolbarMenu()
-        StatusToolbarMenu()
-    }
-    .padding(20)
-    .environment(AppModel())
+/// 툴바에 실제로 쓰이는 팝오버 버튼(레포 메뉴는 툴바 아래 레포 줄로 옮겼다).
+#Preview("상태 메뉴") {
+    StatusToolbarMenu()
+        .padding(20)
+        .environment(AppModel())
 }
 
 private struct PreviewSection<Content: View>: View {
