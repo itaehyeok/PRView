@@ -279,16 +279,27 @@ struct AIReviewView: View {
                     } else {
                         // 좁으면 위아래로 쌓지 않고 탭으로 오간다 — 쌓으면 코드 코멘트가 본문 아래로 밀려 있는 줄도 몰랐다(사용자 피드백).
                         ScrollView {
-                            VStack(alignment: .leading, spacing: 14) {
+                            // 판정 줄·안내는 같이 올라가 사라지고, 탭 줄은 맨 위에 닿으면 붙어 그 아래만 스크롤된다(사용자 요청,
+                            // 2026-11-02). 탭 줄까지 올라가 사라지면 내려 읽는 동안 지금 어느 탭인지 안 보였고, 담기 칩이 들어갈 탭도 화면 밖이었다.
+                            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                                 headerArea(record: record, stacked: true)
-                                VStack(alignment: .leading, spacing: 12) {
-                                    panelTabs(record: record)
-                                    switch currentTab(record) {
-                                    case .body:
-                                        bodyColumn(record: record, binding: binding)
-                                    case .comments:
-                                        issueSection(record: record, binding: binding, showsVerdict: false)
+                                    .padding(.bottom, 8)
+                                Section {
+                                    Group {
+                                        switch currentTab(record) {
+                                        case .body:
+                                            bodyColumn(record: record, binding: binding)
+                                        case .comments:
+                                            issueSection(record: record, binding: binding, showsVerdict: false)
+                                        }
                                     }
+                                    .padding(.top, 12)
+                                } header: {
+                                    // 위 여백은 붙었을 때 탭 글자가 칸 윗변에 닿지 않게 한다(판정 줄 아래 8 과 합쳐 예전 간격 14).
+                                    // 붙어 있는 동안 아래 내용이 비치지 않게 창 바탕을 깔고, 좌우 여백(16)까지 덮는다.
+                                    panelTabs(record: record)
+                                        .padding(.top, 6)
+                                        .background(WindowBackdrop().padding(.horizontal, -16))
                                 }
                             }
                             .frame(width: contentWidth, alignment: .leading)
@@ -2484,4 +2495,18 @@ struct OwnPRNoPostChip: View {
             .fixedSize()
             .help("내 PR이라 GitHub에 올리지 않습니다. 코멘트가 필요하면 GitHub에서 직접 남기세요.")
     }
+}
+
+/// 창 바탕과 같은 판 — 좁은 창에서 위에 붙은 탭 줄 밑에 깐다. 다크 모드 창 바탕은 바탕화면 색이 살짝 비쳐서
+/// 단색 `windowBackgroundColor` 로 칠하면 둘레보다 어둡게 떴다(실측 #282828 · 둘레 #2F3538).
+struct WindowBackdrop: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .windowBackground
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }

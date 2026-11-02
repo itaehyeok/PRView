@@ -45,7 +45,7 @@ final class BasketFrames {
     var leftViewport: CGRect = .zero
     var rightViewport: CGRect = .zero
     var twoColumns = false
-    /// 좁은 창의 "리뷰 본문" · "코드 코멘트" 탭 버튼. 탭 줄도 스크롤 안이라 내려 읽으면 화면 위로 벗어난다.
+    /// 좁은 창의 "리뷰 본문" · "코드 코멘트" 탭 글자 묶음. 탭 줄은 스크롤 맨 위에 붙어 늘 보인다.
     var bodyTab: CGRect = .zero
     var commentsTab: CGRect = .zero
 }
@@ -65,9 +65,7 @@ struct BasketTabTrip: Identifiable, Equatable {
 /// 좁은 창 담기·빼기 — 누른 체크 자리에서 "☑ 참고 · 파일:줄" 칩이 떠올라 반대쪽 탭으로 휘어 들어간다(시안 B "칩 포물선",
 /// 사용자 선택 2026-11-02). 예전에는 카드가 그 자리에서 사라지기만 해서 어디로 갔는지 몰랐다.
 /// 움직임은 목록의 Approve 칩(`ApprovalFlightChip`)과 같다 — 위로 먼저 솟고 옆으로는 늦게 움직여 포물선을 그린다.
-///
-/// 탭 줄도 스크롤 안이라 내려 읽던 중이면 탭이 화면 위로 벗어나 있다. 그때는 스크롤을 건드리지 않고 화면 윗변의 탭 쪽까지만
-/// 날아가 흐려진다 — 넓은 창에서 오른쪽 칸을 굴리지 않고 보이는 자리 끝까지만 날려 보내는 것과 같다.
+/// 탭 줄은 스크롤 맨 위에 붙어 있어(AIReviewView 좁은 창) 내려 읽던 중에도 칩이 보이는 탭에 들어간다.
 struct BasketTabChip: View {
     let trip: BasketTabTrip
     let onLanded: () -> Void
@@ -98,10 +96,8 @@ struct BasketTabChip: View {
 
     private func fly() {
         let duration = BasketFlight.tabDuration
-        // 탭이 화면 위로 벗어났으면 윗변에 칩이 다 보이는 자리까지만 간다.
-        let hidden = trip.to.midY < size.height / 2
         let targetX = trip.to.midX - size.width / 2
-        let targetY = max(trip.to.midY, size.height / 2) - size.height / 2
+        let targetY = trip.to.midY - size.height / 2
         opacity = 1
         withAnimation(.timingCurve(0.2, 0.6, 0.35, 1, duration: duration)) {
             dy = targetY - (trip.from.y - size.height / 2)
@@ -116,7 +112,7 @@ struct BasketTabChip: View {
         } completion: {
             withAnimation(.easeIn(duration: duration * 0.55)) {
                 scale = 0.55
-                opacity = hidden ? 0 : 0.85
+                opacity = 0.85
             }
         }
     }
