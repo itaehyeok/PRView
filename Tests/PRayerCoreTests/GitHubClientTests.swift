@@ -44,6 +44,22 @@ final class GitHubClientTests: XCTestCase {
         XCTAssertTrue(query.contains("is:open"))
         XCTAssertFalse(GitHubClient.searchQuery(repos: repos, includeClosed: true).contains("is:open"))
     }
+
+    /// 규칙이 비었을 때 Approve 조건이 없다고 봐도 되는가. 옛 보호 규칙은 관리자에게만 보여서,
+    /// 관리자가 아니면 빈 목록만으로는 없다고 못 한다 — 브랜치가 하나도 보호되지 않았을 때만 없다.
+    func testConfirmsNoApprovalConditionOnlyWhenRulesAreVisible() {
+        // 관리자는 다 보인다. 새 규칙을 묻다 끊겼으면 모른다.
+        XCTAssertTrue(GitHubClient.confirmsNoApprovalCondition(viewerIsAdmin: true, rulesetsRead: true, branchesProtected: []))
+        XCTAssertFalse(GitHubClient.confirmsNoApprovalCondition(viewerIsAdmin: true, rulesetsRead: false, branchesProtected: []))
+        // 관리자가 아니면 보호 여부로 가른다.
+        XCTAssertTrue(GitHubClient.confirmsNoApprovalCondition(viewerIsAdmin: false, rulesetsRead: true,
+                                                               branchesProtected: [false, false]))
+        XCTAssertFalse(GitHubClient.confirmsNoApprovalCondition(viewerIsAdmin: false, rulesetsRead: true,
+                                                                branchesProtected: [false, true]))
+        XCTAssertFalse(GitHubClient.confirmsNoApprovalCondition(viewerIsAdmin: false, rulesetsRead: true,
+                                                                branchesProtected: [false, nil]))
+        XCTAssertFalse(GitHubClient.confirmsNoApprovalCondition(viewerIsAdmin: false, rulesetsRead: true, branchesProtected: []))
+    }
 }
 
 final class PRListScopeQueryTests: XCTestCase {

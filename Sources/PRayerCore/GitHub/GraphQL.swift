@@ -209,6 +209,7 @@ enum GraphQL {
     static let approvalRules = """
     query ApprovalRules($owner: String!, $name: String!) {
       repository(owner: $owner, name: $name) {
+        viewerPermission
         defaultBranchRef { name }
         branchProtectionRules(first: 50) {
           nodes { pattern requiresApprovingReviews requiredApprovingReviewCount }
@@ -623,6 +624,8 @@ struct ApprovalRulesData: Decodable {
     struct Rules: Decodable { let nodes: [Rule]? }
     struct BranchRef: Decodable { let name: String? }
     struct Repository: Decodable {
+        /// 옛 브랜치 보호 규칙은 관리자(`ADMIN`)에게만 보인다 — 빈 목록이 "없음" 인지 "안 보임" 인지 가른다.
+        let viewerPermission: String?
         let defaultBranchRef: BranchRef?
         let branchProtectionRules: Rules?
     }
