@@ -20,6 +20,7 @@ extension AppModel {
     func sendChat(_ question: String, record: ReviewRecord) {
         let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, let sessionID = chatSessionID(for: record), chatTasks[sessionID] == nil else { return }
+        recordUsage(.chat)
         let engine = record.engineKind
         var chat = chats[sessionID] ?? ReviewChat(sessionID: sessionID, engine: engine)
         // 형식 안내는 답을 한 번이라도 받기 전까지 붙인다 — 첫 질문이 모델에 닿지도 못하고 실패했으면 다음 질문이 첫 질문이다.

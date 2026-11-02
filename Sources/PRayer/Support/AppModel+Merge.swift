@@ -21,6 +21,7 @@ extension AppModel {
             let sha = try await github.mergePullRequest(pr.repo, number: pr.number, method: method,
                                                         expectedHead: pr.headRefOid)
             Log.info("머지 \(pr.id) \(method.rawValue) → \(String(sha.prefix(7)))", "merge")
+            recordUsage(.merge)
         } catch {
             Log.error("머지 실패 \(pr.id): \(error.localizedDescription)", "merge", problem: .mergeFailed)
             await refreshOne(repo: pr.repo, number: pr.number)

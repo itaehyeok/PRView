@@ -1119,6 +1119,7 @@ final class AppModel {
         ledger = await store.loadLedger()
         showOnboarding = !settings.onboardingCompleted
         NotificationRouter.shared.onSelect = { [weak self] prKey in
+            self?.recordUsage(.notificationOpen)
             self?.select(prKey: prKey)
         }
         // 알림 권한은 **사용자가 직접 켤 때만** 요청한다.

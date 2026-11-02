@@ -19,6 +19,8 @@ extension AppModel {
     func loadBranchGraph(for pr: PullRequestInfo, force: Bool = false) async {
         let key = diffKey(for: pr)
         guard force || branchGraphs[key]?.graph == nil, !loadingBranchKeys.contains(key) else { return }
+        // 커밋별로 보기를 켜서 처음 받을 때만 센다(새 커밋으로 다시 받는 것은 사람이 한 일이 아니다).
+        if !force { recordUsage(.byCommit) }
         loadingBranchKeys.insert(key)
         defer { loadingBranchKeys.remove(key) }
         do {
