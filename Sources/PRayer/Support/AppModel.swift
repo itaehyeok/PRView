@@ -583,8 +583,8 @@ final class AppModel {
         if heldBackArrivals.contains(pr.id) { return false }
         // 방금 내가 처리한 PR 은 조건에서 빠져도 잠깐 남겨 둔다(아래 markLeaving 참고).
         if leavingPRs[pr.id] != nil || heldForFlight.contains(pr.id) { return true }
-        // 유예가 끝난 PR 은 GitHub 이 뭐라고 하든 뺀다(아래 dismissedPRs 참고).
-        if PRVisibility.isDismissed(pr: pr, dismissals: dismissedPRs) { return false }
+        // 유예가 끝난 PR 은 GitHub 이 뭐라고 하든 뺀다(아래 dismissedPRs 참고). 리뷰 대기 탭에서만.
+        if PRVisibility.isDismissed(pr: pr, dismissals: dismissedPRs, in: listScope) { return false }
         // 내가 올린 것은 맨 위 별도 그룹이 맡는다. 여기 두면 같은 PR 이 두 번 나온다.
         if isMineInOpenTab(pr) { return false }
         return passesScopeAndFilters(pr, state: state)
@@ -666,7 +666,7 @@ final class AppModel {
         var reason = RepoHiddenReason()
         for pr in prs where pr.repo == repo {
             if leavingPRs[pr.id] != nil || heldForFlight.contains(pr.id) { continue }
-            if PRVisibility.isDismissed(pr: pr, dismissals: dismissedPRs) {
+            if PRVisibility.isDismissed(pr: pr, dismissals: dismissedPRs, in: listScope) {
                 reason.dismissed += 1
                 continue
             }
@@ -769,6 +769,14 @@ final class AppModel {
     /// `reviewedAt` 은 방금 낸 리뷰의 게시 시각 — 뺀 뒤 다시 리뷰 요청이 왔는지 가르는 기준이다.
     /// `approved` 면 리뷰 대기에서 Approved 탭으로 옮겨 가는 것이라, 흐려지며 사라지는 대신 그 탭으로 날아간다.
     func markLeaving(_ prKey: String, reviewedAt: Date, approved: Bool = false) {
+        // Approved·All PRs 탭에서는 처리해도 그 탭에 남는다 — 흐려지며 빠질 것이 없다. 숨김만 적어 두어
+        // 리뷰 대기 탭으로 옮겼을 때 빠져 있게 한다(숨김은 그 탭에서만 걸린다, PRVisibility.isDismissed).
+        guard listScope.kind == .open else {
+            if let pr = prs.first(where: { $0.id == prKey }) {
+                dismissedPRs[prKey] = PRDismissal(head: pr.headRefOid, reviewedAt: reviewedAt)
+            }
+            return
+        }
         if approved, ApprovalFlight.applies(to: listScope.kind) {
             flyToApprovedTab(prKey, reviewedAt: reviewedAt)
             return

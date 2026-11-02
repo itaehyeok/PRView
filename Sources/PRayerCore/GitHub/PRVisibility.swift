@@ -149,6 +149,16 @@ public enum PRVisibility {
         return !pr.isReRequested(postedAt: dismissal.reviewedAt)
     }
 
+    /// 이 탭에서 숨겨야 하나. 숨김은 **리뷰 대기 탭의 것**이다 — 처리했으니 할 일 목록에서 빼는 것이지,
+    /// PR 을 지우는 것이 아니다. 예전에는 탭을 가리지 않아서, 이 앱에서 Approve 한 PR 이 칩은 Approved 탭으로
+    /// 날아가는데 정작 그 탭과 All PRs 에서도 앱을 다시 켤 때까지 빠져 있었다(실측: 24h 승인 4건 중 3건이 안 보였다).
+    public static func isDismissed(pr: PullRequestInfo,
+                                   dismissals: [String: PRDismissal],
+                                   in scope: PRListScope) -> Bool {
+        guard scope.kind == .open else { return false }
+        return isDismissed(pr: pr, dismissals: dismissals)
+    }
+
     /// 새 커밋이 올라온 PR 의 숨김을 걷어낸다.
     ///
     /// 목록에 없는 PR 의 숨김은 그대로 둔다. 탭을 옮겼다 돌아오는 동안 `prs` 에서 잠깐
