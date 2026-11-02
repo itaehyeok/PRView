@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import PRayerCore
 
 struct PRListView: View {
@@ -40,7 +41,10 @@ struct PRListView: View {
                         // 내가 올린 것은 맨 위에 따로 묶는다(MyPRSection 주석 참고).
                         MyPRSection(onRowTap: { listFocused = true })
                         ForEach(model.visiblePRs) { pr in
-                            PRRow(pr: pr)
+                            PRRow(pr: pr) {
+                                listFocused = true
+                                model.clickListPR(pr)
+                            }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(rowBackground(pr))
@@ -301,7 +305,10 @@ struct PRListView: View {
                           name: PRSearchPlan.extraName(scope: model.listScope))
             .padding(.top, 8)
         ForEach(rows) { pr in
-            PRRow(pr: pr)
+            PRRow(pr: pr) {
+                listFocused = true
+                model.clickExtraSearchPR(pr)
+            }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(rowBackground(pr))
@@ -650,6 +657,8 @@ struct PRRow: View {
     /// 목록이 좁아지면 덜 중요한 조각을 뺀다.
     @Environment(\.prRowDensity) private var density
     let pr: PullRequestInfo
+    /// 행을 누른 것과 같은 고르기. 행 안의 답글 칩이 PR 을 열 때 쓴다 — 칩이 누르기를 가져가 행의 누르기가 불리지 않는다.
+    var select: () -> Void = {}
 
     var body: some View {
         let badge = model.badge(for: pr)
@@ -789,7 +798,7 @@ struct PRRow: View {
                      changesRequested: pr.reviewDecision == "CHANGES_REQUESTED")
         let replies = model.unreadReplyCount(for: pr)
         if replies > 0 {
-            ReplyChip(count: replies)
+            ReplyChip(count: replies) { model.openReplies(of: pr, select: select) }
         }
     }
 
@@ -1302,23 +1311,52 @@ struct ApprovalPill: View {
 
 /// 내 코멘트에 온, 아직 안 본 답글 수(AppModel+Replies). PR 을 열면 사라진다(시안 A, 2026-11-02 사용자 결정).
 /// 다른 칩(옅은 바탕)과 달리 꽉 채운다 — 읽으면 없어지는 "확인할 것" 표시라 훑을 때 먼저 걸려야 한다.
+/// 누르면 그 PR 을 열고 개요 탭의 첫 새 답글로 간다(AppModel.openReplies). 올리면 밝아지며 살짝 떠올라 누를 수 있는 것을 알린다.
 struct ReplyChip: View {
     let count: Int
+    let action: () -> Void
+    @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "arrowshape.turn.up.left.fill")
-                .font(.system(size: 8, weight: .bold))
-            Text("답글 \(count)")
-                .font(.caption2.weight(.semibold))
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                    .font(.system(size: 8, weight: .bold))
+                Text("답글 \(count)")
+                    .font(.caption2.weight(.semibold))
+            }
+            .lineLimit(1)
         }
-        .lineLimit(1)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 1)
-        .foregroundStyle(.white)
-        .background(Color.accentColor, in: Capsule())
+        .buttonStyle(ReplyChipStyle(isHovering: isHovering))
         .fixedSize()
-        .help("내 코멘트에 새 답글 \(count)건 — PR 을 열면 읽은 것으로 바뀝니다")
+        .onHover { inside in
+            isHovering = inside
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+        // 누르면 PR 을 열어 읽은 것이 되고 칩이 올린 채로 사라진다 — 나갔다는 알림이 없어 손 모양 커서가 남는다(CodeLink 와 같다).
+        .onDisappear {
+            if isHovering { NSCursor.pop() }
+        }
+        .help("내 코멘트에 새 답글 \(count)건 — 누르면 그 답글로 갑니다")
+    }
+}
+
+/// 답글 칩의 모양. 크기를 바꾸면 같은 줄의 다른 칩이 밀리므로 올렸을 때·눌렀을 때는 밝기·그림자·배율로만 다르게 그린다.
+private struct ReplyChipStyle: ButtonStyle {
+    let isHovering: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .foregroundStyle(.white)
+            .background(Color.accentColor, in: Capsule())
+            .brightness(configuration.isPressed ? -0.08 : (isHovering ? 0.08 : 0))
+            .shadow(color: Color.accentColor.opacity(isHovering ? 0.5 : 0), radius: 3, y: 1)
+            .scaleEffect(configuration.isPressed ? 0.96 : (isHovering ? 1.06 : 1))
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .contentShape(Capsule())
     }
 }
 

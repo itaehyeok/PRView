@@ -30,6 +30,16 @@ extension AppModel {
         }
     }
 
+    /// 목록 행의 답글 칩을 눌렀다 — 행을 누른 것처럼 고르고(`select`), 그 PR 로 옮겨 갔으면 개요 탭을 열어 첫 새 답글로 간다.
+    /// 고르기를 먼저 한다 — 고를 때 안 본 답글이 "새 답글"(`freshReplyIDs`)로 옮겨 와야 개요 탭이 갈 곳을 안다.
+    /// ⌘ 클릭처럼 그 PR 로 안 옮겨 갔으면 아무 데도 가지 않는다(남겨 두면 나중에 그 PR 을 열 때 뜬금없이 스크롤한다).
+    func openReplies(of pr: PullRequestInfo, select: () -> Void) {
+        select()
+        guard selectedPRID == pr.id else { return }
+        detailTab = .overview
+        replyJumpPRID = pr.id
+    }
+
     /// 다른 PR 을 골랐다. 앞 PR 의 "새 답글" 표시는 걷고, 새로 고른 PR 의 안 본 답글을 "새 답글" 로 두고 읽은 것으로 적는다.
     func openRepliesOfSelectedPR() {
         freshReplyIDs = [:]
