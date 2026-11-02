@@ -733,6 +733,8 @@ struct NotificationSettings: View {
                     .help("이미 열린 PR 에 나를 리뷰어로 넣었을 때. PR 을 올리면서 넣으면 '새 PR' 로 옵니다.")
                 Toggle("재리뷰 요청", isOn: $model.settings.prChangeNotifications.reReviewRequested)
                 Toggle("리뷰한 PR 새 커밋", isOn: $model.settings.prChangeNotifications.newCommitsOnReviewed)
+                Toggle("내 코멘트 답글", isOn: $model.settings.prChangeNotifications.repliesToMyComments)
+                    .help("남의 PR 에 단 내 코드 코멘트에 답글이 달렸을 때. 멘션이 없어도 내가 연 스레드의 답글이나 내 글 바로 다음 글이면 옵니다.")
             }
 
             Section("📥 내 PR 알림") {

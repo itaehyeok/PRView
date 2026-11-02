@@ -12,9 +12,13 @@ public struct PRSnapshot: Codable, Sendable, Equatable {
     public var threadCount: Int
     /// 이 PR 을 마지막으로 본 시각. 옛 파일에는 없으므로 optional 이다.
     public var seenAt: Date?
+    /// 나에게 온 답글(`MyCommentReply.id`). 옛 파일이나 내 계정을 아직 모를 때는 nil 이다 —
+    /// nil 이면 기준선이 없는 것이라 비교하지 않는다(업데이트하자마자 지난 답글이 전부 알림으로 나가지 않게).
+    public var myReplyIDs: [String]?
 
-    public init(pr: PullRequestInfo, seenAt: Date? = nil) {
+    public init(pr: PullRequestInfo, seenAt: Date? = nil, viewerLogin: String? = nil) {
         self.seenAt = seenAt
+        myReplyIDs = viewerLogin.map { MyCommentReplies.replies(in: pr, viewer: $0).map(\.id) }
         headSha = pr.headRefOid
         state = pr.state
         approvals = pr.approvalCount
@@ -43,6 +47,8 @@ public enum PRChange: Sendable, Equatable, Hashable {
     case conflictAppeared
     /// 내가 리뷰한 PR 에 새 커밋이 올라왔다(초안이 오래됨).
     case newCommitsOnReviewed
+    /// 남의 PR 에서 내 코드 코멘트에 답글이 달렸다(`MyCommentReplies`).
+    case repliesToMyComments(count: Int)
     /// 내가 만든 PR 이 머지됐다.
     case merged
 
@@ -56,6 +62,7 @@ public enum PRChange: Sendable, Equatable, Hashable {
         case .checksFailed: return "내 PR CI 실패"
         case .conflictAppeared: return "내 PR 충돌 발생"
         case .newCommitsOnReviewed: return "리뷰한 PR 에 새 커밋"
+        case .repliesToMyComments: return "내 코멘트에 답글"
         case .merged: return "내 PR 머지됨"
         }
     }
@@ -70,6 +77,7 @@ public enum PRChange: Sendable, Equatable, Hashable {
         case .checksFailed: return "CI 가 실패했습니다."
         case .conflictAppeared: return "베이스와 충돌합니다. 해결이 필요합니다."
         case .newCommitsOnReviewed: return "리뷰한 커밋 이후 새 커밋이 올라왔습니다."
+        case .repliesToMyComments(let count): return "내 코멘트에 답글 \(count)건이 달렸습니다."
         case .merged: return "머지 완료."
         }
     }
@@ -84,8 +92,8 @@ public enum PRChangeDetector {
     /// 스냅샷을 이만큼 지나면 잊는다. 무한히 쌓이면 파일이 계속 커진다.
     public static let memory: TimeInterval = 60 * 24 * 3600
 
-    public static func snapshots(_ prs: [PullRequestInfo]) -> [String: PRSnapshot] {
-        Dictionary(prs.map { ($0.id, PRSnapshot(pr: $0)) },
+    public static func snapshots(_ prs: [PullRequestInfo], viewerLogin: String? = nil) -> [String: PRSnapshot] {
+        Dictionary(prs.map { ($0.id, PRSnapshot(pr: $0, viewerLogin: viewerLogin)) },
                    // 검색 API 페이지네이션은 오프셋 기반이라 같은 PR 이 두 페이지에 걸쳐 올 수 있다.
                    // uniqueKeysWithValues 로 만들면 그때 런타임이 트랩한다.
                    uniquingKeysWith: { _, new in new })
@@ -99,6 +107,7 @@ public enum PRChangeDetector {
     /// 다시 12건으로 줄어들어 같은 일이 반복된다.
     public static func merged(previous: [String: PRSnapshot],
                               current: [PullRequestInfo],
+                              viewerLogin: String? = nil,
                               now: Date = Date()) -> [String: PRSnapshot] {
         var result = previous.filter { entry in
             // seenAt 이 없는 옛 기록은 이번에 시각을 받는다(버리지 않는다).
@@ -106,7 +115,7 @@ public enum PRChangeDetector {
             return now.timeIntervalSince(seenAt) < memory
         }
         for pr in current {
-            result[pr.id] = PRSnapshot(pr: pr, seenAt: now)
+            result[pr.id] = PRSnapshot(pr: pr, seenAt: now, viewerLogin: viewerLogin)
         }
         return result
     }
@@ -121,10 +130,12 @@ public enum PRChangeDetector {
     /// - Parameter lastSeenAt: 우리가 마지막으로 목록을 본 시각. 처음 보는 PR 이라도 이보다
     ///   먼저 만들어졌다면 새로 올라온 것이 아니라, 그동안 다른 탭을 보고 있어서 안 보였을 뿐이다.
     ///   `nil` 이면 이 판단을 하지 않는다(기억이 아예 없을 때).
+    /// - Parameter viewerLogin: 내 GitHub 로그인. 내 코멘트 답글을 가를 때 쓴다. 모르면 답글은 보지 않는다.
     public static func changes(previous: [String: PRSnapshot],
                                current: [PullRequestInfo],
                                approvalThreshold: (PullRequestInfo) -> Int,
-                               lastSeenAt: Date? = nil) -> [PRChangeSet] {
+                               lastSeenAt: Date? = nil,
+                               viewerLogin: String? = nil) -> [PRChangeSet] {
         var results: [PRChangeSet] = []
         for pr in current {
             var changes: [PRChange] = []
@@ -163,6 +174,10 @@ public enum PRChangeDetector {
             } else if pr.viewerHasSubmittedReview, pr.headRefOid != before.headSha, pr.isOpen {
                 changes.append(.newCommitsOnReviewed)
             }
+            if let viewerLogin, let seen = before.myReplyIDs.map(Set.init) {
+                let added = MyCommentReplies.replies(in: pr, viewer: viewerLogin).filter { !seen.contains($0.id) }
+                if !added.isEmpty { changes.append(.repliesToMyComments(count: added.count)) }
+            }
 
             if !changes.isEmpty { results.append(PRChangeSet(pr: pr, changes: changes)) }
         }
@@ -174,7 +189,7 @@ public enum PRChangeDetector {
     }
 }
 
-/// 어떤 변화를 알릴지. 기본값은 리뷰할 PR 의 새 PR(나에게 요청된 것) · 재리뷰 요청 · 리뷰한 PR 새 커밋과,
+/// 어떤 변화를 알릴지. 기본값은 리뷰할 PR 의 새 PR(나에게 요청된 것) · 재리뷰 요청 · 리뷰한 PR 새 커밋 · 내 코멘트 답글과,
 /// 내 PR 의 새 코멘트 · 머지 가능 · 충돌이다(사용자 결정, 2026-10-30). 리뷰어 지정·CI 실패·머지 완료는 켤 수 있지만
 /// 기본으로는 끈다 — 리뷰어는 대개 PR 을 올릴 때 지정돼 "새 PR" 로 오고, CI 실패는 사용자가 받지 않아도 된다고 했다.
 public struct PRChangeNotificationPrefs: Codable, Sendable, Equatable {
@@ -188,6 +203,8 @@ public struct PRChangeNotificationPrefs: Codable, Sendable, Equatable {
     public var checksFailed: Bool
     public var conflict: Bool
     public var newCommitsOnReviewed: Bool
+    /// 남의 PR 에서 내 코드 코멘트에 답글.
+    public var repliesToMyComments: Bool
     public var merged: Bool
 
     public static let `default` = PRChangeNotificationPrefs(
@@ -200,11 +217,13 @@ public struct PRChangeNotificationPrefs: Codable, Sendable, Equatable {
         checksFailed: false,
         conflict: true,
         newCommitsOnReviewed: true,
+        repliesToMyComments: true,
         merged: false)
 
     public init(newPR: Bool, newPROnlyWhenReviewRequested: Bool, reviewRequested: Bool,
                 reReviewRequested: Bool, commentsOnMyPR: Bool, approvalsReached: Bool,
-                checksFailed: Bool, conflict: Bool, newCommitsOnReviewed: Bool, merged: Bool) {
+                checksFailed: Bool, conflict: Bool, newCommitsOnReviewed: Bool,
+                repliesToMyComments: Bool, merged: Bool) {
         self.newPR = newPR
         self.newPROnlyWhenReviewRequested = newPROnlyWhenReviewRequested
         self.reviewRequested = reviewRequested
@@ -214,6 +233,7 @@ public struct PRChangeNotificationPrefs: Codable, Sendable, Equatable {
         self.checksFailed = checksFailed
         self.conflict = conflict
         self.newCommitsOnReviewed = newCommitsOnReviewed
+        self.repliesToMyComments = repliesToMyComments
         self.merged = merged
     }
 
@@ -233,6 +253,7 @@ public struct PRChangeNotificationPrefs: Codable, Sendable, Equatable {
         checksFailed = v(.checksFailed, d.checksFailed)
         conflict = v(.conflict, d.conflict)
         newCommitsOnReviewed = v(.newCommitsOnReviewed, d.newCommitsOnReviewed)
+        repliesToMyComments = v(.repliesToMyComments, d.repliesToMyComments)
         merged = v(.merged, d.merged)
     }
 
@@ -248,6 +269,7 @@ public struct PRChangeNotificationPrefs: Codable, Sendable, Equatable {
         case .checksFailed: return checksFailed
         case .conflictAppeared: return conflict
         case .newCommitsOnReviewed: return newCommitsOnReviewed
+        case .repliesToMyComments: return repliesToMyComments
         case .merged: return merged
         }
     }

@@ -120,6 +120,11 @@ struct PRDetailView: View {
                 backKey = nil
             }
         }
+        // 안 본 답글이 있는 내 스레드는 펼쳐서 연다(AppModel+Replies) — 열어 둔 동안 새로고침으로 들어온 답글도 같다.
+        // 접는 것은 사용자 몫이라 빠진 키를 다시 접지는 않는다.
+        .onChange(of: model.freshReplyIDs[pr.id] ?? [], initial: true) { _, ids in
+            overviewExpanded.formUnion(ids.compactMap { $0.split(separator: "|").first.map { "thread:\($0)" } })
+        }
         .task(id: pr.id) { await runDebugFollow() }
         .task(id: pr.id) { await runDebugSweep() }
         // 코멘트 그림 중 비공개 첨부는 이 PR 의 본문·대화로 서명 주소를 얻는다(MarkdownImageView).
@@ -679,8 +684,9 @@ struct TimelineRow: View {
         .opacity(isSettled ? 0.72 : 1)
     }
 
-    /// 손이 가야 하는 글(미해결 코드 코멘트·변경 요청)만 테두리에 색을 준다.
+    /// 손이 가야 하는 글(미해결 코드 코멘트·변경 요청)만 테두리에 색을 준다. 새 답글이 온 내 스레드는 그보다 먼저 파랑.
     private var boxBorder: Color {
+        if !freshKeys.isEmpty { return Color.accentColor.opacity(0.8) }
         switch entry {
         case .thread(let thread, _) where !thread.isResolved && !thread.isOutdated:
             return Color.orange.opacity(0.55)
@@ -691,9 +697,9 @@ struct TimelineRow: View {
         }
     }
 
-    /// 해결됐거나 코드가 바뀌어 지난 스레드는 흐리게 — 다시 볼 일이 적다.
+    /// 해결됐거나 코드가 바뀌어 지난 스레드는 흐리게 — 다시 볼 일이 적다. 새 답글이 왔으면 흐리게 두지 않는다.
     private var isSettled: Bool {
-        if case .thread(let thread, _) = entry { return thread.isResolved || thread.isOutdated }
+        if case .thread(let thread, _) = entry, freshKeys.isEmpty { return thread.isResolved || thread.isOutdated }
         return false
     }
 
@@ -753,7 +759,7 @@ struct TimelineRow: View {
                 headerContent
             }
             if case .thread(let thread, _) = entry, let reply = thread.latestReply {
-                replySummary(reply, count: thread.comments.count - 1)
+                replySummary(reply, count: thread.comments.count - 1, fresh: freshKeys.count)
             }
         }
     }
@@ -796,7 +802,7 @@ struct TimelineRow: View {
             }
             .padding(.top, 2)
         case .thread(let thread, _):
-            ThreadCard(thread: thread, pr: pr)
+            ThreadCard(thread: thread, pr: pr, freshKeys: freshKeys)
         case .commit:
             EmptyView()
         }
@@ -804,16 +810,27 @@ struct TimelineRow: View {
 
     /// 스레드 줄의 "답글 N · 마지막으로 답한 사람 언제" — 답글이 달렸다는 것을 원글 줄에서 바로 본다(사용자 요청).
     /// 내가 답했어도 따로 칠하지 않고 이름으로 적는다(사용자 결정: "이름하고 상대시간이 나오면 된다").
-    private func replySummary(_ reply: ReviewThreadComment, count: Int) -> some View {
+    /// 이 PR 을 열 때 안 봤던 내 코멘트 답글이 있으면 "새 답글 N" 으로 칠한다(AppModel+Replies) — 상자 테두리와 같은 색.
+    private func replySummary(_ reply: ReviewThreadComment, count: Int, fresh: Int) -> some View {
         HStack(spacing: 3) {
-            Text("답글 \(count) · \(model.settings.displayName(reply.author))")
+            Text(fresh > 0 ? "새 답글 \(fresh) · \(model.settings.displayName(reply.author))"
+                           : "답글 \(count) · \(model.settings.displayName(reply.author))")
             if let date = PRActivityBuilder.isoDate(reply.createdAt) {
                 RelativeTimeText(date: date, style: .compact)
             }
         }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .help("마지막 답글: \(reply.author)")
+        .font(fresh > 0 ? .caption2.weight(.semibold) : .caption2)
+        .foregroundStyle(fresh > 0 ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        .padding(.horizontal, fresh > 0 ? 7 : 0)
+        .padding(.vertical, fresh > 0 ? 1 : 0)
+        .background(Color.accentColor.opacity(fresh > 0 ? 0.12 : 0), in: Capsule())
+        .help(fresh > 0 ? "내 코멘트에 새 답글 \(fresh)건 — 이 PR 을 열 때 안 본 답글입니다" : "마지막 답글: \(reply.author)")
+    }
+
+    /// 이 스레드에서 "새 답글" 로 보일 글(`MyCommentReplies.key`). 코드 코멘트 스레드가 아니면 비어 있다.
+    private var freshKeys: Set<String> {
+        guard case .thread(let thread, _) = entry else { return [] }
+        return model.freshReplyKeys(in: thread, of: pr)
     }
 
     private var collapseFooter: some View {
@@ -1600,10 +1617,24 @@ struct ThreadCard: View {
     let thread: PRReviewThread
     /// 설명 기능에 필요. 없으면 설명 버튼을 감춘다.
     var pr: PullRequestInfo?
+    /// 이 PR 을 열 때 안 봤던 내 코멘트 답글(`MyCommentReplies.key`). 첫 글 앞에 "새 답글" 줄을 긋는다.
+    var freshKeys: Set<String> = []
     @State private var expanded = false
 
+    /// 새 답글이 앞 세 글 밖에 있으면 다 펼친다 — 새 답글을 보러 열었는데 "더 보기" 뒤에 숨어 있으면 안 된다.
+    private var freshBeyondFold: Bool {
+        thread.comments.dropFirst(3).contains { freshKeys.contains(MyCommentReplies.key($0)) }
+    }
+
+    private var showsAll: Bool { expanded || freshBeyondFold }
+
     private var visibleComments: [ReviewThreadComment] {
-        expanded ? thread.comments : Array(thread.comments.prefix(3))
+        showsAll ? thread.comments : Array(thread.comments.prefix(3))
+    }
+
+    /// "새 답글" 줄을 그을 자리 — 새 답글 가운데 첫 글.
+    private var firstFreshIndex: Int? {
+        thread.comments.firstIndex { freshKeys.contains(MyCommentReplies.key($0)) }
     }
 
     var body: some View {
@@ -1614,11 +1645,16 @@ struct ThreadCard: View {
                         .padding(.vertical, 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Divider()
+                    if index == firstFreshIndex {
+                        NewRepliesDivider()
+                    } else {
+                        Divider()
+                    }
                     CommentBubble(comment: comment, isReply: true)
+                        .background(Color.accentColor.opacity(freshKeys.contains(MyCommentReplies.key(comment)) ? 0.05 : 0))
                 }
             }
-            if thread.comments.count > 3 {
+            if thread.comments.count > 3, !freshBeyondFold {
                 Divider()
                 Button(expanded ? "접기" : "답글 \(thread.comments.count - 3)개 더 보기") {
                     expanded.toggle()
@@ -1633,6 +1669,26 @@ struct ThreadCard: View {
                     .padding(.vertical, 6)
             }
         }
+    }
+}
+
+/// 스레드 안에서 이 PR 을 열 때 안 봤던 답글이 시작되는 자리(시안 A, 2026-11-02 사용자 결정).
+struct NewRepliesDivider: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            line
+            Text("새 답글")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tint)
+            line
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var line: some View {
+        Rectangle()
+            .fill(Color.accentColor.opacity(0.5))
+            .frame(height: 1)
     }
 }
 

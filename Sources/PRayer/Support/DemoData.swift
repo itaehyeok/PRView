@@ -137,6 +137,14 @@ enum DemoData {
             PRCommit(oid: sha(124), abbreviatedOid: String(sha(124).prefix(7)), messageHeadline: "금액을 원 단위로 읽기",
                      committedDate: ago(2_550), author: "jamie-acme"),
         ]
+        // 내 코멘트 답글(AppModel+Replies) — 내가 연 스레드에 작성자가 답했다. 데모는 읽음 기록이 없어 목록에 "답글 1" 이 뜬다.
+        let concurrencyThread = PRReviewThread(
+            id: "T_demo_3", path: "Sources/SampleSDK/ImageLoader.swift", line: 18, isResolved: false, isOutdated: false,
+            comments: [
+                ReviewThreadComment(author: viewer, body: "`@preconcurrency` 로 덮기보다 `ImageLoader` 를 `@MainActor` 로 옮기는 게 어떨까요?",
+                                    createdAt: iso(180)),
+                ReviewThreadComment(author: "sam-acme", body: "옮겼습니다. 테스트의 `MockLoader` 도 같이 고쳤어요.", createdAt: iso(12)),
+            ])
         let loginCommits = [commit(1_281, "로그인 화면 레이아웃 정리", 300),
                             commit(1_282, "버튼 상태를 하나로 모음", 240),
                             commit(128, "키보드 올라올 때 버튼 위치", 70)]
@@ -187,7 +195,7 @@ enum DemoData {
                commits: paymentCommits),
             pr(sdk, 44, "Swift 6 동시성 경고 정리", author: "sam-acme",
                base: "main", head: "chore/swift6-warnings", added: 156, deleted: 131, files: 12, updated: 95, created: 1_300,
-               labels: ["refactor"]),
+               labels: ["refactor"], myReview: "COMMENTED", threads: [concurrencyThread]),
             pr(sdk, 40, "README 예제 갱신", author: "alex-acme",
                base: "main", head: "docs/readme", added: 30, deleted: 9, files: 1, updated: 240, created: 3_000,
                labels: ["docs"]),

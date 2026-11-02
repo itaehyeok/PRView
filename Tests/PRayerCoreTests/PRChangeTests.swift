@@ -97,6 +97,7 @@ final class PRChangePrefsTests: XCTestCase {
                        "기본값은 나에게 요청된 PR 만 알린다")
         XCTAssertTrue(prefs.allows(.reReviewRequested))
         XCTAssertTrue(prefs.allows(.newCommitsOnReviewed))
+        XCTAssertTrue(prefs.allows(.repliesToMyComments(count: 1)))
         XCTAssertTrue(prefs.allows(.commentsOnMyPR(added: 1)))
         XCTAssertTrue(prefs.allows(.approvalsReached(count: 2)))
         XCTAssertTrue(prefs.allows(.conflictAppeared))
