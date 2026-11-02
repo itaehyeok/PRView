@@ -8,7 +8,7 @@ import PRayerCore
 /// 크래시 리포트 스위치는 크래시 기록을 읽어 보내는 부분이 생길 때 더한다 — 하는 일 없는 스위치를 먼저 두지 않는다.
 struct UsageStatsSection: View {
     @Environment(AppModel.self) private var model
-    @State private var showingSent = false
+    @State private var showingSent = DebugLaunch.showUsageSent
 
     var body: some View {
         Section("\(AppInfo.displayName) 개선 돕기") {

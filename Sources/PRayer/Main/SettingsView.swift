@@ -763,6 +763,7 @@ struct NotificationSettings: View {
             UsageStatsSection()
         }
         .formStyle(.grouped)
+        .defaultScrollAnchor(DebugLaunch.settingsAtBottom ? .bottom : nil)
         .onDisappear { Task { await model.save() } }
     }
 }

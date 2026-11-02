@@ -17,6 +17,9 @@ import PRayerCore
 ///   `PRAYER_DEBUG_SETTINGS_TAB=제외` 와 같이 준다.
 /// - `PRAYER_DEBUG_SHOW_APPROVAL_RULES=1` — 설정 레포 줄의 브랜치별 Approve 수 말풍선을 띄워 둔다(마우스를 올린 것처럼).
 ///   `PRAYER_DEBUG_SETTINGS_TAB=레포` 와 같이 준다.
+/// - `PRAYER_DEBUG_SETTINGS_BOTTOM=1` — 설정 › 알림·기타를 맨 아래까지 내린 채로 연다(맨 아래 사용 통계 절 확인).
+///   `PRAYER_DEBUG_SETTINGS_TAB=알림` 과 같이 준다.
+/// - `PRAYER_DEBUG_USAGE_SENT=1` — 사용 통계 절의 "보낸 내용" 창을 띄워 둔다. 보낸 적이 없으면 빈 모양이 뜬다.
 ///
 /// - `PRAYER_DEBUG_FOLLOW=번호` — 고른 PR 에서 리뷰 항목 따라가기의 그 번째(0부터) 항목으로 변경 파일 탭을 연다
 ///   (AI 리뷰 탭에서 코드 링크를 누른 것과 같다). 따라갈 항목이 없는 새 형식 리뷰면 그 번째 코드 코멘트의 줄로 간다
@@ -110,6 +113,8 @@ enum DebugLaunch {
     static var repoQuery: String? { value("PRAYER_DEBUG_REPO_QUERY") }
     static var cloneProgress: String? { value("PRAYER_DEBUG_CLONE_PROGRESS") }
     static var showApprovalRules: Bool { value("PRAYER_DEBUG_SHOW_APPROVAL_RULES") != nil }
+    static var settingsAtBottom: Bool { value("PRAYER_DEBUG_SETTINGS_BOTTOM") != nil }
+    static var showUsageSent: Bool { value("PRAYER_DEBUG_USAGE_SENT") != nil }
     static var showAbout: Bool { value("PRAYER_DEBUG_ABOUT") != nil }
     static var showReviewChoices: Bool { value("PRAYER_DEBUG_REVIEW_CHOICES") != nil }
     static var windowSize: CGSize? {
