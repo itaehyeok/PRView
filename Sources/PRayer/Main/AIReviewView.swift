@@ -2259,16 +2259,10 @@ struct InfoHint: View {
     }
 }
 
-/// 단계 진행 표시. 전체 리뷰는 워크트리 단계가 더 있고, PR 스냅샷을 처음 받는 잡은 클론 단계가 더 있다.
-struct PhaseTrack: View {
-    let current: ReviewPhase
-    let deep: Bool
-    var clonedSnapshot = false
-
-    private var steps: [ReviewPhase] { Self.steps(deep: deep, clonedSnapshot: clonedSnapshot) }
-
-    private var currentIndex: Int { Self.index(of: current, in: steps) }
-
+/// 잡이 거칠 단계 순서. 전체 리뷰는 워크트리 단계가 더 있고, PR 스냅샷을 처음 받는 잡은 클론 단계가 더 있다.
+///
+/// 예전에는 툴바 "리뷰 N" 팝오버에 점 막대로도 그렸다. 그 버튼을 지운 뒤(2026-11-02)로는 순서만 남는다.
+enum PhaseTrack {
     /// 이 잡이 거칠 단계. 진행 카드의 단계 목록(`PhaseChecklist`)도 같은 순서를 쓴다.
     static func steps(deep: Bool, clonedSnapshot: Bool) -> [ReviewPhase] {
         var result: [ReviewPhase] = [.checkingPR, .loadingDiff]
@@ -2284,24 +2278,11 @@ struct PhaseTrack: View {
         // 지금 단계가 목록에 없으면(반납·완료) 마지막으로 본다.
         steps.firstIndex(of: current) ?? (current.isTerminal || current == .releasingWorktree ? steps.count - 1 : 0)
     }
-
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                Capsule()
-                    .fill(index <= currentIndex ? Color.accentColor : Color.secondary.opacity(0.25))
-                    .frame(height: 3)
-                    .help(step.label)
-            }
-        }
-        .frame(maxWidth: 260)
-        .padding(.top, 2)
-    }
 }
 
 /// 진행 카드의 단계 목록 — 끝난 단계는 ✓ 와 걸린 시간, 지금 단계는 지금까지 걸린 시간, 남은 단계는 이름만.
 ///
-/// 점 막대(`PhaseTrack`)는 단계 이름이 마우스를 올려야 보여서, 오래 걸릴 때 무엇을 하는 중인지 알 수 없었다
+/// 툴바 큐의 점 막대는 단계 이름이 마우스를 올려야 보여서, 오래 걸릴 때 무엇을 하는 중인지 알 수 없었다
 /// (2026-10-27 사용자 요청, 시안 B4). 예상은 "Claude 가 읽고 판단" 에만 범위로 붙인다 — 다른 단계는 몇 초면 끝난다.
 struct PhaseChecklist: View {
     let job: ReviewJob

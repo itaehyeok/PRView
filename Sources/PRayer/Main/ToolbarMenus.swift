@@ -6,7 +6,7 @@ import PRayerCore
 ///
 /// 툴바 오른쪽에 아이콘·이름으로 있던 것을 여기로 옮겼다(사용자 선택 B안). 늘 보이기만 하고 누를 일은 없는
 /// 표시가 버튼들 사이에서 자리를 차지했다. 베타·개발 빌드만 색 점을 달고, 정식은 점 없이 회색으로 둔다 —
-/// 평소 상태는 조용히, 다른 판일 때만 눈에 띄게(사용자 결정). 목록을 접으면 같이 숨지만 상태 메뉴 맨 위에도 버전이 있다.
+/// 평소 상태는 조용히, 다른 판일 때만 눈에 띄게(사용자 결정). 목록을 접으면 같이 숨지만 상태 메뉴 맨 아래에도 버전이 있다.
 ///
 /// 베타와 정식은 같은 파일이라, 공개 저장소에 이 버전이 올라가 있는지로 가른다(AppModel.buildKind).
 /// 아직 모르면(오프라인·확인 전) 버전만 적는다 — 베타라고 단정하지 않는다. 글자는 "v0.5.0 베타 3" 처럼
@@ -313,108 +313,22 @@ struct HoverHint: View {
     }
 }
 
-// MARK: - 큐
-
-struct QueueToolbarMenu: View {
-    @Environment(AppModel.self) private var model
-    @State private var showsCapHint = false
-
-    private var active: [ReviewJob] { model.jobs.filter(\.isActive) }
-
-    private func capHint(_ cap: Int) -> String {
-        "최근 5시간 동안 쓴 토큰이 정해 둔 상한(\(cap / 1000)k)을 넘었습니다. 리뷰를 막지는 않습니다 — "
-            + "Claude 사용 한도에 걸리기 전에 알려 주는 표시입니다. 상한은 설정 → ‘대상 제외’ → 사용량 방어에서 바꿉니다."
-    }
-
-    var body: some View {
-        ToolbarPopover {
-            ToolbarButtonLabel(title: "리뷰 \(active.count)", tint: .primary, showsChevron: true) {
-                Image(systemName: "bolt.fill").foregroundStyle(.orange)
-            }
-        } content: {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("돌고 있는 리뷰 \(active.count)건")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                ForEach(active) { job in
-                    QueueRow(job: job)
-                }
-                Divider()
-                let cap = model.settings.fiveHourTokenCap
-                HStack(spacing: 6) {
-                    Text("5시간 토큰 \(model.fiveHourTokens / 1000)k")
-                        .font(.caption.monospacedDigit())
-                    if cap > 0 {
-                        Text("/ 상한 \(cap / 1000)k")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                        if model.fiveHourTokens >= cap {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                                .help(capHint(cap))
-                                .onHover { inside in withAnimation(.easeOut(duration: 0.12)) { showsCapHint = inside } }
-                        }
-                    }
-                }
-                if showsCapHint, cap > 0, model.fiveHourTokens >= cap {
-                    HoverHint(text: capHint(cap))
-                }
-            }
-        }
-        .help("리뷰 큐")
-    }
-}
-
-private struct QueueRow: View {
-    @Environment(AppModel.self) private var model
-    let job: ReviewJob
-
-    private var elapsed: TimeInterval {
-        guard let startedAt = job.startedAt else { return 0 }
-        return max(0, model.clockTick.timeIntervalSince(startedAt))
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            if job.state == .running {
-                ProgressView().controlSize(.small)
-            } else {
-                Image(systemName: "clock").foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text(verbatim: "#\(job.number)").font(.callout.weight(.medium))
-                    if job.deep { Tag(text: "전체 리뷰", color: .purple) }
-                }
-                if job.state == .running {
-                    HStack(spacing: 6) {
-                        Text(job.progressTitle).font(.caption)
-                        if let fraction = job.cloneFraction {
-                            Text("\(Int((fraction * 100).rounded()))%")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(String(format: "%d:%02d", Int(elapsed) / 60, Int(elapsed) % 60))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    PhaseTrack(current: job.phase, deep: job.deep, clonedSnapshot: job.clonedSnapshot)
-                } else {
-                    Text("대기 중").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 4)
-            Button("취소") { model.cancel(jobID: job.id) }
-                .buttonStyle(.link)
-                .font(.caption)
-        }
-    }
-}
-
 // MARK: - 상태
 
+/// 툴바 "상태" 팝오버. 평소엔 짧게, 문제가 있으면 맨 위에서 무엇을 할지 말한다(2026-11-02 사용자 선택, 시안 B).
+///
+/// 정상이면 "모두 정상" 한 줄·연결 줄·5시간 토큰 막대·버전만 보인다. 문제 기록은 1건 이상일 때만,
+/// GitHub API 잔여는 적게 남았을 때만 보인다. 엔진 로그인이 풀렸거나 GitHub 이 끊겼거나 갱신이 계속 실패하면
+/// 맨 위가 주황 카드가 되고, 고칠 버튼(다시 로그인·연결 설정)을 그 문제 줄에 단다.
+///
+/// 예전에 있다가 뺀 것: 앱 이름·설명(정보 창에 있다), 갱신 시각(목록 머리 줄에 있다), 로그 열기(설정 → 연결 탭에 있다),
+/// 연결 다시 확인(앱으로 돌아올 때 이미 돌고, 이 팝오버를 열 때도 돈다), 보고 복사(문제 기록 창에 있다).
 struct StatusToolbarMenu: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
+
+    /// GitHub API 잔여를 보이기 시작하는 값. 시간당 한도가 5,000 이라 1할 아래로 내려가면 알린다.
+    private static let lowRateThreshold = 500
 
     /// 팝오버를 열 때 센다. 문제 기록은 관찰 대상이 아니지만 팝오버는 열 때마다 다시 그려진다.
     private var recentProblemCount: Int {
@@ -432,6 +346,42 @@ struct StatusToolbarMenu: View {
     private var githubOK: Bool { model.githubAccount != nil }
     private var refreshFailing: Bool { model.consecutiveRefreshFailures > 0 }
 
+    private struct Problem: Identifiable {
+        enum Fix {
+            case login(ReviewEngineKind)
+            case install(ReviewEngineKind)
+            case settings
+        }
+
+        let id: String
+        let message: String
+        let fix: Fix?
+    }
+
+    /// 맨 위 카드에 한 줄씩 보일 문제. 비어 있으면 "모두 정상". 엔진을 아직 확인하는 중(상태 nil)이면 문제로 치지 않는다.
+    private var problems: [Problem] {
+        var result: [Problem] = []
+        for engine in shownEngines {
+            guard let status = model.engineStatus(engine), !status.isReady else { continue }
+            if status.isInstalled {
+                result.append(Problem(id: "login-\(engine.displayName)",
+                                      message: "\(engine.displayName) 로그인이 필요합니다", fix: .login(engine)))
+            } else {
+                result.append(Problem(id: "install-\(engine.displayName)",
+                                      message: "\(engine.displayName) CLI 를 찾지 못했습니다", fix: .install(engine)))
+            }
+        }
+        if !githubOK {
+            result.append(Problem(id: "github", message: "GitHub 에 연결되어 있지 않습니다", fix: .settings))
+        } else if refreshFailing {
+            // 고칠 버튼은 달지 않는다 — 잠시 뒤 알아서 다시 받는다.
+            result.append(Problem(id: "refresh",
+                                  message: "갱신 실패 \(model.consecutiveRefreshFailures)회 연속 — \(model.githubError ?? "원인 불명")",
+                                  fix: nil))
+        }
+        return result
+    }
+
     var body: some View {
         ToolbarPopover(debugID: "status") {
             // 색점만으로는 무슨 버튼인지 알 수 없다. 이름을 아래에 붙인다.
@@ -444,58 +394,7 @@ struct StatusToolbarMenu: View {
             }
         } content: {
             VStack(alignment: .leading, spacing: 8) {
-                LabeledContent {
-                    Text(model.versionSummary)
-                        .font(.caption)
-                        .multilineTextAlignment(.trailing)
-                } label: {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(AppInfo.displayName)
-                        Text(AppInfo.subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                // 경고·실패를 이 맥에 모아 둔다. 보고는 종류·횟수·버전만 복사한다(사람이 누를 때만).
-                LabeledContent("문제 기록") {
-                    HStack(spacing: 8) {
-                        Text("최근 30일 \(recentProblemCount)건")
-                            .font(.caption.monospacedDigit())
-                        Button("보기…") { openWindow(id: "problems") }
-                            .buttonStyle(.link)
-                            .font(.caption)
-                        Button("보고 복사") { model.copyProblemReport() }
-                            .buttonStyle(.link)
-                            .font(.caption)
-                            .help("종류·횟수·앱 버전만 담은 글을 복사합니다. 파일·PR·레포 이름은 넣지 않습니다.")
-                    }
-                }
-                Divider()
-                ForEach(shownEngines) { engine in
-                    let status = model.engineStatus(engine)
-                    statusRow(title: engine.displayName,
-                              ok: model.engineReady(engine),
-                              detail: status?.accountLabel ?? status?.errorMessage ?? "확인 중")
-                    // 빨간불만 보여 주고 길을 안 주면 터미널 명령을 외워야 한다.
-                    if !model.engineReady(engine), status?.isInstalled == true {
-                        Button("\(engine.displayName) 다시 로그인") {
-                            model.openEngineLogin(engine)
-                        }
-                        .buttonStyle(.link)
-                    }
-                }
-                statusRow(title: "GitHub", ok: githubOK,
-                          detail: model.githubAccount?.login ?? "미연결")
-                Divider()
-                if let remaining = model.rateRemaining {
-                    LabeledContent("API 잔여") {
-                        Text("\(remaining)").font(.caption.monospacedDigit())
-                    }
-                }
-                LabeledContent("5시간 토큰") {
-                    Text("\(model.fiveHourTokens / 1000)k / 상한 \(model.settings.fiveHourTokenCap / 1000)k")
-                        .font(.caption.monospacedDigit())
-                }
+                summary
                 // 잠자기 중에는 갱신을 멈춘다. 알려 주지 않으면 "왜 안 도는지" 알 길이 없다
                 // (예전에는 툴바의 자동 리뷰 컨트롤이 이 표시를 들고 있었다).
                 if model.isSleeping {
@@ -503,26 +402,36 @@ struct StatusToolbarMenu: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                if let last = model.lastRefreshedAt {
-                    LabeledContent("갱신") {
-                        Text(last, style: .time).font(.caption.monospacedDigit())
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(shownEngines) { engine in
+                        let status = model.engineStatus(engine)
+                        statusRow(title: engine.displayName, color: engineColor(status), detail: engineDetail(status))
                     }
-                }
-                if refreshFailing {
-                    Label("갱신 실패 \(model.consecutiveRefreshFailures)회 연속 — \(model.githubError ?? "")",
-                          systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
+                    statusRow(title: "GitHub", color: githubColor, detail: githubDetail)
                 }
                 Divider()
-                SettingsLink { Text("연결 설정…") }
-                    .buttonStyle(.link)
-                Button("로그 열기") { model.openLogFile() }
-                    .buttonStyle(.link)
-                // 터미널에서 직접 로그인한 경우를 위한 수동 확인. 앱으로 돌아올 때 자동으로도 돈다.
-                Button("연결 다시 확인") { Task { await model.checkEngines() } }
-                    .buttonStyle(.link)
+                tokenUsage
+                if let remaining = model.rateRemaining, remaining < Self.lowRateThreshold {
+                    valueRow("GitHub API 잔여") {
+                        Text("\(remaining)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.orange)
+                    }
+                    .help("GitHub API 는 시간당 5,000 까지 씁니다. 한 시간이 지나면 다시 찹니다.")
+                }
+                // 경고·실패를 이 맥에 모아 둔다. 0건이면 줄을 숨긴다 — 보고 복사는 문제 기록 창에 있다.
+                if recentProblemCount > 0 {
+                    valueRow("문제 기록") {
+                        HStack(spacing: 6) {
+                            Text("30일 \(recentProblemCount)건")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Button("보기…") { openWindow(id: "problems") }
+                                .buttonStyle(.link)
+                                .font(.caption)
+                        }
+                    }
+                }
 
                 if let update = model.availableUpdate {
                     Divider()
@@ -545,9 +454,100 @@ struct StatusToolbarMenu: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                Divider()
+                HStack {
+                    Text(model.versionLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help(model.versionSummary)
+                    Spacer(minLength: 8)
+                    SettingsLink { Text("연결 설정…") }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                }
             }
+            // 열 때마다 엔진 로그인을 다시 본다(`claude auth status` 한 번). 그래서 "연결 다시 확인" 버튼이 없다.
+            .task { await model.checkEngines() }
         }
         .help(statusHelp)
+    }
+
+    @ViewBuilder
+    private var summary: some View {
+        let problems = problems
+        if problems.isEmpty {
+            Label {
+                Text("모두 정상").font(.callout)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(problems) { problem in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(problem.message)
+                                .font(.callout)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let fix = problem.fix {
+                                fixButton(fix)
+                                    .buttonStyle(.link)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
+        }
+    }
+
+    @ViewBuilder
+    private func fixButton(_ fix: Problem.Fix) -> some View {
+        switch fix {
+        case .login(let engine):
+            Button("다시 로그인") { model.openEngineLogin(engine) }
+        case .install(let engine):
+            Button("설치하기") { model.openEngineInstall(engine) }
+        case .settings:
+            SettingsLink { Text("연결 설정…") }
+        }
+    }
+
+    /// 최근 5시간 토큰과 상한을 막대로. 상한을 넘어도 리뷰를 막지는 않는다 — 막대와 숫자만 주황이 된다.
+    @ViewBuilder
+    private var tokenUsage: some View {
+        let tokens = model.fiveHourTokens
+        let cap = model.settings.fiveHourTokenCap
+        let over = cap > 0 && tokens >= cap
+        VStack(alignment: .leading, spacing: 4) {
+            valueRow("5시간 토큰") {
+                Text(cap > 0 ? "\(tokens / 1000)k / \(cap / 1000)k" : "\(tokens / 1000)k")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(over ? Color.orange : Color.secondary)
+            }
+            if cap > 0 {
+                let fraction = min(1, Double(tokens) / Double(cap))
+                Capsule()
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 4)
+                    .overlay(alignment: .leading) {
+                        GeometryReader { geometry in
+                            Capsule()
+                                .fill(over ? Color.orange : Color.secondary)
+                                .frame(width: geometry.size.width * fraction)
+                        }
+                    }
+            }
+        }
+        .help(over
+              ? "최근 5시간 동안 쓴 토큰이 정해 둔 상한(\(cap / 1000)k)을 넘었습니다. 리뷰를 막지는 않습니다 — "
+                + "Claude 사용 한도에 걸리기 전에 알려 주는 표시입니다. 상한은 설정 → ‘대상 제외’ → 사용량 방어에서 바꿉니다."
+              : "최근 5시간 동안 리뷰에 쓴 토큰입니다. 상한은 설정 → ‘대상 제외’ → 사용량 방어에서 바꿉니다.")
     }
 
     private var statusHelp: String {
@@ -558,15 +558,38 @@ struct StatusToolbarMenu: View {
         return parts.joined(separator: " · ")
     }
 
+    /// 아직 확인하는 중이면 회색 — 빨강은 확인한 뒤 안 된 것에만 쓴다.
+    private func engineColor(_ status: EngineStatus?) -> Color {
+        guard let status else { return .secondary }
+        return status.isReady ? .green : .red
+    }
+
+    private func engineDetail(_ status: EngineStatus?) -> String {
+        guard let status else { return "확인 중" }
+        if let account = status.accountLabel { return account }
+        if let error = status.errorMessage { return error }
+        return status.isInstalled ? "로그인 필요" : "설치 안 됨"
+    }
+
+    private var githubColor: Color {
+        guard githubOK else { return .red }
+        return refreshFailing ? .orange : .green
+    }
+
+    private var githubDetail: String {
+        guard let account = model.githubAccount else { return "미연결" }
+        return refreshFailing ? "갱신 실패 \(model.consecutiveRefreshFailures)회" : account.login
+    }
+
     private func dot(_ ok: Bool, warning: Bool = false) -> some View {
         Circle()
             .fill(warning ? Color.orange : (ok ? Color.green : Color.red))
             .frame(width: 7, height: 7)
     }
 
-    private func statusRow(title: String, ok: Bool, detail: String) -> some View {
+    private func statusRow(title: String, color: Color, detail: String) -> some View {
         HStack(spacing: 6) {
-            Circle().fill(ok ? Color.green : Color.red).frame(width: 7, height: 7)
+            Circle().fill(color).frame(width: 7, height: 7)
             Text(title).font(.callout)
             Spacer(minLength: 8)
             Text(detail)
@@ -574,6 +597,15 @@ struct StatusToolbarMenu: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+        }
+    }
+
+    /// 이름은 왼쪽, 값은 오른쪽 끝 — 연결 줄과 같은 정렬.
+    private func valueRow<Value: View>(_ title: String, @ViewBuilder value: () -> Value) -> some View {
+        HStack(spacing: 6) {
+            Text(title).font(.callout)
+            Spacer(minLength: 8)
+            value()
         }
     }
 }
@@ -679,14 +711,11 @@ private struct PreviewSampleLabel: View {
     .frame(width: 600, alignment: .leading)
 }
 
-/// 툴바에 실제로 쓰이는 두 버튼(레포 메뉴는 툴바 아래 레포 줄로 옮겼다). 빈 `AppModel` 이라 큐 내용은 없지만 라벨 배치는 같다.
-#Preview("메뉴 2종") {
-    HStack(spacing: 10) {
-        QueueToolbarMenu()
-        StatusToolbarMenu()
-    }
-    .padding(20)
-    .environment(AppModel())
+/// 툴바에 실제로 쓰이는 팝오버 버튼(레포 메뉴는 툴바 아래 레포 줄로 옮겼다).
+#Preview("상태 메뉴") {
+    StatusToolbarMenu()
+        .padding(20)
+        .environment(AppModel())
 }
 
 private struct PreviewSection<Content: View>: View {

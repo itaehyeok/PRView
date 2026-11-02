@@ -1673,7 +1673,7 @@ final class AppModel {
 
     // MARK: - 새로고침
 
-    /// 사람이 누른 새로고침(툴바·⌘R·목록 머리 줄 ↻·빈 화면의 "지금 새로고침"). 받는 동안 목록 머리 줄의 ↻ 가 돈다 —
+    /// 사람이 누른 새로고침(⌘R·목록 머리 줄 ↻·빈 화면의 "지금 새로고침"). 받는 동안 목록 머리 줄의 ↻ 가 돈다 —
     /// 2분마다 도는 폴링·탭 이동은 조용히 받는다.
     func refreshByUser() async {
         guard !isUserRefreshing else { return }
@@ -2293,7 +2293,8 @@ final class AppModel {
     /// 앱으로 돌아올 때마다 엔진 로그인 상태와 새 버전을 다시 본다.
     ///
     /// 터미널에서 로그인하고 돌아왔는데 표시등이 그대로 빨갛게 남아 있으면, 로그인이 된 건지
-    /// 아닌지 또 헤맨다. 사용자가 "다시 확인" 을 눌러 줄 것을 기대하지 않는다.
+    /// 아닌지 또 헤맨다. 사용자가 따로 확인을 눌러 줄 것을 기대하지 않는다 — 상태 팝오버의 "연결 다시 확인"
+    /// 버튼도 그래서 뺐다(2026-11-02). 팝오버를 열 때도 다시 본다(StatusToolbarMenu).
     /// `claude auth status` 한 번이라 비용도 거의 없다. 새 버전은 5분 간격으로만 묻는다.
     private func observeActivation() {
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,

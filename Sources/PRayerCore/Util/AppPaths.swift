@@ -9,7 +9,7 @@ public enum AppInfo {
     public static let name = "PRayer"
     /// 화면에 보이는 이름. 창 제목·온보딩·안내 문구는 전부 이걸 쓴다(앱 메뉴·Dock 이름은 InfoPlist.strings 쪽).
     public static let displayName = "PRView"
-    /// 이름 옆에 붙는 한 줄 설명. 정보 창·온보딩·상태 팝오버에 이름과 같이 보인다.
+    /// 이름 옆에 붙는 한 줄 설명. 정보 창·온보딩에 이름과 같이 보인다.
     /// 앱 메뉴·Dock·Finder 이름에는 넣지 않는다 — 길어서 잘리고, Finder 이름은 파일 이름과 같아야 한다.
     public static let subtitle = "PR Review Manager"
     /// 게시 코멘트에 붙는 숨은 마커 접두어. `<!-- prdeck:v1:<sha256-12> -->`
