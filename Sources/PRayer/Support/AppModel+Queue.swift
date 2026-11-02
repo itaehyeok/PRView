@@ -495,6 +495,8 @@ extension AppModel {
         } else {
             jobs.append(job)
         }
+        recordUsage(trigger == .auto ? .reviewAuto : .reviewManual)
+        if deep { recordUsage(.reviewDeep) }
         startWorkerIfNeeded()
     }
 
@@ -750,6 +752,7 @@ extension AppModel {
         do {
             let posted = try await github.postReview(pr.repo, number: pr.number, payload: payload)
             Log.info("승인 게시 \(pr.id) (리뷰 초안 없음, 본문 \(body.count)자)", "queue")
+            recordUsage(.approve)
             noteApproval(repo: pr.repo, number: pr.number)
             // 그 PR 하나만 다시 받는다(post 경로와 같다). 예전에는 목록 전체를 다시 받았는데, 그게 끝나야 이 함수가
             // 돌아와서 GitHub 에는 이미 올라간 뒤에도 버튼이 "Approve 올리는 중…" 에 6~8초 더 머물렀다(실측).
@@ -826,6 +829,8 @@ extension AppModel {
             // 그 사실을 다시 받아 오지 않으면 폴링(기본 120초) 전까지 목록에 그대로 남는다
             // — 승인 경로는 refresh() 를 했는데 이 경로만 빠져 있었다(실측).
             // 전체 갱신은 무겁고 느리므로 그 PR 하나만 다시 조회한다.
+            recordUsage(.reviewPost)
+            if event == .approve { recordUsage(.approve) }
             await refreshOne(repo: record.repo, number: record.number)
             markLeaving(record.prKey, reviewedAt: posted.postedAt, approved: event == .approve)
             banner = Banner(kind: .info,

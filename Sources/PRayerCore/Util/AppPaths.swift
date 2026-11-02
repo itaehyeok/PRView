@@ -56,6 +56,8 @@ public enum AppPaths {
     /// 내 코멘트 답글을 어디까지 봤나(`MyReplyReadState`).
     public static var myReplyReadFile: URL { support.appendingPathComponent("my-comment-replies.json") }
     public static var ledgerFile: URL { support.appendingPathComponent("token-ledger.json") }
+    /// 기능별 하루 사용 횟수와 보내기 켬·끔(`UsageStats`). 설정 공유에 담지 않는다 — 맥마다 사람이 정한다.
+    public static var usageStatsFile: URL { support.appendingPathComponent("usage-stats.json") }
     public static var explanationsFile: URL { support.appendingPathComponent("comment-explanations.json") }
     /// 하단 대화창에서 리뷰 대화를 이어 간 말들(`ReviewChat`). 대화 자체는 CLI 가 따로 남긴다.
     public static var chatsFile: URL { support.appendingPathComponent("review-chats.json") }

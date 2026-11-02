@@ -135,6 +135,7 @@ extension AppModel {
     /// 보낸 것을 남긴다. 나에게 보낸 시험은 남기지 않는다 — 요청한 적 없는데 "요청함" 이 뜨면 헷갈린다.
     func recordSlackRequest(_ prs: [PullRequestInfo], destination: SlackDestination, link: String?) {
         guard destination.kind != .me else { return }
+        recordUsage(.slackRequest)
         let entry = SlackRequestEntry(sentAt: Date(), destination: destination, link: link)
         for pr in prs { slackRequests[pr.id] = entry }
         let snapshot = slackRequests

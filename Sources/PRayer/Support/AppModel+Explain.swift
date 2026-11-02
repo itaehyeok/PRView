@@ -22,6 +22,7 @@ extension AppModel {
             banner = Banner(kind: .error, message: PostError.engineMissing.localizedDescription)
             return
         }
+        recordUsage(.explain)
         explainingKeys.insert(target.key)
         Task { [weak self] in
             guard let self else { return }

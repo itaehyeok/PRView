@@ -759,8 +759,11 @@ struct NotificationSettings: View {
                 }
                 Button("폴더 열기") { NSWorkspace.shared.open(AppPaths.support) }
             }
+            // 맨 아래에 둔다 — 알림을 고치러 온 사람의 눈길을 먼저 끌 자리가 아니다(2026-11-02 사용자 결정).
+            UsageStatsSection()
         }
         .formStyle(.grouped)
+        .defaultScrollAnchor(DebugLaunch.settingsAtBottom ? .bottom : nil)
         .onDisappear { Task { await model.save() } }
     }
 }

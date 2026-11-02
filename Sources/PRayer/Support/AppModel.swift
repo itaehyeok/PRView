@@ -437,6 +437,8 @@ final class AppModel {
     var hasSnapshotBaseline = false
     /// 내 코멘트 답글을 어디까지 봤나(AppModel+Replies). 디스크에서 읽기 전에는 nil — 그동안은 칩을 그리지 않는다.
     var myReplyRead: MyReplyReadState?
+    /// 기능별 하루 사용 횟수와 보내기 켬·끔(AppModel+Usage).
+    var usageStats = UsageStats()
     /// PR 을 열 때 아직 안 본 답글이었던 것(`MyCommentReply.id`). 열어 둔 동안만 개요 탭에 "새 답글" 로 남는다.
     var freshReplyIDs: [String: Set<String>] = [:]
     /// 목록의 답글 칩으로 연 PR(`openReplies`). 그 PR 의 개요 탭이 첫 새 답글로 스크롤하고 비운다(OverviewTab).
@@ -1070,6 +1072,7 @@ final class AppModel {
             hasSnapshotBaseline = true
         }
         await loadMyReplyRead()
+        await loadUsageStats()
         filter = PRFilter.load()
         // 모델 목록을 수확보다 먼저 읽는다 — 수확이 Codex 계열(`codex:sol`)을 실제 모델로 풀 때 쓴다. 늦게 읽으면
         // 초안에 계열 이름이 그대로 남는다(실측 2026-10-29: 머리 줄에 "codex:codex:sol").
@@ -1116,6 +1119,7 @@ final class AppModel {
         ledger = await store.loadLedger()
         showOnboarding = !settings.onboardingCompleted
         NotificationRouter.shared.onSelect = { [weak self] prKey in
+            self?.recordUsage(.notificationOpen)
             self?.select(prKey: prKey)
         }
         // 알림 권한은 **사용자가 직접 켤 때만** 요청한다.

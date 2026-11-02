@@ -14,6 +14,7 @@ extension AppModel {
 
     func openTeamStats() {
         guard !showingTeamStats else { return }
+        recordUsage(.teamStats)
         prBeforeTeamStats = selectedPRID
         showingTeamStats = true
         selectedPRID = nil

@@ -80,6 +80,7 @@ extension AppModel {
             // 입력이 멈출 때까지 기다린다 — 글자마다 물으면 GitHub 검색 한도(분당 30회)를 금방 쓴다.
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
+            self?.recordUsage(.searchAllPRs)
             await self?.runExtraSearch(plan: plan, key: key, repos: repos,
                                        olderThan: PRSearchPlan.olderThan(scope: scope))
         }
