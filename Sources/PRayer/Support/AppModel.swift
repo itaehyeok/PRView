@@ -1673,7 +1673,7 @@ final class AppModel {
 
     // MARK: - 새로고침
 
-    /// 사람이 누른 새로고침(툴바·⌘R·목록 머리 줄 ↻·빈 화면의 "지금 새로고침"). 받는 동안 목록 머리 줄의 ↻ 가 돈다 —
+    /// 사람이 누른 새로고침(⌘R·목록 머리 줄 ↻·빈 화면의 "지금 새로고침"). 받는 동안 목록 머리 줄의 ↻ 가 돈다 —
     /// 2분마다 도는 폴링·탭 이동은 조용히 받는다.
     func refreshByUser() async {
         guard !isUserRefreshing else { return }

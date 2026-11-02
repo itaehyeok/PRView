@@ -177,8 +177,9 @@ struct MainWindow: View {
             .padding(.leading, 10)
         }
         ToolbarItemGroup {
-            // "리뷰 N"(돌고 있는 리뷰 큐) 버튼은 지웠다(2026-11-02 사용자 결정). 리뷰 중인 것은 목록 행의
-            // Reviewing 표시와 AI 리뷰 탭의 진행 카드가 이미 보인다. 5시간 토큰은 "상태" 팝오버에 남는다.
+            // "리뷰 N"(돌고 있는 리뷰 큐)과 "새로고침" 버튼은 지웠다(2026-11-02 사용자 결정). 리뷰 중인 것은 목록 행의
+            // Reviewing 표시와 AI 리뷰 탭의 진행 카드가 이미 보이고, 새로고침은 목록 머리 줄의 ↻ 와 ⌘R(메뉴)이 있다.
+            // 5시간 토큰은 "상태" 팝오버에 남는다.
             //
             // macOS 툴바는 Label 을 기본으로 **아이콘만** 그린다. 그대로 두면 "일부만" 같은 글자가
             // 사라지고 아이콘 하나만 남아 무슨 표시인지 알 수 없다. 이름을 직접 아래에 붙인다.
@@ -204,15 +205,6 @@ struct MainWindow: View {
                   ? "PR 로 돌아가기 (⌥⌘S)"
                   : "팀 통계 — 주간·월간 커밋·PR·Approve·코멘트 순위 (⌥⌘S)")
             StatusToolbarMenu()
-            Button {
-                Task { await model.refreshByUser() }
-            } label: {
-                ToolbarButtonLabel(title: "새로고침", tint: .primary) {
-                    Image(systemName: "arrow.clockwise")
-                }
-            }
-            .help("새로고침 (⌘R)")
-            .disabled(model.isRefreshing)
         }
     }
 
