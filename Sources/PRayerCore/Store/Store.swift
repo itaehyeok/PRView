@@ -232,6 +232,17 @@ public actor Store {
         try? encoder.encode(myReplyRead).write(to: AppPaths.myReplyReadFile, options: .atomic)
     }
 
+    // MARK: - 사용 통계
+
+    public func loadUsageStats() -> UsageStats? {
+        guard let data = try? Data(contentsOf: AppPaths.usageStatsFile) else { return nil }
+        return try? decoder.decode(UsageStats.self, from: data)
+    }
+
+    public func save(usageStats: UsageStats) {
+        try? encoder.encode(usageStats).write(to: AppPaths.usageStatsFile, options: .atomic)
+    }
+
     // MARK: - 슬랙 리뷰 요청 기록 (키: PR id)
 
     public func loadSlackRequests() -> [String: SlackRequestEntry] {
