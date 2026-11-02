@@ -37,6 +37,21 @@ final class DismissalTests: XCTestCase {
         XCTAssertFalse(PRVisibility.isDismissed(pr: other, dismissals: dismissals))
     }
 
+    /// 숨김은 리뷰 대기 탭에서만 걸린다. 처리한 PR 은 할 일에서 빠질 뿐, Approved·All PRs 에는 그대로 보여야 한다
+    /// (예전에는 이 앱에서 Approve 한 PR 이 Approved 탭에서도 빠졌다).
+    func testDismissalHidesOnlyInOpenTab() {
+        let pr = Fixtures.pr(number: 42, headRefOid: head)
+        let dismissals = [pr.id: dismissal()]
+        XCTAssertTrue(PRVisibility.isDismissed(pr: pr, dismissals: dismissals, in: .open))
+        for window in PRListWindow.allCases {
+            XCTAssertFalse(PRVisibility.isDismissed(pr: pr, dismissals: dismissals, in: .myApprovals(window)))
+            XCTAssertFalse(PRVisibility.isDismissed(pr: pr, dismissals: dismissals, in: .recentAll(window)))
+        }
+        // 리뷰 대기 탭에서도 새 커밋이 오면 다시 보인다 — 탭 조건이 다른 규칙을 덮지 않는다.
+        let pushed = Fixtures.pr(number: 42, headRefOid: "bbbbbbbbbbbb2222")
+        XCTAssertFalse(PRVisibility.isDismissed(pr: pushed, dismissals: dismissals, in: .open))
+    }
+
     func testPruneDropsDismissalAfterNewCommit() {
         let pr = Fixtures.pr(number: 42, headRefOid: "bbbbbbbbbbbb2222")
         let pruned = PRVisibility.prunedDismissals([pr.id: dismissal()], prs: [pr])
