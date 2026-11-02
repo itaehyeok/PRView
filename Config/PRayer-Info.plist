@@ -11,6 +11,9 @@
   PRayerBetaNumber: release.sh --beta 가 빌드할 때 넘기는 베타 번호(0.5.0-beta.3 이면 3). 그 밖의 빌드에서는
   정의되지 않은 변수라 빈 값이 된다. 앱 버전(CFBundleShortVersionString)은 숫자 세 자리만 두라는 애플 규칙이라
   "-beta.3" 을 거기 붙이지 않고 따로 둔다.
+  PRayerTelemetryAppID·PRayerTelemetryNamespace: 사용 통계(UsageStats)를 보낼 TelemetryDeck 앱. release.sh 가
+  Local.env 의 값을 배포 빌드에만 넘긴다. 개발 빌드·포크는 빈 값이라 세지도 보내지도 않는다 — 소스에 박으면 포크와
+  개발 빌드의 사용까지 대시보드에 섞인다.
 -->
 <plist version="1.0">
 <dict>
@@ -24,5 +27,9 @@
 	<string>문서 폴더에 있는 로컬 클론을 리뷰하거나, 그 폴더에서 처음 연 PRView 를 응용 프로그램 폴더로 옮긴 뒤 정리할 때 필요합니다.</string>
 	<key>PRayerBetaNumber</key>
 	<string>$(PRAYER_BETA_NUMBER)</string>
+	<key>PRayerTelemetryAppID</key>
+	<string>$(PRAYER_TELEMETRY_APP_ID)</string>
+	<key>PRayerTelemetryNamespace</key>
+	<string>$(PRAYER_TELEMETRY_NAMESPACE)</string>
 </dict>
 </plist>

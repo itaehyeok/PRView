@@ -81,6 +81,9 @@ if [ -z "$TEAM_ID" ]; then
   echo "❌ Local.env 에 PRAYER_TEAM_ID 가 없습니다. 어느 팀으로 서명할지 정해야 합니다." >&2
   exit 1
 fi
+# 사용 통계(TelemetryDeck) 앱. 배포 빌드에만 넣는다 — 없으면 이 배포본은 세지도 보내지도 않는다(막지는 않는다).
+TELEMETRY_APP_ID="${PRAYER_TELEMETRY_APP_ID:-}"
+TELEMETRY_NAMESPACE="${PRAYER_TELEMETRY_NAMESPACE:-}"
 # 소스·베타·배포본을 두는 공개 저장소(2026-10-30 소스 공개). origin 이 이곳이어야 한다.
 # 앱의 UpdateCheck.repo·assetName 과 setup.sh 의 REPO·ZIP_PREFIX 와 같아야 한다.
 REPO="itaehyeok/PRView"
@@ -376,6 +379,8 @@ xcodebuild -project PRayer.xcodeproj -scheme PRayer -configuration Release \
   OTHER_CODE_SIGN_FLAGS="$SIGN_FLAGS" \
   CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
   PRAYER_BETA_NUMBER="$BETA_N" \
+  PRAYER_TELEMETRY_APP_ID="$TELEMETRY_APP_ID" \
+  PRAYER_TELEMETRY_NAMESPACE="$TELEMETRY_NAMESPACE" \
   build >/tmp/prayer-release.log 2>&1
 if [ $? -ne 0 ]; then
   echo "❌ 빌드 실패 — 로그: /tmp/prayer-release.log" >&2
@@ -390,6 +395,15 @@ BUILT_N="$(/usr/libexec/PlistBuddy -c 'Print PRayerBetaNumber' "$APP/Contents/In
 if [ "$BUILT_N" != "$BETA_N" ]; then
   echo "❌ 앱의 베타 번호가 다릅니다: 기대 ${BETA_N:-빈 값} · 실제 ${BUILT_N:-빈 값} — Config/PRayer-Info.plist 의 PRayerBetaNumber 를 확인하세요." >&2
   exit 1
+fi
+# 사용 통계 App ID 도 실제로 들어갔는지 본다. 승격은 이 zip 을 그대로 옮기므로 여기서 빠지면 공개본도 빠진다.
+BUILT_TELEMETRY="$(/usr/libexec/PlistBuddy -c 'Print PRayerTelemetryAppID' "$APP/Contents/Info.plist" 2>/dev/null)"
+if [ "$BUILT_TELEMETRY" != "$TELEMETRY_APP_ID" ]; then
+  echo "❌ 앱의 사용 통계 App ID 가 다릅니다 — Config/PRayer-Info.plist 의 PRayerTelemetryAppID 를 확인하세요." >&2
+  exit 1
+fi
+if [ -z "$TELEMETRY_APP_ID" ]; then
+  echo "⚠️  Local.env 에 PRAYER_TELEMETRY_APP_ID 가 없습니다 — 이 배포본은 사용 통계를 보내지 않습니다."
 fi
 # 베타도 나중에 그대로 공개로 승격되므로 같은 검사를 거친다.
 check_for_public "$APP" || exit 1
