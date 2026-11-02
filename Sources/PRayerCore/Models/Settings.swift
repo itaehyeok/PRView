@@ -9,25 +9,45 @@ public struct RepoConfig: Codable, Sendable, Equatable, Identifiable {
     /// 머지에 필요한 Approve 수. GitHub 규칙에서 읽고, 못 읽으면 이 값(기본 3)을 쓴다.
     public var approvalThreshold: Int
     public var approvalThresholdFromAPI: Bool
+    /// GitHub 을 읽었는데 머지 조건에 Approve 가 없었다. `approvalThresholdFromAPI` 가 거짓일 때만 뜻이 있다.
+    /// 예전에는 이것과 "못 읽음" 이 같은 "직접 정함" 으로 보여, 규칙이 없을 뿐인 레포도 고장 난 것처럼 보였다.
+    public var approvalConditionMissing: Bool
     /// 브랜치별 Approve 규칙을 수로 묶은 것. 묶음이 둘 이상이면 설정에서 수를 고른다. 비어 있으면 아직 못 읽었다.
     public var approvalGroups: [ApprovalGroup]
     public var enabled: Bool
 
     public var id: String { repo.full }
 
+    /// Approve 수를 어디서 얻었나 — 설정의 레포 줄이 이걸로 표시를 고른다.
+    public enum ApprovalSource: Sendable, Equatable {
+        /// GitHub 규칙에서 읽었다.
+        case github
+        /// GitHub 에 Approve 조건이 없다. 수는 사람이 정한 값(기본 3)이다.
+        case noCondition
+        /// GitHub 규칙을 못 읽었다(아직 안 읽은 것 포함). 수는 사람이 정한 값(기본 3)이다.
+        case unreadable
+    }
+
+    public var approvalSource: ApprovalSource {
+        if approvalThresholdFromAPI { return .github }
+        return approvalConditionMissing ? .noCondition : .unreadable
+    }
+
     public init(repo: RepoID, prTargetBranch: String = "develop", approvalThreshold: Int = 3,
-                approvalThresholdFromAPI: Bool = false, enabled: Bool = true,
-                approvalGroups: [ApprovalGroup] = []) {
+                approvalThresholdFromAPI: Bool = false, approvalConditionMissing: Bool = false,
+                enabled: Bool = true, approvalGroups: [ApprovalGroup] = []) {
         self.repo = repo
         self.prTargetBranch = prTargetBranch
         self.approvalThreshold = approvalThreshold
         self.approvalThresholdFromAPI = approvalThresholdFromAPI
+        self.approvalConditionMissing = approvalConditionMissing
         self.approvalGroups = approvalGroups
         self.enabled = enabled
     }
 
     enum CodingKeys: String, CodingKey {
-        case repo, prTargetBranch, approvalThreshold, approvalThresholdFromAPI, approvalGroups, enabled
+        case repo, prTargetBranch, approvalThreshold, approvalThresholdFromAPI, approvalConditionMissing,
+             approvalGroups, enabled
     }
 
     /// repo 만 있으면 복원한다. 항목 하나가 깨져 레포 목록 전체가 사라지는 것을 막는다.
@@ -37,6 +57,7 @@ public struct RepoConfig: Codable, Sendable, Equatable, Identifiable {
         prTargetBranch = (try? c.decodeIfPresent(String.self, forKey: .prTargetBranch)) ?? "develop"
         approvalThreshold = (try? c.decodeIfPresent(Int.self, forKey: .approvalThreshold)) ?? 3
         approvalThresholdFromAPI = (try? c.decodeIfPresent(Bool.self, forKey: .approvalThresholdFromAPI)) ?? false
+        approvalConditionMissing = (try? c.decodeIfPresent(Bool.self, forKey: .approvalConditionMissing)) ?? false
         approvalGroups = (try? c.decodeIfPresent([ApprovalGroup].self, forKey: .approvalGroups)) ?? []
         enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? true
     }

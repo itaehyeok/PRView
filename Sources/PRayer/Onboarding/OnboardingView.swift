@@ -663,7 +663,7 @@ struct RepoOptionRow: View {
                 }
                 .foregroundStyle(config.enabled ? .primary : .secondary)
                 Text(RepoConfigRow.summary(config)
-                     + (config.approvalThresholdFromAPI ? "" : " · 직접 정함")
+                     + (RepoConfigRow.sourceLabel(config).map { " · \($0)" } ?? "")
                      + (config.enabled ? "" : " · 꺼 둠"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -696,8 +696,12 @@ struct RepoOptionRow: View {
 ///   (사용자 피드백, 2026-10-06). PR 마다 그 PR 이 향하는 브랜치의 수를 쓴다
 ///   (`Settings.approvalThreshold(for: PullRequestInfo)`). 한때 "Approve 2명(main·release/*·team/**/*)
 ///   · 1명(docs/*)" 처럼 전부 적었는데, 두 줄로 꺾이고 정작 몇 명인지가 묻혔다(사용자 피드백).
-/// - 못 읽었으면: 주황 "직접 정함" + 수를 고르는 칸 + 다시 읽기. 예전에는 3명이라고만 적혀 고칠 곳이 없었다 —
+/// - GitHub 에서 수를 얻지 못했으면: 까닭 표시 + 수를 고르는 칸. 예전에는 3명이라고만 적혀 고칠 곳이 없었다 —
 ///   팀이 2명이면 다 찬 PR 이 계속 대기에 남았다. 읽어 온 값에는 아이콘을 달지 않는다 — 읽어 온 것이 보통이다.
+///   - Approve 조건이 없는 레포: 회색 "Approve 조건 없음". 고장이 아니라 그 레포 사정이라 색을 쓰지 않고, 다시 읽어도
+///     같으니 "다시 읽기" 를 달지 않는다(앱을 켤 때·⌘R 에는 다시 읽는다).
+///   - 못 읽은 레포: 주황 "Approve 조건 못 읽음" + 다시 읽기.
+///   한때 둘 다 주황 "직접 정함" 이어서, 규칙이 없을 뿐인 레포가 고장 난 것처럼 보였고 손대지 않았는데 "직접" 이라고 했다(사용자 피드백).
 struct RepoConfigRow: View {
     @Environment(AppModel.self) private var model
     let config: RepoConfig
@@ -717,26 +721,50 @@ struct RepoConfigRow: View {
         "Approve \(config.approvalThreshold)명 필요" + (hasBranchRules(config) ? " · 브랜치마다 다름" : "")
     }
 
+    /// GitHub 에서 수를 얻지 못한 까닭. 읽어 온 값이면 nil.
+    static func sourceLabel(_ config: RepoConfig) -> String? {
+        switch config.approvalSource {
+        case .github: nil
+        case .noCondition: "Approve 조건 없음"
+        case .unreadable: "Approve 조건 못 읽음"
+        }
+    }
+
+    private var manualHelp: String {
+        let reason = config.approvalSource == .noCondition
+            ? "GitHub 에 이 레포의 Approve 조건이 없습니다 — 머지할 때 Approve 를 요구하지 않습니다."
+            : "GitHub 에서 Approve 조건을 읽지 못했습니다 — 브랜치 보호 규칙은 레포 관리자에게만 보이거나, 연결이 끊겼을 수 있습니다."
+        return reason + " 그래서 여기서 정한 수(처음에는 3명)가 차면 다 찬 것으로 봅니다. 팀 기준에 맞게 고치세요 — 실제보다 높으면 다 찬 PR 이 'To review' 에 남고, 낮으면 덜 찬 PR 이 'To review' 에서 빠집니다."
+    }
+
     var body: some View {
         HStack(spacing: 6) {
-            if !config.approvalThresholdFromAPI {
-                Label("직접 정함", systemImage: "pencil")
+            if let source = Self.sourceLabel(config) {
+                let unreadable = config.approvalSource == .unreadable
+                let tint = unreadable ? Color.orange : Color.secondary
+                Label(source, systemImage: unreadable ? "exclamationmark.triangle" : "pencil")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(tint)
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .overlay(Capsule().stroke(Color.orange.opacity(0.5), lineWidth: 0.5))
+                    .overlay(Capsule().stroke(tint.opacity(0.5), lineWidth: 0.5))
+                    .help(manualHelp)
                 Stepper(title, value: manualBinding, in: 1...10)
                     .font(.caption)
                     .controlSize(.small)
                     .fixedSize()
-                    .help("GitHub 에서 Approve 규칙을 읽지 못했거나 규칙이 없어, 처음에는 3명으로 가정합니다. 팀 기준에 맞게 고치세요 — 실제보다 높으면 다 찬 PR 이 'To review' 에 남고, 낮으면 덜 찬 PR 이 'To review' 에서 빠집니다.")
-                Button(isReading ? "읽는 중…" : "다시 읽기") { reread() }
-                    .buttonStyle(.link)
-                    .font(.caption)
-                    .disabled(isReading)
+                    .help(manualHelp)
+                if unreadable {
+                    // 제 폭을 지킨다. 앞 표시가 길어지자 폭을 못 받아 글자가 세로로 꺾이며 사라지고 줄만 높아졌다(실측).
+                    Button(isReading ? "읽는 중…" : "다시 읽기") { reread() }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .disabled(isReading)
+                }
             } else if Self.hasBranchRules(config) {
                 Text(title)
                     .font(.caption)
@@ -774,7 +802,7 @@ struct RepoConfigRow: View {
         }
     }
 
-    /// 규칙을 못 읽은 레포의 수. 읽어 온 값이 생기면(다시 읽기·앱을 켤 때) 그 값이 이것을 덮는다.
+    /// GitHub 에서 수를 얻지 못한 레포의 수. 읽어 온 값이 생기면(다시 읽기·앱을 켤 때) 그 값이 이것을 덮는다.
     private var manualBinding: Binding<Int> {
         Binding(get: { config.approvalThreshold },
                 set: { model.setManualApprovalThreshold($0, for: config.repo) })

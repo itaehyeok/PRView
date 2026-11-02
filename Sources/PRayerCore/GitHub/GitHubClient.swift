@@ -831,6 +831,7 @@ public struct GitHubClient: Sendable {
 
     /// 승인 임계값. 룰셋 → 클래식 보호 → GraphQL 순으로 시도하고 못 읽으면 nil.
     /// 이 레포의 브랜치별 Approve 규칙과 기본 브랜치. 아무것도 못 읽으면 nil, 읽었는데 규칙이 없으면 빈 배열.
+    /// 빈 배열은 "규칙이 없다" 는 뜻으로 쓰이므로, 정말 없다고 확인되지 않으면 빈 배열 대신 nil(못 읽음)을 준다.
     ///
     /// 두 군데를 본다. ① 옛 브랜치 보호 규칙 — 패턴과 수가 한 번에 온다. ② 새 규칙(ruleset) — 레포 전체 목록은
     /// 관리자만 볼 수 있어서, 이름을 아는 브랜치(기본 브랜치 · 옛 규칙의 이름 · 열린 PR 의 대상)마다 물어본다.
@@ -852,19 +853,43 @@ public struct GitHubClient: Sendable {
             names.append(name)
         }
         var rulesets: [ApprovalRule] = []
+        var rulesetsRead = true
         // 브랜치마다 한 번씩 부르므로 몇 개로 끊는다. 앱을 켤 때·⌘R·레포를 켤 때만 돈다.
         for name in names.prefix(8) {
-            if let count = await rulesetApprovals(repo, branch: name) {
+            let read = await rulesetApprovals(repo, branch: name)
+            rulesetsRead = rulesetsRead && read.succeeded
+            if let count = read.count {
                 rulesets.append(ApprovalRule(branch: name, count: count))
             }
         }
         // 옛 규칙 조회가 실패했는데 새 규칙도 없으면 "규칙 없음" 인지 "못 읽음" 인지 모른다 — 모른다고 돌려준다.
         if data == nil, rulesets.isEmpty { return nil }
-        return (defaultBranch, ApprovalGroups.merge(legacy: legacy, rulesets: rulesets))
+        let rules = ApprovalGroups.merge(legacy: legacy, rulesets: rulesets)
+        if rules.isEmpty {
+            let isAdmin = data?.repository?.viewerPermission == "ADMIN"
+            var protected: [Bool?] = []
+            if !isAdmin {
+                for name in names.prefix(8) { protected.append(await isProtected(repo, branch: name)) }
+            }
+            guard Self.confirmsNoApprovalCondition(viewerIsAdmin: isAdmin, rulesetsRead: rulesetsRead,
+                                                   branchesProtected: protected) else { return nil }
+        }
+        return (defaultBranch, rules)
     }
 
-    /// 새 규칙(ruleset)에서 이 브랜치에 걸린 Approve 수. 여러 규칙이 걸리면 가장 큰 값이 조건이다. 없으면 nil.
-    private func rulesetApprovals(_ repo: RepoID, branch: String) async -> Int? {
+    /// 읽은 규칙이 비었을 때 Approve 조건이 없다고 봐도 되는가. 아니면 모르는 것(못 읽음)이다.
+    ///
+    /// 옛 브랜치 보호 규칙은 레포 관리자에게만 보인다. 관리자가 아니면 GraphQL 이 오류 없이 빈 목록을 준다
+    /// (실측: 읽기 권한만 있는 공개 레포 — 새 규칙 없이 기본 브랜치가 보호돼 있는데 옛 규칙 0개). 그래서 관리자가 아니면 물어본
+    /// 브랜치가 하나도 보호되지 않았음을 확인해야 없다고 말한다. 보호 여부는 읽기 권한만 있어도 보이고, 새 규칙도 반영된다.
+    static func confirmsNoApprovalCondition(viewerIsAdmin: Bool, rulesetsRead: Bool, branchesProtected: [Bool?]) -> Bool {
+        if viewerIsAdmin { return rulesetsRead }
+        return !branchesProtected.isEmpty && branchesProtected.allSatisfy { $0 == false }
+    }
+
+    /// 새 규칙(ruleset)에서 이 브랜치에 걸린 Approve 수. 여러 규칙이 걸리면 가장 큰 값이 조건이다.
+    /// 못 물었으면 `succeeded` 가 거짓이다 — 물었는데 Approve 규칙이 없는 것(`count` nil)과 나눈다.
+    private func rulesetApprovals(_ repo: RepoID, branch: String) async -> (succeeded: Bool, count: Int?) {
         struct Rule: Decodable {
             let type: String?
             let parameters: Parameters?
@@ -872,11 +897,23 @@ public struct GitHubClient: Sendable {
         }
         guard let result = try? await gh(["api", "repos/\(repo.full)/rules/branches/\(branch)"], timeout: 30),
               result.succeeded,
-              let rules = try? JSONDecoder().decode([Rule].self, from: Data(result.stdout.utf8)) else { return nil }
-        return rules.filter { $0.type == "pull_request" }
+              let rules = try? JSONDecoder().decode([Rule].self, from: Data(result.stdout.utf8)) else { return (false, nil) }
+        let count = rules.filter { $0.type == "pull_request" }
             .compactMap { $0.parameters?.required_approving_review_count }
             .filter { $0 > 0 }
             .max()
+        return (true, count)
+    }
+
+    /// 브랜치가 보호돼 있나(옛 규칙이든 새 규칙이든). 읽기 권한만 있어도 보인다. 못 물었으면 nil.
+    private func isProtected(_ repo: RepoID, branch: String) async -> Bool? {
+        guard let result = try? await gh(["api", "repos/\(repo.full)/branches/\(branch)", "--jq", ".protected"], timeout: 30),
+              result.succeeded else { return nil }
+        switch result.stdout.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "true": return true
+        case "false": return false
+        default: return nil
+        }
     }
 
     public func requiredApprovals(_ repo: RepoID, branch: String) async throws -> Int? {

@@ -74,4 +74,22 @@ final class ApprovalGroupsTests: XCTestCase {
         let round = try JSONDecoder().decode(RepoConfig.self, from: JSONEncoder().encode(withGroups))
         XCTAssertEqual(round.approvalGroups, groups)
     }
+
+    /// 설정의 레포 줄이 "Approve 조건 없음" 과 "Approve 조건 못 읽음" 을 가른다. 옛 설정 파일에는 가를 값이 없어
+    /// 못 읽음으로 시작하고, 앱을 켤 때 다시 읽으면서 제자리를 찾는다.
+    func testApprovalSourceSeparatesNoConditionFromUnreadable() throws {
+        let old = #"{"repo":{"owner":"acme","name":"sample-ios"},"approvalThreshold":3,"approvalThresholdFromAPI":false}"#
+        let config = try JSONDecoder().decode(RepoConfig.self, from: Data(old.utf8))
+        XCTAssertEqual(config.approvalSource, .unreadable)
+
+        var noCondition = config
+        noCondition.approvalConditionMissing = true
+        XCTAssertEqual(noCondition.approvalSource, .noCondition)
+        let round = try JSONDecoder().decode(RepoConfig.self, from: JSONEncoder().encode(noCondition))
+        XCTAssertEqual(round.approvalSource, .noCondition)
+
+        // GitHub 에서 읽은 수가 있으면 남은 표시와 상관없이 읽어 온 값이다.
+        noCondition.approvalThresholdFromAPI = true
+        XCTAssertEqual(noCondition.approvalSource, .github)
+    }
 }

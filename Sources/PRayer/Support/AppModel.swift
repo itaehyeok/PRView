@@ -1645,6 +1645,7 @@ final class AppModel {
             settings.repos[index].approvalGroups = groups
             settings.repos[index].approvalThreshold = chosen.count
             settings.repos[index].approvalThresholdFromAPI = true
+            settings.repos[index].approvalConditionMissing = false
         } else {
             // 규칙이 없거나 못 읽었다. 예전 방식으로 그 브랜치 하나만 한 번 더 물어보고, 그래도 없으면 직접 정한 값(기본 3)을 쓴다.
             // 규칙이 없다고 0명으로 두지 않는다 — 0이면 모든 PR 이 "Approve 가 다 찼다" 로 보여 리뷰 대상에서 빠진다.
@@ -1654,14 +1655,18 @@ final class AppModel {
             if let count {
                 settings.repos[index].approvalThreshold = count
                 settings.repos[index].approvalThresholdFromAPI = true
+                settings.repos[index].approvalConditionMissing = false
             } else {
                 settings.repos[index].approvalThresholdFromAPI = false
+                // 읽기는 했는데 규칙이 비었으면 "Approve 조건 없음", 아예 못 읽었으면(`read` 가 nil) "못 읽음" 으로 나눠 보인다.
+                settings.repos[index].approvalConditionMissing = read != nil
             }
         }
         await save()
     }
 
-    /// GitHub 규칙을 못 읽은 레포의 Approve 수를 사람이 정한다(설정의 레포 줄 "직접 정함").
+    /// GitHub 에서 Approve 수를 얻지 못한 레포의 수를 사람이 정한다(설정의 레포 줄 "Approve 조건 없음"·"Approve 조건 못 읽음").
+    /// 어느 쪽인지(`approvalConditionMissing`)는 건드리지 않는다 — 수를 고쳐도 GitHub 쪽 사정은 그대로다.
     /// 예전에는 브랜치마다 수가 다를 때 하나를 골라 모든 PR 에 쓰는 메뉴가 있었는데, 이제 PR 마다 그 PR 이 향하는
     /// 브랜치의 수를 쓰므로(`Settings.approvalThreshold(for: PullRequestInfo)`) 고를 일은 규칙을 못 읽었을 때만 남았다.
     func setManualApprovalThreshold(_ count: Int, for repo: RepoID) {
