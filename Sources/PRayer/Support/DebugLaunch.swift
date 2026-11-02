@@ -152,7 +152,11 @@ enum DebugLaunch {
     static var keyPresses: [String]? { value("PRAYER_DEBUG_KEYS")?.split(separator: ",").map(String.init) }
     /// `PRAYER_DEBUG_REVIEW_SCROLL=4` — AI 리뷰 탭을 그 번째(0부터) 코드 코멘트까지 내려 둔다(왼쪽 칸이 따라오는지 보기).
     static var reviewScrollIndex: Int? { value("PRAYER_DEBUG_REVIEW_SCROLL").flatMap(Int.init) }
-    /// `PRAYER_DEBUG_FLIGHT_SECONDS=3` — "리뷰에 담기" 고스트가 날아가는 시간(기본 0.5초). 창 캡처로 날아가는 도중을 찍으려고.
+    /// `PRAYER_DEBUG_BASKET=2` — AI 리뷰 탭이 뜬 5초 뒤 그 번째(0부터) 코드 코멘트의 담기 체크를 누른 것처럼 담는다(담겨 있으면
+    /// 뺀다). 담기 연출 확인용 — `PRAYER_DEBUG_REVIEW_SCROLL` 로 내려 둔 뒤에 누른다. **아무것도 올리지 않는다.**
+    static var basketIndex: Int? { value("PRAYER_DEBUG_BASKET").flatMap(Int.init) }
+    /// `PRAYER_DEBUG_FLIGHT_SECONDS=3` — "리뷰에 담기" 고스트(기본 0.5초)·좁은 창 탭 칩(기본 0.64초)이 날아가는 시간.
+    /// 창 캡처로 날아가는 도중을 찍으려고.
     static var flightSeconds: Double? { value("PRAYER_DEBUG_FLIGHT_SECONDS").flatMap(Double.init) }
     /// `PRAYER_DEBUG_APPROVE_MORPH=배율` — 고른 PR 의 AI 리뷰 탭에서 3초 뒤 "리뷰 없이 Approve" 연출(`ApproveCheckMorph`)만
     /// 그 시간 배율로 돌린다(1 = 실제 속도, 5 = 다섯 배 느리게). **아무것도 올리지 않는다** — 끝나면 버튼이 그대로 돌아온다.

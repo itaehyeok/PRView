@@ -44,6 +44,13 @@ struct AIReviewView: View {
     /// 지금 날아가는 고스트. 도착 자리(`tripTarget`)를 받으면 그리로 움직이고, 내려앉으면 nil.
     @State private var trip: BasketFlight.Trip?
     @State private var tripTarget: CGRect?
+    /// 좁은 창에서 반대쪽 탭으로 날아가는 칩(`BasketTabChip`). 탭에 닿으면 nil.
+    @State private var tabTrip: BasketTabTrip?
+    /// 칩이 닿아 반짝이는 탭과 "+1" 을 띄운 탭. 목록 탭(PRListView `land()`)과 같은 박자로 꺼진다.
+    @State private var landedTab: PanelTab?
+    @State private var plusOneTab: PanelTab?
+    /// 마지막으로 닿은 차례. 연달아 닿으면 앞 차례의 끄기가 뒤 차례의 반짝임을 일찍 끄지 않게 한다.
+    @State private var tabLandSerial = 0
     /// 이 줄이 보이게 칸을 굴려 달라는 요청(`ReviewIssue.key`) — 담은 줄이 왼쪽 칸 화면 밖에 생겼을 때.
     @State private var revealRequest: String?
 
@@ -272,21 +279,35 @@ struct AIReviewView: View {
                     } else {
                         // 좁으면 위아래로 쌓지 않고 탭으로 오간다 — 쌓으면 코드 코멘트가 본문 아래로 밀려 있는 줄도 몰랐다(사용자 피드백).
                         ScrollView {
-                            VStack(alignment: .leading, spacing: 14) {
+                            // 판정 줄·안내는 같이 올라가 사라지고, 탭 줄은 맨 위에 닿으면 붙어 그 아래만 스크롤된다(사용자 요청,
+                            // 2026-11-02). 탭 줄까지 올라가 사라지면 내려 읽는 동안 지금 어느 탭인지 안 보였고, 담기 칩이 들어갈 탭도 화면 밖이었다.
+                            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                                 headerArea(record: record, stacked: true)
-                                VStack(alignment: .leading, spacing: 12) {
-                                    panelTabs(record: record)
-                                    switch currentTab(record) {
-                                    case .body:
-                                        bodyColumn(record: record, binding: binding)
-                                    case .comments:
-                                        issueSection(record: record, binding: binding, showsVerdict: false)
+                                    .padding(.bottom, 8)
+                                Section {
+                                    Group {
+                                        switch currentTab(record) {
+                                        case .body:
+                                            bodyColumn(record: record, binding: binding)
+                                        case .comments:
+                                            issueSection(record: record, binding: binding, showsVerdict: false)
+                                        }
                                     }
+                                    .padding(.top, 12)
+                                } header: {
+                                    // 위 여백은 붙었을 때 탭 글자가 칸 윗변에 닿지 않게 한다(판정 줄 아래 8 과 합쳐 예전 간격 14).
+                                    // 붙어 있는 동안 아래 내용이 비치지 않게 창 바탕을 깔고, 좌우 여백(16)까지 덮는다.
+                                    panelTabs(record: record)
+                                        .padding(.top, 6)
+                                        .background(WindowBackdrop().padding(.horizontal, -16))
                                 }
                             }
                             .frame(width: contentWidth, alignment: .leading)
                             .padding(16)
                         }
+                        // 칩은 스크롤 위에 띄운다 — 스크롤 안에서 옮기면 가장자리에서 잘린다(BasketFlight 주석).
+                        .coordinateSpace(.named(BasketFlight.space))
+                        .overlay(alignment: .topLeading) { tabFlightLayer }
                     }
                 }
                 .onChange(of: twoColumns, initial: true) { _, isTwo in basketFrames.twoColumns = isTwo }
@@ -300,6 +321,14 @@ struct AIReviewView: View {
                     guard let index = DebugLaunch.reviewScrollIndex, record.issues.indices.contains(index) else { return }
                     try? await Task.sleep(for: .seconds(3))
                     scrollRequest = record.issues[index].key
+                }
+                .task(id: record.id) {
+                    // 확인용: 그 번째 코드 코멘트의 담기 체크를 누른 것처럼 담는다(담겨 있으면 뺀다). 위에서 내려 둔 뒤에 누르게
+                    // 5초 기다린다 — 좌표 클릭(PRAYER_DEBUG_KEYS)은 스크롤이 멈추는 자리가 실행마다 달라 옆 버튼을 눌렀다.
+                    guard let index = DebugLaunch.basketIndex, record.issues.indices.contains(index) else { return }
+                    try? await Task.sleep(for: .seconds(5))
+                    let issue = record.issues[index]
+                    moveBasket(issue, into: !(model.record(for: pr)?.basketKeys.contains(issue.key) ?? false))
                 }
                 .onChange(of: scrollRequest) { _, key in
                     guard let key else { return }
@@ -904,7 +933,7 @@ struct AIReviewView: View {
         let chips = VerdictChip.chips(for: record)
         return VStack(spacing: 0) {
             HStack(spacing: 4) {
-                panelTabButton(title: "리뷰 본문", systemImage: "text.alignleft",
+                panelTabButton(tab: .body, title: "리뷰 본문", systemImage: "text.alignleft",
                                isSelected: selected == .body, action: { narrowTab = .body }) {
                     Text(composedCount == 0 ? "본문 없음" : "\(composedCount)자")
                         .font(.caption.monospacedDigit())
@@ -914,7 +943,7 @@ struct AIReviewView: View {
                         .background(Color.secondary.opacity(0.15), in: Capsule())
                 }
                 // 탭 전체가 버튼이라 칩은 누를 것 없이 글자만 둔다 — 첫 카드로 가는 건 탭을 연 뒤 카드 목록에서.
-                panelTabButton(title: "코드 코멘트", systemImage: "chevron.left.forwardslash.chevron.right",
+                panelTabButton(tab: .comments, title: "코드 코멘트", systemImage: "chevron.left.forwardslash.chevron.right",
                                isSelected: selected == .comments, action: { narrowTab = .comments }) {
                     HStack(spacing: 4) {
                         ForEach(chips, id: \.text) { VerdictChipLabel(chip: $0) }
@@ -927,10 +956,11 @@ struct AIReviewView: View {
         }
     }
 
-    private func panelTabButton<Badge: View>(title: String, systemImage: String, isSelected: Bool,
+    private func panelTabButton<Badge: View>(tab: PanelTab, title: String, systemImage: String, isSelected: Bool,
                                              action: @escaping () -> Void,
                                              @ViewBuilder badge: () -> Badge) -> some View {
-        Button(action: action) {
+        let landed = landedTab == tab
+        return Button(action: action) {
             VStack(spacing: 6) {
                 HStack(spacing: 6) {
                     Image(systemName: systemImage)
@@ -939,6 +969,36 @@ struct AIReviewView: View {
                     Text(title)
                         .font(model.fonts.ui(weight: isSelected ? .semibold : .regular))
                     badge()
+                }
+                // 칩이 닿으면 목록 탭(PRListView)처럼 강조색으로 한 번 부풀고 "+1" 이 떴다 사라진다 — 탭에 들어간 게 보이게.
+                // 버튼은 밑줄 때문에 남는 폭을 다 차지해(탭 둘이 반씩) 글자 묶음에만 단다. 버튼에 달면 "+1" 이 글자에서 멀리
+                // 옆 탭 경계에 떠서 옆 탭 것처럼 보였다(실측). 바탕은 그리기만 넓혀 탭 줄 높이를 바꾸지 않는다.
+                .background {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.accentColor.opacity(landed ? 0.14 : 0))
+                        .padding(.horizontal, -6)
+                        .padding(.vertical, -3)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if plusOneTab == tab {
+                        Text(verbatim: "+1")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.accentColor, in: Capsule())
+                            .offset(x: 12, y: -9)
+                            .transition(.scale(scale: 0.4).combined(with: .opacity))
+                            .allowsHitTesting(false)
+                    }
+                }
+                .scaleEffect(landed ? 1.07 : 1)
+                // 칩이 날아갈 자리 — 버튼 가운데가 아니라 글자 묶음 가운데에 내려앉게.
+                .recordBasketFrame { frame in
+                    switch tab {
+                    case .body: basketFrames.bodyTab = frame
+                    case .comments: basketFrames.commentsTab = frame
+                    }
                 }
                 .padding(.horizontal, 10)
                 .padding(.top, 4)
@@ -950,7 +1010,25 @@ struct AIReviewView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+        .foregroundStyle(isSelected ? Color.primary : (landed ? Color.accentColor : Color.secondary))
+    }
+
+    /// 칩이 탭에 닿음 — 목록 탭의 `land()` 와 같은 박자.
+    private func landTab(_ tab: PanelTab) {
+        tabLandSerial += 1
+        let serial = tabLandSerial
+        withAnimation(.spring(duration: 0.2, bounce: 0.3)) {
+            landedTab = tab
+            plusOneTab = tab
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(0.32))
+            guard serial == tabLandSerial else { return }
+            withAnimation(.easeOut(duration: 0.25)) { landedTab = nil }
+            try? await Task.sleep(for: .seconds(0.5))
+            guard serial == tabLandSerial else { return }
+            withAnimation(.easeOut(duration: 0.25)) { plusOneTab = nil }
+        }
     }
 
     /// 리뷰 본문 열 — 본문 상자, 게시 조작부, 이어서 대화하기. 예전엔 이어서 대화하기가 두 열 아래에 가로로 걸쳐
@@ -992,8 +1070,20 @@ struct AIReviewView: View {
         }
     }
 
-    /// 체크로 담기·빼기. 두 칸이 나란히 보이면 고스트가 카드 → 왼쪽 담은 줄(빼기는 반대)로 날아가 내려앉고, 좁은 창(탭)에서는
-    /// 그냥 바꾼다 — 탭은 한 번에 한쪽만 보여 날아갈 곳이 화면에 없다.
+    /// 좁은 창에서 반대쪽 탭으로 날아가는 칩.
+    @ViewBuilder
+    private var tabFlightLayer: some View {
+        if let tabTrip {
+            BasketTabChip(trip: tabTrip) {
+                self.tabTrip = nil
+                landTab(tabTrip.intoBasket ? .body : .comments)
+            }
+            .id(tabTrip.id)
+        }
+    }
+
+    /// 체크로 담기·빼기. 두 칸이 나란히 보이면 고스트가 카드 → 왼쪽 담은 줄(빼기는 반대)로 날아가 내려앉는다. 좁은 창(탭)은
+    /// 한 번에 한쪽만 보여 내려앉을 줄이 화면에 없어, 칩이 반대쪽 탭 버튼으로 날아 들어간다(`BasketTabChip`).
     ///
     /// 두 칸이 따로 스크롤되어 도착 자리가 그 칸의 화면 밖일 수 있다. 담을 때는 왼쪽 칸을 그 줄까지 굴리고(revealRequest),
     /// 뺄 때는 오른쪽 칸을 굴리지 않고 보이는 자리 끝까지만 날려 보낸다 — 읽던 오른쪽이 멋대로 움직이지 않게.
@@ -1002,7 +1092,19 @@ struct AIReviewView: View {
             withAnimation(.easeInOut(duration: 0.3)) { model.setInBasket(into, issue: issue, pr: pr) }
         }
         let source = into ? basketFrames.cards[issue.key] : basketFrames.rows[issue.key]
-        guard basketFrames.twoColumns, trip == nil, let source, source.width > 0 else {
+        guard trip == nil, tabTrip == nil, let source, source.width > 0 else {
+            change()
+            return
+        }
+        guard basketFrames.twoColumns else {
+            let tab = into ? basketFrames.bodyTab : basketFrames.commentsTab
+            if tab.width > 0 {
+                // 칩의 체크 그림이 방금 누른 체크 위에 겹치게 세운다 — 카드는 머리 줄이 안쪽으로 12pt·위에서 15pt 아래,
+                // 담은 줄은 체크가 줄 맨 앞이다. 카드·줄은 칩이 뜨는 동안 접힌다.
+                let from = into ? CGPoint(x: source.minX + 6, y: source.minY + 15)
+                    : CGPoint(x: source.minX - 6, y: source.minY + 9)
+                tabTrip = BasketTabTrip(issue: issue, intoBasket: into, from: from, to: tab)
+            }
             change()
             return
         }
@@ -2401,4 +2503,18 @@ struct OwnPRNoPostChip: View {
             .fixedSize()
             .help("내 PR이라 GitHub에 올리지 않습니다. 코멘트가 필요하면 GitHub에서 직접 남기세요.")
     }
+}
+
+/// 창 바탕과 같은 판 — 좁은 창에서 위에 붙은 탭 줄 밑에 깐다. 다크 모드 창 바탕은 바탕화면 색이 살짝 비쳐서
+/// 단색 `windowBackgroundColor` 로 칠하면 둘레보다 어둡게 떴다(실측 #282828 · 둘레 #2F3538).
+struct WindowBackdrop: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .windowBackground
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
