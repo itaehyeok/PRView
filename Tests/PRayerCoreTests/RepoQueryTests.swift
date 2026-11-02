@@ -51,4 +51,31 @@ final class RepoQueryTests: XCTestCase {
         XCTAssertNil(RepoQuery("acme/").exactRepo)
         XCTAssertNil(RepoQuery("/sample-ios").exactRepo)
     }
+
+    // MARK: 보일 순서
+
+    private func option(_ full: String) -> RepoOption {
+        RepoOption(repo: RepoID(full: full)!, isPrivate: true, isArchived: false, isFork: false,
+                   defaultBranch: "main", permission: "WRITE")
+    }
+
+    /// 수천 개 중 흔한 말에 수십 개가 걸린다. 이름이 그 말로 시작하는 것이 찾던 것이라 위로 올린다.
+    func testNamesStartingWithTheWordComeFirst() {
+        let options = ["acme/web-ios-kit", "acme/sample-ios", "jamie/ios-notes", "acme/ios-app"].map(option)
+        XCTAssertEqual(RepoQuery("ios").ranked(options).map(\.repo.full),
+                       ["jamie/ios-notes", "acme/ios-app", "acme/web-ios-kit", "acme/sample-ios"])
+    }
+
+    func testRankingKeepsTheReceivedOrderWithinEachGroup() {
+        // 받은 순서가 최근 push 순이다. 앞으로 올린 무리 안에서도, 나머지 안에서도 그 순서를 지킨다.
+        let options = ["acme/ios-b", "acme/x-ios", "acme/ios-a", "acme/y-ios"].map(option)
+        XCTAssertEqual(RepoQuery("IOS").ranked(options).map(\.repo.full),
+                       ["acme/ios-b", "acme/ios-a", "acme/x-ios", "acme/y-ios"])
+    }
+
+    func testRankingDropsWhatDoesNotMatch() {
+        let options = ["acme/sample-ios", "acme/sample-ad-sdk", "itaehyeok/PRayer"].map(option)
+        XCTAssertEqual(RepoQuery("acme/").ranked(options).map(\.repo.full), ["acme/sample-ios", "acme/sample-ad-sdk"])
+        XCTAssertEqual(RepoQuery("").ranked(options).count, 3)
+    }
 }

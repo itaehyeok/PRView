@@ -477,12 +477,12 @@ struct RepoPickerStep: View {
         model.settings.repos.first { $0.repo == repo }
     }
 
-    /// 보일 줄과, 줄 수 제한(`unpickedLimit`)으로 안 그린 레포 수. 고른 것이 위, 그 아래 안 고른 것.
-    /// 팝오버는 검색할 때만 안 고른 것을 붙인다.
+    /// 보일 줄과, 줄 수 제한(`unpickedLimit`)으로 안 그린 레포 수. 고른 것이 위, 그 아래 안 고른 것을
+    /// `RepoQuery.ranked` 순으로. 팝오버는 검색할 때만 안 고른 것을 붙인다.
     private var visibleRows: (rows: [RepoOption], hidden: Int) {
         guard !compact || !query.isEmpty else { return (picked, 0) }
         let selected = Set(model.settings.repos.map(\.repo))
-        let unpicked = model.repoOptions.filter { query.matches($0.repo) && !selected.contains($0.repo) }
+        let unpicked = query.ranked(model.repoOptions).filter { !selected.contains($0.repo) }
         return (picked + unpicked.prefix(Self.unpickedLimit), max(unpicked.count - Self.unpickedLimit, 0))
     }
 

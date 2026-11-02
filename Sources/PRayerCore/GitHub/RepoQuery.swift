@@ -45,4 +45,15 @@ public struct RepoQuery: Sendable, Equatable {
         // 슬래시가 없으면 오너에 걸려도 이름에 걸려도 남긴다.
         return repo.full.localizedCaseInsensitiveContains(name)
     }
+
+    /// 거른 뒤 보일 순서. 이름이 친 말로 시작하는 레포를 위로 올리고, 같은 무리 안에서는 받은 순서
+    /// (최근 push 순)를 지킨다. 접근할 수 있는 레포가 수천 개라 `ios` 처럼 흔한 말에는 수십 개가 걸리는데,
+    /// 찾던 레포는 대개 이름이 그 말로 시작한다.
+    public func ranked(_ options: [RepoOption]) -> [RepoOption] {
+        let matched = options.filter { matches($0.repo) }
+        guard !name.isEmpty else { return matched }
+        let leading = matched.filter { $0.repo.name.range(of: name, options: [.caseInsensitive, .anchored]) != nil }
+        let others = matched.filter { $0.repo.name.range(of: name, options: [.caseInsensitive, .anchored]) == nil }
+        return leading + others
+    }
 }
