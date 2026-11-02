@@ -328,17 +328,45 @@ struct OverviewTab: View {
     var body: some View {
         let entries = PRTimelineBuilder.build(from: pr)
         let keys = collapsibleKeys(entries)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if !keys.isEmpty { expandControls(keys) }
-                factsCard
-                bodyCard
-                timelineCard(entries)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if !keys.isEmpty { expandControls(keys) }
+                    factsCard
+                    bodyCard
+                    timelineCard(entries)
+                }
+                .padding(16)
             }
-            .padding(16)
+            .task(id: pr.id) {
+                if DebugLaunch.expandAll { expanded = keys }
+            }
+            // 목록의 답글 칩으로 열었다(AppModel.openReplies).
+            .onChange(of: model.replyJumpPRID, initial: true) { _, id in
+                guard id == pr.id else { return }
+                model.replyJumpPRID = nil
+                scrollToFirstFreshReply(entries, proxy: proxy)
+            }
         }
-        .task(id: pr.id) {
-            if DebugLaunch.expandAll { expanded = keys }
+    }
+
+    /// 새 답글이 온 내 스레드 가운데 대화에서 먼저 나오는 것의 "새 답글" 줄로 간다. 화면 위쪽 3할 쯤에 둬 그 위의 내
+    /// 코멘트도 같이 보이게 한다(AIReviewView 의 돌아오기와 같은 자리).
+    private func scrollToFirstFreshReply(_ entries: [PRTimelineEntry], proxy: ScrollViewProxy) {
+        let target = entries.lazy.compactMap { entry -> (entryID: String, threadID: String)? in
+            guard case .thread(let thread, _) = entry, !model.freshReplyKeys(in: thread, of: pr).isEmpty else { return nil }
+            return (entry.id, thread.id)
+        }.first
+        guard let target else { return }
+        // 새 답글이 온 스레드는 열 때 펼쳐지지만(PRDetailView) 그 줄이 있어야 갈 수 있으니 여기서도 펼친다.
+        expanded.insert(target.entryID)
+        // 막 그려지며 스레드가 펼쳐지는 참이라 줄이 아직 자리를 잡지 않았다. 한 박자 기다렸다가 미끄러지듯 민다 —
+        // 맨 위에서 내려가는 것이 보여야 어디로 왔는지 안다.
+        Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            withAnimation(.smooth(duration: 0.35)) {
+                proxy.scrollTo(NewRepliesDivider.anchorID(target.threadID), anchor: UnitPoint(x: 0.5, y: 0.3))
+            }
         }
     }
 
@@ -1675,6 +1703,7 @@ struct ThreadCard: View {
                 } else {
                     if index == firstFreshIndex {
                         NewRepliesDivider()
+                            .id(NewRepliesDivider.anchorID(thread.id))
                     } else {
                         Divider()
                     }
@@ -1702,6 +1731,9 @@ struct ThreadCard: View {
 
 /// 스레드 안에서 이 PR 을 열 때 안 봤던 답글이 시작되는 자리(시안 A, 2026-11-02 사용자 결정).
 struct NewRepliesDivider: View {
+    /// 목록의 답글 칩으로 열면 개요 탭이 이 줄로 스크롤한다(OverviewTab).
+    static func anchorID(_ threadID: String) -> String { "fresh-replies:\(threadID)" }
+
     var body: some View {
         HStack(spacing: 8) {
             line
