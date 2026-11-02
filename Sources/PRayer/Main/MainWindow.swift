@@ -150,7 +150,7 @@ struct MainWindow: View {
             }
         .toolbar { toolbarContent }
         // 창 제목은 이름만. 한동안 "PRView - PR Review Manager" 로 설명을 붙였다가 뺐다(2026-10-20 사용자:
-        // "별로다"). 설명(AppInfo.subtitle)은 정보 창·온보딩·상태 팝오버에만 남는다.
+        // "별로다"). 설명(AppInfo.subtitle)은 정보 창·온보딩에만 남는다.
         .navigationTitle(AppInfo.displayName)
     }
 

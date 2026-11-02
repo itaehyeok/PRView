@@ -1639,7 +1639,7 @@ private struct ListHeader: View {
         return Text("\(label) \(count)건")
     }
 
-    /// "오후 2:40 갱신" — 상태 메뉴의 "갱신" 과 같은 꼴. 이 탭을 받은 적이 없으면 비운다.
+    /// "오후 2:40 갱신". 이 탭을 받은 적이 없으면 비운다. 갱신 시각은 여기에만 있다(상태 팝오버에서 뺐다, 2026-11-02).
     @ViewBuilder private var status: some View {
         switch phase {
         case .idle:
