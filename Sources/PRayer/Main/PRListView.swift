@@ -691,6 +691,7 @@ struct PRRow: View {
     let pr: PullRequestInfo
     /// 행을 누른 것과 같은 고르기. 행 안의 답글 칩이 PR 을 열 때 쓴다 — 칩이 누르기를 가져가 행의 누르기가 불리지 않는다.
     var select: () -> Void = {}
+    @State private var isHovering = false
 
     var body: some View {
         let badge = model.badge(for: pr)
@@ -734,8 +735,11 @@ struct PRRow: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 4)
+                // 리뷰 전 PR 에 마우스를 올리면 시각 자리에 리뷰 버튼을 띄운다(RowReviewButtons). 좁아서 시각을 뺀 행에도 띄운다.
+                if showsRowActions, badge.badge == .notReviewed, pr.isOpen {
+                    RowReviewButtons(pr: pr)
                 // 마지막 활동 시각은 따로 찍지 않는다 — 아래 Recent activity 첫 줄이 곧 그 시각이다.
-                if density.showsCreatedAt {
+                } else if density.showsCreatedAt {
                     // "최근 승인" 탭은 승인 시각으로 거른다. 그 탭에서 PR 올린 시각을 보여 주면
                     // 거르는 기준과 보이는 값이 달라 "24h 탭인데 1d ago" 로 읽힌다(실측).
                     let approvedAt = model.listScope.requiresMyApproval ? model.viewerApprovedAt(pr) : nil
@@ -795,6 +799,12 @@ struct PRRow: View {
             }
         }
         .padding(.vertical, 3)
+        .onHover { isHovering = $0 }
+    }
+
+    /// 행에 마우스가 올라와 있다 — 시각 자리에 행 버튼을 띄운다. 리뷰가 돌기 시작하면 배지가 바뀌어 버튼이 바로 빠진다.
+    private var showsRowActions: Bool {
+        isHovering || DebugLaunch.rowReviewButtons == pr.number
     }
 
     /// 라벨은 몇 개까지 보이는가(PRLabels — 라벨이 나오는 곳은 다 이 모양). 넘치면 "외 N". 넘치면 아랫줄로 흐르므로 폭이
