@@ -9,8 +9,9 @@ import PRayerCore
 ///
 /// - 체크를 푼 파일은 내용 없이 파일명·줄 수만 간다(`PromptBuilder` 의 files_without_content). 전부 풀면 목록만으로 리뷰한다.
 /// - 파일은 바뀐 줄 많은 순으로 5개만 보이고 "5개 더 보기" 로 늘린다 — 큰 파일은 대개 위 몇 개다.
-/// - 확인 창 기준은 슬라이더나 숫자로 고치고, 리뷰를 시작할 때 저장한다(취소하면 남기지 않는다).
-/// - 이유는 전체 변경 줄 수 한 줄만, 5시간 상한은 적지 않는다(사용자 결정 — 한도에 걸려 멈추면 그때 알림이 간다).
+/// - 맨 위는 왜 떴는지 한 줄(전체 변경 줄 수와 정해 둔 기준), 맨 아래는 "다음부터 N줄 넘으면 확인 창 띄우기" 숫자칸 —
+///   리뷰를 시작할 때 저장한다(취소하면 남기지 않는다). 슬라이더는 뺐다(사용자 결정 — 숫자만 친다).
+/// - 5시간 상한은 적지 않는다(사용자 결정 — 한도에 걸려 멈추면 그때 알림이 간다).
 /// - "전부 리뷰" 는 체크를 풀어도 늘 남는다 — 고르다 마음이 바뀌어도 한 번에 무시하고 다 보낼 수 있게.
 struct ReviewSizeSheet: View {
     @Environment(AppModel.self) private var model
@@ -21,8 +22,8 @@ struct ReviewSizeSheet: View {
     @State private var skipped: Set<String> = []
     @State private var shown = Self.page
     @State private var warnLines = 0
-    /// 숫자칸의 글. 치는 동안에도 슬라이더가 따라오게 글로 받아 범위 안이면 바로 기준에 넣는다 — 값(`format:`)으로 받으면
-    /// Return 이나 칸을 떠날 때만 들어가서, 치고 바로 리뷰 버튼을 누르면 고친 기준이 빠진다.
+    /// 숫자칸의 글. 글로 받아 범위 안의 수가 되면 바로 기준에 넣는다 — 값(`format:`)으로 받으면 Return 이나 칸을
+    /// 떠날 때만 들어가서, 치고 바로 리뷰 버튼을 누르면 고친 기준이 빠진다.
     @State private var warnText = ""
     @FocusState private var warnFieldFocused: Bool
     @State private var prepared = false
@@ -46,6 +47,9 @@ struct ReviewSizeSheet: View {
             if shown < request.files.count {
                 moreFiles
             }
+            Divider()
+                .padding(.top, 4)
+            thresholdRow
             buttons
                 .padding(.top, 2)
         }
@@ -54,10 +58,7 @@ struct ReviewSizeSheet: View {
         .background(InitialFocusSink())
         .onAppear(perform: prepare)
         .onExitCommand(perform: cancel)
-        // 슬라이더로 바꾸면 숫자칸도 따라간다. 치는 중에는 덮지 않고, 칸을 떠나면 100 단위로 맞춘 값으로 정리한다.
-        .onChange(of: warnLines) { _, value in
-            if !warnFieldFocused { warnText = value.formatted() }
-        }
+        // 칸을 떠나면 100 단위로 맞춘 값으로 정리한다(치는 중에는 덮지 않는다).
         .onChange(of: warnFieldFocused) { _, focused in
             if !focused { warnText = warnLines.formatted() }
         }
@@ -66,40 +67,49 @@ struct ReviewSizeSheet: View {
     // MARK: - 이유와 기준
 
     private var reasonBox: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 창이 뜬 까닭은 한 줄로만 — 한 파일이 1,000줄 넘어 떴을 때도 같다(사용자 결정).
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "info.circle")
-                    .foregroundStyle(.orange)
-                Text("전체 변경 \(request.totalLines.formatted())줄입니다.")
-            }
-            HStack(spacing: 8) {
-                // step 을 주면 macOS 슬라이더가 눈금을 100개 가까이 그린다. 값만 100 단위로 맞춘다.
-                Slider(value: Binding(get: { Double(warnLines) },
-                                      set: { warnLines = Self.rounded(Int($0)) }),
-                       in: Double(Self.warnRange.lowerBound)...Double(Self.warnRange.upperBound))
-                TextField("", text: Binding(get: { warnText }, set: typeWarnLines))
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                    .frame(width: 68)
-                    .focused($warnFieldFocused)
-                    .onSubmit { warnFieldFocused = false }
-                Text("줄 넘으면 확인 창 띄우기")
-                    .fixedSize()
-            }
-            .padding(.leading, 22)
-            if prepared, warnLines != model.settings.manualSizeWarnLines {
-                Text("다음부터 \(warnLines.formatted())줄 넘을 때만 확인 창을 띄웁니다 (리뷰를 시작하면 저장)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 22)
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(.orange)
+            Text(reason)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(.callout)
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    /// 창이 뜬 까닭 한 줄. 기준은 저장돼 있던 값이다 — 아래 칸을 고치는 중이어도 이번에 뜬 이유는 그대로다.
+    /// 전체는 기준 아래인데 한 파일이 1,000줄 넘어서 떴으면 그렇게 말한다("기준보다 많아" 는 사실이 아니라서).
+    private var reason: String {
+        let total = "전체 변경 \(request.totalLines.formatted())줄"
+        let saved = model.settings.manualSizeWarnLines
+        if request.totalLines > saved {
+            return "\(total) — 정해 둔 기준(\(saved.formatted())줄)보다 많아 확인 창을 띄웠습니다."
+        }
+        return "\(total) — 한 파일이 \(SkippableFiles.minLines.formatted())줄 넘게 바뀌어 확인 창을 띄웠습니다."
+    }
+
+    private var thresholdRow: some View {
+        HStack(spacing: 6) {
+            Text("다음부터")
+            TextField("", text: Binding(get: { warnText }, set: typeWarnLines))
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.trailing)
+                .monospacedDigit()
+                .frame(width: 68)
+                .focused($warnFieldFocused)
+                .onSubmit { warnFieldFocused = false }
+            Text("줄 넘으면 확인 창 띄우기")
+            Spacer(minLength: 8)
+            if prepared, warnLines != model.settings.manualSizeWarnLines {
+                Text("리뷰를 시작하면 저장")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
     }
 
     /// 숫자칸에 친 글. 범위 안의 수가 되는 순간 기준에 넣는다(3,000 을 치는 중 300 에서 한 번 움직인다).
@@ -220,8 +230,12 @@ struct ReviewSizeSheet: View {
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(file.changedLines.formatted())줄")
                     .font(.callout.monospacedDigit().weight(on ? .medium : .regular))
-                Text("+\(file.additions.formatted()) −\(file.deletions.formatted())")
-                    .font(.caption.monospacedDigit())
+                // 색은 늘 둔다 — 체크를 풀면 줄 전체가 흐려져 색도 같이 흐려진다.
+                HStack(spacing: 4) {
+                    Text("+\(file.additions.formatted())").foregroundStyle(.green)
+                    Text("−\(file.deletions.formatted())").foregroundStyle(.red)
+                }
+                .font(.caption.monospacedDigit())
             }
         }
         .foregroundStyle(on ? Color.primary : Color.secondary)
