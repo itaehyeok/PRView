@@ -32,6 +32,10 @@ public struct UsageStats: Codable, Sendable, Equatable {
         case reviewListOnly = "review.listOnly"
         /// 리뷰 전 확인 창에서 확인 창 기준을 바꿨다.
         case reviewSizeThreshold = "review.sizeThreshold"
+        /// 목록 행에 마우스를 올려 뜬 [전체 리뷰]·[diff] 버튼으로 리뷰를 걸었다.
+        case reviewFromRow = "list.rowReview"
+        /// 도는·기다리는 리뷰를 취소했다(행 버튼·우클릭·AI 리뷰 탭 어디서든, 한 번 누른 것을 하나로).
+        case reviewCancel = "review.cancel"
     }
 
     /// 마지막으로 보낸 것. 설정의 "보낸 내용 보기" 가 본문을 글자 그대로 보인다.

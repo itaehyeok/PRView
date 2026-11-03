@@ -151,6 +151,9 @@ enum DebugLaunch {
     static var slackQuery: String? { value("PRAYER_DEBUG_SLACK_QUERY") }
     static var listMultiCount: Int? { value("PRAYER_DEBUG_LIST_MULTI").flatMap(Int.init) }
     static var batchReview: String? { value("PRAYER_DEBUG_BATCH_REVIEW") }
+    /// `PRAYER_DEBUG_ROW_REVIEW=126` — 목록에서 그 번호 PR 행에 마우스를 올린 것처럼 리뷰 버튼(RowReviewButtons)을 띄워 둔다.
+    /// 띄우기만 하고 리뷰는 걸지 않는다.
+    static var rowReviewButtons: Int? { value("PRAYER_DEBUG_ROW_REVIEW").flatMap(Int.init) }
     static var followIndex: Int? { value("PRAYER_DEBUG_FOLLOW").flatMap(Int.init) }
     static var scrollSweep: CGFloat? { value("PRAYER_DEBUG_SCROLL_SWEEP").flatMap(Double.init).map { CGFloat($0) } }
     static var sweepKeyToggles: Int { value("PRAYER_DEBUG_SWEEP_TOGGLE_KEY").flatMap(Int.init) ?? 0 }

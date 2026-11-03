@@ -208,7 +208,7 @@ struct PRListView: View {
             let active = targets.compactMap { model.job(for: $0) }.filter(\.isActive)
             if !active.isEmpty {
                 Button("리뷰 취소 (\(active.count)개)") {
-                    for job in active { model.cancel(jobID: job.id) }
+                    model.cancel(jobIDs: active.map(\.id))
                 }
             }
             Button("선택 풀기") { model.clearListSelection() }
@@ -691,9 +691,11 @@ struct PRRow: View {
     let pr: PullRequestInfo
     /// 행을 누른 것과 같은 고르기. 행 안의 답글 칩이 PR 을 열 때 쓴다 — 칩이 누르기를 가져가 행의 누르기가 불리지 않는다.
     var select: () -> Void = {}
+    @State private var isHovering = false
 
     var body: some View {
         let badge = model.badge(for: pr)
+        let activeJob = model.job(for: pr).flatMap { $0.isActive ? $0 : nil }
         // 작성자 아바타를 행의 첫 요소로 둔다 — 이름을 읽지 않아도 색과 머리글자로 잡히게.
         // 높이는 **상태 칩 줄 + 제목을 합친 덩어리의 가운데**에 맞춘다(사용자 결정, 2026-10-20).
         // 제목 첫 줄에만 맞췄을 때는 아바타가 제목 쪽에 붙어 칩 줄이 따로 떠 보였다.
@@ -723,7 +725,7 @@ struct PRRow: View {
                             .frame(width: 7, height: 7)
                             .help("승인 뒤 아직 안 본 소식이 있습니다 — 열면 사라집니다")
                     }
-                    BadgeChip(result: badge)
+                    BadgeChip(result: badge, spins: activeJob?.state == .running)
                         // Approve 칩은 이 배지 자리에서 뜬다(ApprovalFlight). 날 차례인 행만 적는다.
                         .anchorPreference(key: ApprovalFlightAnchorsKey.self, value: .bounds) { anchor in
                             isFlightSource ? ApprovalFlightAnchors(sources: [pr.id: anchor]) : ApprovalFlightAnchors()
@@ -734,8 +736,14 @@ struct PRRow: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 4)
+                // 마우스를 올리면 시각 자리에 리뷰 버튼(리뷰 전)이나 취소 버튼(도는 중·대기 중)을 띄운다(RowReviewButtons).
+                // 좁아서 시각을 뺀 행에도 띄운다.
+                if let activeJob, showsRowActions {
+                    RowCancelReviewButton(jobID: activeJob.id, isQueued: activeJob.state == .queued)
+                } else if showsRowActions, badge.badge == .notReviewed, pr.isOpen {
+                    RowReviewButtons(pr: pr)
                 // 마지막 활동 시각은 따로 찍지 않는다 — 아래 Recent activity 첫 줄이 곧 그 시각이다.
-                if density.showsCreatedAt {
+                } else if density.showsCreatedAt {
                     // "최근 승인" 탭은 승인 시각으로 거른다. 그 탭에서 PR 올린 시각을 보여 주면
                     // 거르는 기준과 보이는 값이 달라 "24h 탭인데 1d ago" 로 읽힌다(실측).
                     let approvedAt = model.listScope.requiresMyApproval ? model.viewerApprovedAt(pr) : nil
@@ -795,6 +803,12 @@ struct PRRow: View {
             }
         }
         .padding(.vertical, 3)
+        .onHover { isHovering = $0 }
+    }
+
+    /// 행에 마우스가 올라와 있다 — 시각 자리에 행 버튼을 띄운다. 리뷰가 돌기 시작하면 리뷰 버튼이 취소 버튼으로 바로 바뀐다.
+    private var showsRowActions: Bool {
+        isHovering || DebugLaunch.rowReviewButtons == pr.number
     }
 
     /// 라벨은 몇 개까지 보이는가(PRLabels — 라벨이 나오는 곳은 다 이 모양). 넘치면 "외 N". 넘치면 아랫줄로 흐르므로 폭이
@@ -1138,6 +1152,8 @@ struct CloneProgressChip: View {
 
 struct BadgeChip: View {
     let result: BadgeResult
+    /// 아이콘 자리에 도는 고리를 그린다 — 리뷰가 실제로 돌고 있을 때(PRRow). 큐에서 기다리는 중이면 모래시계 그대로다.
+    var spins = false
 
     var body: some View {
         if let followUp = result.followUp {
@@ -1196,8 +1212,13 @@ struct BadgeChip: View {
 
     private var label: some View {
         HStack(spacing: 3) {
-            Image(systemName: result.badge.symbolName)
-                .font(.caption2)
+            if spins {
+                ReviewSpinner()
+                    .frame(width: 9, height: 9)
+            } else {
+                Image(systemName: result.badge.symbolName)
+                    .font(.caption2)
+            }
             Text(result.text)
                 .font(.caption2.weight(.medium))
                 // 좁아지면 "미리뷰" 가 "미리 / 뷰" 로 접혔다. 뱃지는 늘 한 줄이다.
@@ -1252,6 +1273,22 @@ struct BadgeChip: View {
         case .dismissed: return .secondary
         case .reRequested: return .blue
         case .notReviewed: return .secondary
+        }
+    }
+}
+
+/// 리뷰가 도는 동안 Reviewing 칩의 아이콘 자리에서 도는 고리. 모래시계만으로는 기다리는 중인지 돌고 있는지,
+/// 멈춘 건 아닌지가 목록에서 안 보였다(사용자, 2026-11-03). 글자색을 따라가 칩 색과 같다.
+/// 시스템 ProgressView 는 칩 색으로 칠할 수 없어 직접 그린다. 도는 잡은 하나뿐이라 매 프레임 그려도 부담이 없다 —
+/// 그래도 RemovalCountdown 처럼 초당 30번으로 묶는다.
+struct ReviewSpinner: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { context in
+            let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9
+            Circle()
+                .trim(from: 0.12, to: 0.82)
+                .stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+                .rotationEffect(.degrees(turn * 360))
         }
     }
 }
