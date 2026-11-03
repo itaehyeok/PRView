@@ -25,6 +25,7 @@ public struct UsageStats: Codable, Sendable, Equatable {
         case slackRequest = "slack.request"
         case teamStats = "teamStats.open"
         case notificationOpen = "notification.open"
+        case onlyLabel = "list.onlyLabel"
     }
 
     /// 마지막으로 보낸 것. 설정의 "보낸 내용 보기" 가 본문을 글자 그대로 보인다.

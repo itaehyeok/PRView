@@ -962,6 +962,7 @@ final class AppModel {
             filter.onlyLabel = nil
         } else {
             filter.onlyLabel = label
+            recordUsage(.onlyLabel)
         }
     }
 
