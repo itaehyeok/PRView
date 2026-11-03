@@ -1214,7 +1214,7 @@ struct DiffRowView: View {
         let kind = line?.kind ?? .context
         let marked = isMarked(line, kind: kind)
         let followed = follow?.highlights(line, kind: kind) == true
-        // 줄 번호는 접힌 줄의 **첫 줄** 옆에 있어야 한다. 가운데 정렬이면 3줄짜리 옆에서
+        // 줄 번호는 접힌 줄의 **첫 줄** 옆에 있어야 한다. 가운데 정렬이면 여러 줄짜리 옆에서
         // 번호가 가운데 떠서 어느 줄의 번호인지 알 수 없다.
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(number(for: line, side: side))
@@ -1224,16 +1224,12 @@ struct DiffRowView: View {
             CodeLineText(text: line?.text ?? "", profile: syntax,
                          font: model.fonts.code(),
                          dimmed: kind == .context)
-                // 한 줄로 자르면 긴 줄을 끝까지 볼 방법이 없다. 세 줄까지는 접어 내려가고,
-                // 그보다 길면 그때 자른다(전체 내용은 아래 help 툴팁에 그대로 있다).
-                // 무제한으로 두지 않는 이유: 1,900자짜리 한 줄이 화면을 스무 줄쯤 먹는다.
-                // 단, 코드 코멘트가 달린 줄(주황)과 코멘트에서 건너온 줄(노랑)은 끝까지 편다 —
-                // 코멘트가 바로 그 줄 이야기라 잘린 뒷부분을 읽어야 할 때가 많다(사용자 피드백).
-                .lineLimit(marked || followed ? nil : 3)
-                .truncationMode(.tail)
+                // 줄 수를 제한하지 않고 끝까지 접어 내려간다(GitHub 나란히 보기와 같다, 사용자 결정).
+                // 예전엔 세 줄에서 잘랐는데, 고를 수 있는 글(textSelection)은 누르는 순간 제한을 무시하고
+                // 전문을 그리면서 자리는 세 줄 그대로라 글이 줄 바탕·가운데 선 밖으로 넘쳐 보였다.
+                // 사람이 읽을 일 없는 아주 긴 줄(2,000자 넘음)은 CodeLineText 가 한 줄 요약으로 가린다.
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
-                .help(line?.text ?? "")
         }
         .font(.system(size: 11.5, design: .monospaced))
         .padding(.horizontal, 8)
