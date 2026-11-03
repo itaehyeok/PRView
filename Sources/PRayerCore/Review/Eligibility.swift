@@ -24,7 +24,7 @@ public enum SkipReason: Sendable, Equatable {
         case .conflicting: return "충돌 상태"
         case .mergeableUnknown: return "머지 가능 여부 계산 중"
         case .approvalThresholdReached(let count): return "Approve \(count)명으로 임계값 도달"
-        case .tooLarge(let lines, let cap): return "변경 \(lines)줄 (자동 상한 \(cap)줄 초과)"
+        case .tooLarge(let lines, let cap): return "변경 \(lines)줄 ('큼' 기준 \(cap)줄 초과)"
         case .alreadyHasRecord: return "이 커밋의 리뷰 결과가 이미 있음"
         }
     }

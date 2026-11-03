@@ -408,7 +408,7 @@ public enum SettingsTransfer {
         case ID.memberNicknames: return "직접 붙인 표시 이름"
         case ID.reviewModel: return "리뷰 모델"
         case ID.excludedPathPatterns: return "제외 경로"
-        case ID.sizeLimits: return "크기 기준"
+        case ID.sizeLimits: return "큰 PR 기준"
         case ID.fiveHourTokenCap: return "사용량 경고 기준"
         case ID.reviewNotifications: return "AI 리뷰 알림"
         case ID.prChangeNotifications: return "PR 변화 알림"

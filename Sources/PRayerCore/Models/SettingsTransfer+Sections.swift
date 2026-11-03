@@ -11,7 +11,7 @@ extension SettingsTransfer {
         static let hiding = "'To review' 목록에서 뺄 PR 의 조건입니다. PR 목록 위 필터 메뉴의 ‘특정 라벨 숨기기’·‘특정 사람의 PR 숨기기’에서 고치는 값입니다."
         static let members = "PR 목록에서 팀원의 GitHub 아이디를 짧게 보여 주는 규칙입니다. ‘레포·팀원’ 탭 아래쪽의 값입니다."
         static let review = "리뷰 모델과 사용량 경고 기준입니다. ‘리뷰’ 탭의 값입니다."
-        static let scope = "리뷰에서 뺄 파일과 PR 크기 기준입니다. ‘리뷰 대상’ 탭의 값입니다."
+        static let scope = "리뷰에서 뺄 파일과 큰 PR 기준입니다. ‘리뷰 대상’ 탭의 값입니다."
         static let notifications = "어떤 일에 알림을 받을지와 PR 목록을 다시 받는 주기입니다. 사람마다 취향이 달라 가져올 때 기본으로는 고르지 않습니다. ‘알림·기타’ 탭의 값입니다."
         static let appearance = "코드·코멘트·화면 글자의 글꼴과 크기입니다. 취향이라 가져올 때 기본으로는 고르지 않습니다."
     }

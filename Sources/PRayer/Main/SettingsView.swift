@@ -486,17 +486,6 @@ struct ExclusionSettings: View {
     var body: some View {
         @Bindable var model = model
         Form {
-            Section("크기 상한") {
-                Stepper("'큼' 표시 기준 \(model.settings.autoSizeCapLines)줄",
-                        value: $model.settings.autoSizeCapLines, in: 100...5000, step: 100)
-                // 리뷰 전 확인 창(ReviewSizeSheet)의 기준 칸과 같은 말로 쓴다 — 그 창에서도 이 값을 바꾼다.
-                Stepper("\(model.settings.manualSizeWarnLines.formatted())줄 넘으면 확인 창 띄우기",
-                        value: $model.settings.manualSizeWarnLines, in: 200...10000, step: 100)
-                Text("리뷰에서 빼는 파일(아래)을 뺀 뒤의 변경 줄 수로 판단합니다. 상한을 넘으면 '큼' 표시만 붙고, 리뷰는 그대로 돌릴 수 있습니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             // 잠금 파일은 앱이 늘 뺀다(LockFiles). 그 밖의 규칙은 여기서 적는다 — 베타 6 에서 칸을 없앴다가(고르게 하면
             // 귀찮다) 레포 파일 기준 자동완성과 함께 되살렸다(사용자 결정, 2026-10-06). 처음 쓰는 사람은 비어 있다.
             Section("리뷰에서 빼는 파일") {
@@ -523,6 +512,19 @@ struct ExclusionSettings: View {
                         .help("이 규칙 지우기 — 걸려 있던 파일이 다시 리뷰에 들어갑니다")
                     }
                 }
+            }
+
+            // 두 줄을 같은 꼴("N줄 넘으면 …")로 쓴다. 예전에는 "'큼' 표시 기준 N줄" 과 "N줄 넘으면 확인 창 띄우기" 로 꼴이
+            // 달라 다른 기준인지 한눈에 안 들어왔다(2026-11-03 사용자 결정). 빼는 파일을 뺀 줄 수로 세서 그 절 아래에 둔다.
+            Section("큰 PR 기준") {
+                Stepper("\(model.settings.autoSizeCapLines.formatted())줄 넘으면 목록에 '큼' 표시",
+                        value: $model.settings.autoSizeCapLines, in: 100...5000, step: 100)
+                // 리뷰 전 확인 창(ReviewSizeSheet)의 기준 칸과 같은 말로 쓴다 — 그 창에서도 이 값을 바꾼다.
+                Stepper("\(model.settings.manualSizeWarnLines.formatted())줄 넘으면 확인 창 띄우기",
+                        value: $model.settings.manualSizeWarnLines, in: 200...10000, step: 100)
+                Text("위에서 뺀 파일을 빼고 셉니다. '큼' 은 표시만 붙고, 리뷰는 그대로 돌릴 수 있습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
