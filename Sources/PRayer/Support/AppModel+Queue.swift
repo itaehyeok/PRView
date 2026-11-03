@@ -508,6 +508,7 @@ extension AppModel {
             message = "리뷰 \(targets.count)개를 취소했습니다."
         }
         banner = Banner(kind: .info, message: message)
+        recordUsage(.reviewCancel)
     }
 
     func startWorkerIfNeeded() {

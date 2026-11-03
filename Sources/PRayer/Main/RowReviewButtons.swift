@@ -26,6 +26,7 @@ struct RowReviewButtons: View {
 
     private func button(_ launch: ReviewLaunch, title: String, showsSymbol: Bool) -> some View {
         Button {
+            model.recordUsage(.reviewFromRow)
             model.reviewNow(pr: pr, deep: launch == .worktree)
         } label: {
             HStack(spacing: 3) {
