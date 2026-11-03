@@ -97,6 +97,9 @@ public struct Settings: Codable, Sendable, Equatable {
     // 대상·크기
     public var excludedPathPatterns: [String]
     public var autoSizeCapLines: Int
+    /// 이 줄 수를 넘는 PR 은 리뷰 전에 확인 창(ReviewSizeSheet)을 띄운다. 기본 3,000 — 실측(리뷰 83건)으로 1,000 이면
+    /// 16%, 2,000 이면 4%, 3,000 이면 2% 에서 떴다. 보통 기능 PR 은 3,000 아래였고 그 위는 브랜치 합치기·외부 SDK 처럼
+    /// 줄마다 읽을 일이 적은 PR 이었다. 처음 쓰는 사람에게만 적용된다(저장된 값은 그대로).
     public var manualSizeWarnLines: Int
     /// 이 라벨이 붙은 PR 은 리뷰 대기에서 숨기고, 리뷰할 필요가 없다고 표시한다(화면에서는 "특정 라벨 숨기기").
     ///
@@ -185,7 +188,7 @@ public struct Settings: Codable, Sendable, Equatable {
         concurrency: 1,
         excludedPathPatterns: Settings.defaultExcludedPatterns,
         autoSizeCapLines: 600,
-        manualSizeWarnLines: 1000,
+        manualSizeWarnLines: 3000,
         // 처음 쓰는 팀의 기본값. 널리 쓰는 관례 하나만 둔다 — "DO NOT MERGE" 는 팀에 따라
         // "리뷰는 해 달라, 머지만 말라" 는 뜻이라 기본으로 숨기면 볼 PR 이 사라진다.
         hiddenLabels: Settings.defaultHiddenLabels,
