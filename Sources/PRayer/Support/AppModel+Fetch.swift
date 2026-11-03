@@ -84,6 +84,58 @@ extension AppModel {
                           cost: cost, fullSync: full)
     }
 
+    /// 지금 탭 말고도 늘 받아 두는 탭 — 리뷰 대기와 Approved(마지막에 고른 기간). 누르자마자 최신 목록이 보이고
+    /// (`isListFresh`), 열지 않은 탭의 소식도 알 수 있다(사용자 결정 2026-11-02). 받는 값이 작아서(바뀐 것만) 기간에
+    /// 상관없이 매번 받는다. All PRs 는 건수가 많고 알릴 것이 없어 받지 않는다.
+    func refreshInBackground() async {
+        guard !DemoMode.isOn, !settings.enabledRepos.isEmpty, !isBackgroundRefreshing else { return }
+        isBackgroundRefreshing = true
+        defer { isBackgroundRefreshing = false }
+        for kind in [PRListScopeKind.open, .myApprovals] {
+            let scope = scope(for: kind)
+            guard scope != listScope else { continue }
+            do {
+                try await refreshQuietly(scope)
+            } catch is CancellationError {
+                continue
+            } catch {
+                // 화면에 보이는 탭이 아니라 알리지 않는다. 다음 주기에 다시 받는다.
+                Log.info("뒤에서 받기 실패(\(scope.label)): \(error.localizedDescription)", "app")
+            }
+        }
+    }
+
+    /// 화면에 없는 탭 하나를 받아 그 탭의 지난 목록(`listCache`)을 바꾼다. 연출 없이 바꾼다 — 그 탭으로 옮기면
+    /// 받은 지 얼마 안 된 목록으로 바로 보인다.
+    private func refreshQuietly(_ scope: PRListScope) async throws {
+        let result = try await fetchScope(scope)
+        var fetched = result.prs
+        if scope.requiresMyApproval {
+            let extra = await recentlyApprovedMissing(from: fetched, windowHours: scope.windowHours)
+            for pr in extra { knownPRs[pr.id] = pr }
+            fetched += extra
+        }
+        fetched = GitHubClient.deduped(fetched).sorted { $0.createdAt > $1.createdAt }
+        // 받는 사이 이 탭으로 옮겨 왔으면 화면 목록은 그 탭의 refresh 가 맞춘다 — 여기서 바꾸면 연출과 엇갈린다.
+        guard scope != listScope else { throw CancellationError() }
+        let key = scope.storageValue
+        let before = listCache[key] ?? []
+        let fetchedBefore = listFetchedAt[key]
+        listCache[key] = fetched
+        listFetchedAt[key] = Date()
+        seedOtherCaches(with: fetched, from: scope)
+        seedDeparted(from: before, fetched: fetched, since: fetchedBefore, source: scope)
+        // 알림은 리뷰 대기 목록으로 본다 — 열린 PR 전부라 새 PR·새 코멘트·머지 가능을 여기서 안다. 지금 탭의 refresh 도
+        // 같은 기억(prSnapshots)에 합치므로 같은 소식이 두 번 오지 않는다.
+        if scope.kind == .open { detectChangesAndNotify(in: fetched) }
+        if !result.truncated {
+            let cached = Store.CachedList(scope: key, savedAt: Date(), prs: fetched)
+            Task { [store] in await store.save(list: cached) }
+        }
+        pruneKnownPRs()
+        Log.info("뒤에서 받음 \(scope.label) \(fetched.count)건 — \(result.summary)", "app")
+    }
+
     /// 어느 탭에도 없는 PR 은 잊는다. 다시 나타나면 그때 자세히 받는다.
     ///
     /// 다른 탭을 받는 중이면 건너뛴다. 그 탭이 막 받은 PR 은 아직 어느 목록에도 없어, 여기서 잊으면 그 탭을 다 받았을 때

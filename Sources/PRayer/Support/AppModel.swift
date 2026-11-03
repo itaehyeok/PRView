@@ -450,13 +450,15 @@ final class AppModel {
     /// 먼저 보여 준다 — 예전에는 앞 탭의 목록이 그대로 남아, 승인 탭에서 방금 승인한 PR 이 없는 것처럼 보였다.
     @ObservationIgnored var listCache: [String: [PullRequestInfo]] = [:]
     /// 탭마다 마지막으로 다 받은 때(키: 탭의 storageValue). 앱을 켤 때는 디스크에 남긴 때로 채운다.
-    @ObservationIgnored private var listFetchedAt: [String: Date] = [:]
+    @ObservationIgnored var listFetchedAt: [String: Date] = [:]
     /// GitHub 이 준 그대로의 PR(키: pr.id). 훑은 목록과 견줘 바뀐 것만 자세히 받는 기준이다(`fetchScope`).
     /// 다른 탭에 미리 채운 모습(ListCacheSeeding)처럼 앱이 지어낸 것은 넣지 않는다 — 넣으면 GitHub 이 바뀐 것을 놓친다.
     @ObservationIgnored var knownPRs: [String: PullRequestInfo] = [:]
     /// 탭마다 마지막으로 전부 받은 때. 30분마다(`PRFetchPlan.fullSyncInterval`), 그리고 사람이 새로고침을 누르거나 맥이
     /// 깨어나면 바뀐 것만이 아니라 전부 받는다 — 훑기로 못 가르는 변화가 있어도 그때 바로잡힌다.
     @ObservationIgnored var lastFullSync: [String: Date] = [:]
+    /// 다른 탭을 뒤에서 받는 중(`refreshInBackground`). 겹쳐 돌지 않게.
+    @ObservationIgnored var isBackgroundRefreshing = false
     /// 지금 받고 있는 탭 수(`fetchScope`). 받는 동안은 `knownPRs` 를 정리하지 않는다.
     @ObservationIgnored var fetchesInFlight = 0
     /// 검색칸 아래 구역 — 지금 탭 밖의 PR 을 서버에서 찾은 것(AppModel+Search).
@@ -1753,6 +1755,7 @@ final class AppModel {
         // 사람이 누른 새로고침은 바뀐 것만이 아니라 전부 받는다 — 무언가 이상해서 누르는 것이다.
         lastFullSync.removeAll()
         await refresh(reloadThresholds: true)
+        await refreshInBackground()
     }
 
     /// - Parameter reloadThresholds: 레포의 승인 임계값을 GitHub 에 다시 물어볼지.
@@ -2171,7 +2174,7 @@ final class AppModel {
     /// 지금 탭은 건드리지 않는다 — 화면의 목록이고 제 조회가 맞춘다. 대상은 지난 목록이 있는 탭과, 종류마다 누르면 열릴
     /// 기간의 탭이다(한 번도 안 본 탭도 미리 채운다). 디스크에는 쓰지 않는다 — 그 탭을 받은 적이 없는데 남기면 다시 켤 때
     /// 받은 지 얼마 안 된 목록으로 잘못 읽히고(isListFresh), 지금 탭을 2분마다 받을 때마다 다른 탭 파일까지 다시 쓴다.
-    private func seedOtherCaches(with fetched: [PullRequestInfo], from source: PRListScope) {
+    func seedOtherCaches(with fetched: [PullRequestInfo], from source: PRListScope) {
         guard !fetched.isEmpty else { return }
         var keys = Set(listCache.keys)
         for kind in PRListScopeKind.allCases {
@@ -2190,7 +2193,7 @@ final class AppModel {
 
     /// 리뷰 대기 탭에서 받은 목록에 없어진 PR(머지·닫힘)을 다른 탭의 지난 목록에 넣는다(`ListCacheSeeding.departed`) —
     /// 칩이 All PRs 로 날아갔는데 그 탭에 없으면 어긋난다. 지난번에 받은 적이 없으면 언제 빠졌는지 몰라 넣지 않는다.
-    private func seedDeparted(from before: [PullRequestInfo], fetched: [PullRequestInfo], since: Date?,
+    func seedDeparted(from before: [PullRequestInfo], fetched: [PullRequestInfo], since: Date?,
                               source: PRListScope) {
         guard source.kind == .open, let since else { return }
         let found = Set(fetched.map(\.id))
@@ -2240,18 +2243,20 @@ final class AppModel {
     }
 
     /// 이전 폴링과 비교해 알릴 만한 변화를 찾아 알림을 보낸다.
-    func detectChangesAndNotify() {
+    /// - Parameter list: 견줄 목록. 없으면 지금 탭 목록(`prs`). 뒤에서 받은 리뷰 대기 목록도 여기로 온다(`refreshQuietly`).
+    func detectChangesAndNotify(in list: [PullRequestInfo]? = nil) {
+        let current = list ?? prs
         let previous = prSnapshots
         let prefs = settings.prChangeNotifications
         let changeSets = PRChangeDetector.changes(previous: previous,
-                                                  current: prs,
+                                                  current: current,
                                                   approvalThreshold: { [settings] pr in
                                                       settings.approvalThreshold(for: pr)
                                                   },
                                                   lastSeenAt: PRChangeDetector.lastSeen(previous),
                                                   viewerLogin: githubAccount?.login)
         // 교체가 아니라 누적이다. 탭마다 목록이 달라서 교체하면 기억을 잃는다(merged 주석 참고).
-        prSnapshots = PRChangeDetector.merged(previous: previous, current: prs, viewerLogin: githubAccount?.login)
+        prSnapshots = PRChangeDetector.merged(previous: previous, current: current, viewerLogin: githubAccount?.login)
         Task { [prSnapshots, store] in await store.save(snapshots: prSnapshots) }
         absorbRepliesOfSelectedPR()
 
@@ -2297,6 +2302,8 @@ final class AppModel {
     func startPolling() {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
+            // 지금 탭은 막 받았다(부르는 쪽). 다른 탭도 바로 받아 둔다 — 첫 주기까지 기다리면 그동안 눌렀을 때 옛 목록이 보인다.
+            await self?.refreshInBackground()
             while !Task.isCancelled {
                 guard let seconds = self?.settings.pollSeconds else { return }
                 try? await Task.sleep(for: .seconds(seconds))
@@ -2304,6 +2311,7 @@ final class AppModel {
                 guard let self else { return }
                 if self.isSleeping { continue }
                 await self.refresh()
+                await self.refreshInBackground()
             }
         }
     }
@@ -2368,6 +2376,7 @@ final class AppModel {
                 Task {
                     await self.refresh()
                     self.startWorkerIfNeeded()
+                    await self.refreshInBackground()
                 }
             }
         })
