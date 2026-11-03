@@ -40,7 +40,7 @@ enum GraphQL {
         labels(first: 20) { nodes { name } }
         reviewRequests(first: 20) { nodes { requestedReviewer {
           __typename ... on User { login } ... on Team { slug } } } }
-        latestOpinionatedReviews(first: 20) { nodes { state author { login } commit { oid } } }
+        latestOpinionatedReviews(first: 20) { nodes { state author { login } commit { oid } viewerDidAuthor } }
         commits(last: 30) {
           totalCount
           nodes {
@@ -242,7 +242,7 @@ struct PRNodeDTO: Decodable {
     struct Login: Decodable { let login: String? }
     struct Repo: Decodable { let name: String?; let owner: Login? }
     struct Commit: Decodable { let oid: String? }
-    struct ReviewNode: Decodable { let state: String?; let author: Login?; let commit: Commit? }
+    struct ReviewNode: Decodable { let state: String?; let author: Login?; let commit: Commit?; let viewerDidAuthor: Bool? }
     struct ReviewsConn: Decodable { let nodes: [ReviewNode]? }
     struct LabelNode: Decodable { let name: String? }
     struct ReviewRequestsConn: Decodable {
@@ -452,6 +452,10 @@ struct LabelsConn: Decodable { let nodes: [LabelNode]? }
         info.viewerReviewRequestedAt = viewerReviewRequestedAt
         info.viewerRequestedAsCodeOwner = viewerLatestReviewRequest?.asCodeOwner
         info.viewerCanUpdate = viewerCanUpdate
+        if let opinionated = latestOpinionatedReviews?.nodes {
+            let mine = opinionated.first { $0.viewerDidAuthor == true }
+            info.viewerOpinion = ViewerOpinion(state: mine?.state, commitOid: mine?.commit?.oid)
+        }
         return info
     }
 

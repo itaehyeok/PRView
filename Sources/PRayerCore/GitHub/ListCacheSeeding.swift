@@ -65,6 +65,7 @@ public enum ListCacheSeeding {
         pr.viewerLatestReviewState = "APPROVED"
         pr.viewerLatestReviewCommit = pr.headRefOid
         pr.viewerLatestReviewAt = date
+        pr.viewerOpinion = ViewerOpinion(state: "APPROVED", commitOid: pr.headRefOid)
         pr.viewerHasReviewRequest = false
         pr.reviewEvents.append(PRReviewEvent(author: login, state: "APPROVED", submittedAt: date, body: ""))
         if !pr.approvals.contains(where: { $0.login == login }) {
