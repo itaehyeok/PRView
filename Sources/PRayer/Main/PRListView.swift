@@ -208,7 +208,7 @@ struct PRListView: View {
             let active = targets.compactMap { model.job(for: $0) }.filter(\.isActive)
             if !active.isEmpty {
                 Button("리뷰 취소 (\(active.count)개)") {
-                    for job in active { model.cancel(jobID: job.id) }
+                    model.cancel(jobIDs: active.map(\.id))
                 }
             }
             Button("선택 풀기") { model.clearListSelection() }

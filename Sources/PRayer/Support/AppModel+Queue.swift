@@ -485,12 +485,29 @@ extension AppModel {
     }
 
     func cancel(jobID: String) {
-        guard let job = jobs.last(where: { $0.id == jobID && $0.isActive }) else { return }
-        if job.state == .running {
-            runningTask?.cancel()
-        } else {
-            updateJob(jobID) { $0.state = .cancelled }
+        cancel(jobIDs: [jobID])
+    }
+
+    /// 사용자가 누른 취소. 끝나면 무엇을 멈췄는지 잠깐 알리고 저절로 사라진다(정보 알림) — 사용자가 한 일이라 오래 남길
+    /// 까닭이 없다. 여럿을 한꺼번에 거두면 알림은 하나로 모은다(하나씩 띄우면 마지막 번호만 남는다).
+    /// 멈추는 순간 끊긴 프로세스가 오류로 끝나도 실패로 치지 않는다(`run(job:)` 의 취소 처리).
+    func cancel(jobIDs: [String]) {
+        let targets = jobIDs.compactMap { id in jobs.last(where: { $0.id == id && $0.isActive }) }
+        guard !targets.isEmpty else { return }
+        for job in targets {
+            if job.state == .running {
+                runningTask?.cancel()
+            } else {
+                updateJob(job.id) { $0.state = .cancelled }
+            }
         }
+        let message: String
+        if let only = targets.first, targets.count == 1 {
+            message = only.state == .running ? "#\(only.number) 리뷰를 취소했습니다." : "#\(only.number) 리뷰를 큐에서 뺐습니다."
+        } else {
+            message = "리뷰 \(targets.count)개를 취소했습니다."
+        }
+        banner = Banner(kind: .info, message: message)
     }
 
     func startWorkerIfNeeded() {
@@ -595,6 +612,9 @@ extension AppModel {
                 if settings.notifyOnReviewDone {
                     Notifier.reviewDone(record: record)
                 }
+            } else if Task.isCancelled {
+                // 취소로 Claude 프로세스가 끊기면 던지지 않고 실패 결과로 돌아올 수 있다 — 사용자가 멈춘 것이라 실패가 아니다.
+                finishCancelled(job, endedWith: outcome.failureMessage)
             } else {
                 let message = outcome.failureMessage ?? "리뷰에 실패했습니다."
                 Log.error("잡 실패 #\(job.number): \(message)", "queue", problem: .reviewFailed)
@@ -612,14 +632,11 @@ extension AppModel {
                 }
             }
         } catch is CancellationError {
-            updateJob(job.id) {
-                // 처음 받던 클론을 멈췄으면 받던 파일은 이미 지웠다(ReviewCloner). 그 사실을 남긴다.
-                if $0.clonedSnapshot && $0.phase == .cloningSnapshot {
-                    $0.message = "클론을 취소했습니다. 받던 파일은 지웠습니다."
-                }
-                $0.state = .cancelled
-                $0.progress = nil
-            }
+            finishCancelled(job, endedWith: nil)
+        } catch where Task.isCancelled {
+            // 취소하는 순간 돌던 git 이 끊기면 "git 저장소가 아닙니다" 같은 엉뚱한 오류로 끝날 수 있다. 사용자가 멈춘 잡이면
+            // 어떤 오류로 끝났든 취소로 친다 — 실패 알림·문제 기록을 남기면 취소 버튼이 고장 난 것처럼 보인다.
+            finishCancelled(job, endedWith: error.localizedDescription)
         } catch {
             let message = error.localizedDescription
             Log.error("잡 예외 #\(job.number): \(message)", "queue", problem: .reviewFailed)
@@ -632,6 +649,21 @@ extension AppModel {
             if settings.notifyOnFailure {
                 Notifier.reviewFailed(prKey: job.id)
             }
+        }
+    }
+
+    /// 사용자가 멈춘 잡을 닫는다. 알림은 취소를 누른 쪽(`cancel(jobIDs:)`)이 이미 띄웠다.
+    /// - Parameter endedWith: 멈추는 순간 끊긴 프로세스가 낸 오류. 화면엔 안 띄우고 로그에만 남긴다 — 정말 끊겨서
+    ///   난 것인지 나중에 가려 볼 수 있게.
+    private func finishCancelled(_ job: ReviewJob, endedWith error: String?) {
+        Log.info("잡 취소 #\(job.number)" + (error.map { " — 멈추며 끝난 오류: \($0)" } ?? ""), "queue")
+        updateJob(job.id) {
+            // 처음 받던 클론을 멈췄으면 받던 파일은 이미 지웠다(ReviewCloner). 그 사실을 남긴다.
+            if $0.clonedSnapshot && $0.phase == .cloningSnapshot {
+                $0.message = "클론을 취소했습니다. 받던 파일은 지웠습니다."
+            }
+            $0.state = .cancelled
+            $0.progress = nil
         }
     }
 
