@@ -132,7 +132,7 @@ final class OpenScopeTests: XCTestCase {
     /// 끌 수 있는 필터만 목록에 남는다. 없앤 것들이 다시 기어들어오면 잡는다.
     func testOnlyTogglableFiltersRemain() {
         XCTAssertEqual(Set(PRFilterKind.allCases),
-                       [.hideIgnoredAuthors, .hideLabels, .repos, .search])
+                       [.hideIgnoredAuthors, .hideLabels, .repos, .onlyLabel, .search])
     }
 
     func testApprovedPRIsNotCountedAsFilterHidden() {
