@@ -226,7 +226,7 @@ extension AppModel {
         if let modelOverride { settings.model = modelOverride }
         if let effortOverride { settings.effort = effortOverride }
         settings.excludedPathPatterns += extraExclusions.filter { !settings.excludedPathPatterns.contains($0) }
-        let config = ReviewEngineConfig(settings: settings,
+        var config = ReviewEngineConfig(settings: settings,
                                         guidePath: guide.path,
                                         guideText: guide.text,
                                         schemaPath: schema.path,
@@ -244,6 +244,7 @@ extension AppModel {
                                         recheckSchemaPath: recheckSchema?.path,
                                         recheckSchemaText: recheckSchema?.text,
                                         codexCatalog: codexCatalog)
+        config.skippedPathPatterns = extraExclusions
         return ReviewEngine(github: github, claude: claude, codex: codex, store: store, config: config)
     }
 

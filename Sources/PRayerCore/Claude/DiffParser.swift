@@ -82,6 +82,17 @@ public struct ParsedDiff: Sendable {
         copy.excludedFiles = all.filter { DiffParser.isExcluded($0.path, patterns: patterns) }
         return copy
     }
+
+    /// 리뷰 전 창에서 사용자가 체크를 푼 파일 — 빠진 파일 중 그 규칙(`ExclusionPattern.file`)에 걸린 것.
+    /// 내용이 빠지는 건 제외 규칙과 같지만, 프롬프트에 "사용자가 뺐다" 로 따로 알리려고 가려낸다.
+    public func skippedFiles(by patterns: [String]) -> [DiffFile] {
+        patterns.isEmpty ? [] : excludedFiles.filter { Glob.isExcluded(path: $0.path, patterns: patterns) }
+    }
+
+    /// 사용자가 푼 파일이 있고, 남은 파일에 내용이 하나도 없다(바이너리·이름만 바뀐 것뿐) — 목록만으로 리뷰한다.
+    public func isListOnly(skippedFiles: [DiffFile]) -> Bool {
+        !skippedFiles.isEmpty && files.allSatisfy { $0.lines.isEmpty }
+    }
 }
 
 public enum DiffParser {

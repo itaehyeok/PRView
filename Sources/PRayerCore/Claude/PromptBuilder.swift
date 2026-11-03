@@ -17,12 +17,19 @@ public struct PromptInput: Sendable {
     public var pr: PullRequestInfo
     public var diff: ParsedDiff
     public var maxCharacters: Int
+    /// 리뷰 전 창에서 사용자가 체크를 푼 파일 — `diff.excludedFiles` 중 일부다. 잠금 파일·제외 경로와 이유가 달라서
+    /// 따로 알린다(그대로 두면 "자동 생성 파일이라 뺐다" 로 읽힌다).
+    public var skippedFiles: [DiffFile]
 
-    public init(pr: PullRequestInfo, diff: ParsedDiff, maxCharacters: Int = 600_000) {
+    public init(pr: PullRequestInfo, diff: ParsedDiff, maxCharacters: Int = 600_000, skippedFiles: [DiffFile] = []) {
         self.pr = pr
         self.diff = diff
         self.maxCharacters = maxCharacters
+        self.skippedFiles = skippedFiles
     }
+
+    /// 사용자가 모든 파일의 체크를 풀었다 — 코드 없이 PR 설명과 파일 목록만으로 리뷰한다.
+    public var isListOnly: Bool { diff.isListOnly(skippedFiles: skippedFiles) }
 }
 
 public enum PromptBuilder {
@@ -98,12 +105,33 @@ public enum PromptBuilder {
             out += "</existing_comments>\n"
         }
 
-        if !input.diff.excludedFiles.isEmpty {
+        let skippedPaths = Set(input.skippedFiles.map(\.path))
+        let ruleExcluded = input.diff.excludedFiles.filter { !skippedPaths.contains($0.path) }
+        if !ruleExcluded.isEmpty {
             out += "<excluded_files 이유=\"잠금 파일·자동 생성 파일이라 리뷰 범위에서 제외됨(내용은 보내지 않음)\">\n"
-            for file in input.diff.excludedFiles.prefix(30) {
+            for file in ruleExcluded.prefix(30) {
                 out += "- \(file.path) (\(file.changedLines)줄\(LockFiles.isLockFile(file.path) ? ", 잠금 파일" : ""))\n"
             }
             out += "</excluded_files>\n"
+        }
+        if !input.skippedFiles.isEmpty {
+            out += "<files_without_content 이유=\"리뷰 전에 사용자가 내용을 빼고 파일명과 바뀐 줄 수만 보냈다. "
+                + "이 파일들의 코드는 보지 못했으니 추측해 지적하지 않는다\">\n"
+            for file in input.skippedFiles.prefix(listedSkippedFiles) {
+                out += "- \(file.path) (+\(file.additions) -\(file.deletions))\(file.isNew ? " 신규" : file.isDeleted ? " 삭제" : "")\n"
+            }
+            if input.skippedFiles.count > listedSkippedFiles {
+                let rest = input.skippedFiles.dropFirst(listedSkippedFiles)
+                out += "- … 외 \(rest.count)개 (+\(rest.reduce(0) { $0 + $1.additions }) -\(rest.reduce(0) { $0 + $1.deletions }))\n"
+            }
+            out += "</files_without_content>\n"
+        }
+        if input.isListOnly {
+            // 답 형식(review-format.md)은 코멘트를 바뀐 줄에 달게 한다. 달 줄이 없으니 이번만 다르게 쓰라고 알린다 —
+            // 안 알리면 파일 이름만 보고 코드를 짐작해 줄 코멘트를 지어낸다.
+            out += "<review_scope>이번 리뷰는 코드 내용 없이 PR 제목·본문·기존 코멘트와 파일명·줄 수만 받았다. "
+                + "달 수 있는 코드 줄이 없으니 code_comments 는 비워 둔다. PR 설명과 바뀐 파일이 서로 맞는지, 빠진 것은 없는지, "
+                + "작성자에게 확인할 점을 summary_ko 에 쓴다. 코드를 보지 못했으니 verdict 는 comment 로 둔다.</review_scope>\n"
         }
 
         let numbered = numberedDiffDetail(input.diff, maxCharacters: input.maxCharacters)
@@ -219,6 +247,10 @@ public enum PromptBuilder {
     /// 내용 없는 파일(바이너리·이름만 바뀜)은 이만큼만 이름을 적고 나머지는 개수로 묶는다.
     static let listedContentlessFiles = 20
 
+    /// 사용자가 체크를 푼 파일은 이만큼 적는다. 목록만으로 리뷰할 때는 이 목록이 리뷰 재료의 전부라 넉넉히 둔다
+    /// (파일 150개 남짓인 PR 이 다 들어가고, 한 줄이 짧아 300개여도 2만 자 안팎이다).
+    static let listedSkippedFiles = 300
+
     /// "png 12 · svg 3" — 이름을 다 적지 않은 파일에 무엇이 섞였는지만 알린다.
     static func extensionSummary<S: Sequence>(_ files: S) -> String where S.Element == DiffFile {
         var counts: [String: Int] = [:]
@@ -268,6 +300,8 @@ public enum PromptBuilder {
         ("<existing_threads>", "(existing_threads)"), ("</existing_threads>", "(/existing_threads)"),
         ("<excluded_files", "(excluded_files"), ("</excluded_files>", "(/excluded_files)"),
         ("<shortened_lines", "(shortened_lines"), ("</shortened_lines>", "(/shortened_lines)"),
+        ("<files_without_content", "(files_without_content"), ("</files_without_content>", "(/files_without_content)"),
+        ("<review_scope>", "(review_scope)"), ("</review_scope>", "(/review_scope)"),
         ("<diff", "(diff"), ("</diff>", "(/diff)"),
         ("<prior_review", "(prior_review"), ("</prior_review>", "(/prior_review)"),
         ("--- FILE:", "··· 파일 표기 제거 ···")

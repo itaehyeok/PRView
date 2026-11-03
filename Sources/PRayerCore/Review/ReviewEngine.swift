@@ -25,6 +25,9 @@ public struct ReviewEngineConfig: Sendable {
     public var promptVersion: String
     /// Codex 가 알려 준 모델 목록. 계열(`codex:sol`)을 실제 모델로 풀고, 그 모델이 받는 effort 인지 본다.
     public var codexCatalog: CodexCatalog?
+    /// 리뷰 전 창에서 체크를 푼 파일의 규칙(`ExclusionPattern.file`). `settings.excludedPathPatterns` 에도 들어 있어
+    /// 내용은 빠지고, 이 목록은 프롬프트가 "사용자가 뺐다" 로 따로 알리는 데만 쓴다.
+    public var skippedPathPatterns: [String] = []
 
     public init(settings: Settings, guidePath: String, guideText: String,
                 schemaPath: String, schemaText: String,
@@ -62,6 +65,11 @@ public struct ReviewPreparation: Sendable {
     public var prompt: String
     public var estimatedTokens: Int
     public var changedLinesAfterExclusion: Int
+    /// 리뷰 전 창에서 체크를 푼 파일(`ReviewEngineConfig.skippedPathPatterns` 에 걸린 것).
+    public var skippedFiles: [DiffFile] = []
+
+    /// 모든 파일의 체크를 풀었다 — 코드 없이 목록만으로 리뷰한다. diff 가 비어도 실패가 아니다.
+    public var isListOnly: Bool { diff.isListOnly(skippedFiles: skippedFiles) }
 }
 
 public struct ReviewOutcome: Sendable {
@@ -169,11 +177,13 @@ public struct ReviewEngine: Sendable {
             await store.cacheDiff(diffText, repo: pr.repo, number: pr.number, sha: pr.headRefOid)
         }
         let parsed = DiffParser.parse(diffText, excluding: config.settings.excludedPathPatterns)
-        let prompt = PromptBuilder.build(PromptInput(pr: pr, diff: parsed))
+        let skipped = parsed.skippedFiles(by: config.skippedPathPatterns)
+        let prompt = PromptBuilder.build(PromptInput(pr: pr, diff: parsed, skippedFiles: skipped))
         return ReviewPreparation(diff: parsed,
                                  prompt: prompt,
                                  estimatedTokens: PromptBuilder.estimatedTokens(changedLines: parsed.changedLines),
-                                 changedLinesAfterExclusion: parsed.changedLines)
+                                 changedLinesAfterExclusion: parsed.changedLines,
+                                 skippedFiles: skipped)
     }
 
     /// 깊은 리뷰: PR head 를 체크아웃한 워크트리를 주고 읽기 도구만 열어 준다.
@@ -196,7 +206,7 @@ public struct ReviewEngine: Sendable {
             prep = try await prepare(pr: pr)
         }
 
-        if prep.diff.isEmpty {
+        if prep.diff.isEmpty, !prep.isListOnly {
             let detail = prep.diff.excludedFiles.isEmpty
                 ? "diff 가 비어 있습니다."
                 : "변경이 전부 잠금 파일·제외 경로(\(prep.diff.excludedFiles.map(\.path).prefix(3).joined(separator: ", ")) 등)라 리뷰할 코드가 없습니다."
@@ -210,8 +220,9 @@ public struct ReviewEngine: Sendable {
         var worktree: WorktreeManager.Prepared?
         var workingDirectory: String?
         var tools: [String] = []
-        var resolvedRepoPath = deepRepoPath
-        if let deepRepoProvider {
+        // 목록만으로 하는 리뷰는 클론을 읽지 않는다 — 읽기 도구를 열면 모델이 파일을 직접 읽어 가벼운 리뷰가 되지 않는다.
+        var resolvedRepoPath = prep.isListOnly ? nil : deepRepoPath
+        if let deepRepoProvider, !prep.isListOnly {
             resolvedRepoPath = try await deepRepoProvider()
         }
         if let deepRepoPath = resolvedRepoPath {
