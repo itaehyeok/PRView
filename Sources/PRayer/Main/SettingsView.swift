@@ -437,15 +437,21 @@ struct ReviewSettings: View {
     var body: some View {
         @Bindable var model = model
         Form {
-            Section("기본 리뷰 모델") {
+            // 절 이름과 줄 이름이 같은 말을 되풀이했고, PR 마다 따로 고를 수 있어 "모든 PR 에 쓸 모델" 은 맞지 않았다
+            // (2026-11-03 사용자 결정).
+            Section("리뷰 모델") {
                 // AI 리뷰 탭의 두 칸과 같은 모양·같은 목록이다. 여기서 고르면 기본값이 바로 바뀐다.
-                LabeledContent("모든 PR 에 쓸 모델") {
+                LabeledContent("기본값") {
                     ReviewModelPills(modelID: model.settings.model,
                                      effort: model.settings.effort,
-                                     scope: "여기서 고르면 모든 PR 의 기본값이 바뀝니다",
+                                     scope: "여기서 고르면 기본값이 바뀝니다 — PR 마다 따로 고른 것은 그대로입니다",
                                      chooseModel: { model.setDefaultReviewModel($0) },
                                      chooseEffort: { model.setDefaultReviewModel(effort: $0) })
                 }
+                // 새 기본값과 같은 PR 별 선택은 지운다(forgetPRChoicesMatchingDefault) — 남는 것은 다르게 고른 것뿐이다.
+                Text("PR 마다 따로 고른 모델은 그대로 둡니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             ReviewRulesSection(rules: $model.settings.reviewRules)
