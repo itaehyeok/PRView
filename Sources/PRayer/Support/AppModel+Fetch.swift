@@ -133,6 +133,7 @@ extension AppModel {
             Task { [store] in await store.save(list: cached) }
         }
         pruneKnownPRs()
+        loadSinceApprovals()
         Log.info("뒤에서 받음 \(scope.label) \(fetched.count)건 — \(result.summary)", "app")
     }
 

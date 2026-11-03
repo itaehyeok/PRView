@@ -862,6 +862,41 @@ public struct GitHubClient: Sendable {
         return .compared(try JSONDecoder().decode(CommitComparison.self, from: Data(result.stdout.utf8)))
     }
 
+    /// 승인한 커밋부터 head 까지 무엇이 바뀌었나(`SinceApproval`). 승인한 PR 의 이유 칩이 쓴다.
+    ///
+    /// 커밋 사이 비교(compare)는 REST 라 GraphQL 한도와 따로 센다. 머지와 작성자 커밋이 섞였으면 compare 의 파일 목록에
+    /// base 에서 받아온 변경까지 들어 있어서, 작성자 커밋마다 파일을 따로 받는다(열 개를 넘으면 compare 것을 그대로 쓴다).
+    public func sinceApproval(_ repo: RepoID, base: String, head: String,
+                              commentedPaths: Set<String>) async throws -> SinceApproval {
+        let result = try await gh(["api", "repos/\(repo.full)/compare/\(base)...\(head)?per_page=100",
+                                   "--jq", "{status: .status, commits: [.commits[] | {sha: .sha, parents: (.parents | length)}],"
+                                       + " files: [(.files // [])[] | {filename, additions, deletions}]}"],
+                                  timeout: 60)
+        guard result.succeeded else {
+            // 승인한 커밋이 아예 없어졌다(강제 푸시 뒤 지워짐).
+            if CommitComparison.isMissingBase(result.stderr + result.stdout) {
+                return SinceApproval.classify(nil, commentedPaths: commentedPaths)
+            }
+            throw GitHubError.cli(GitHubClient.failureMessage(result, context: "승인 뒤 비교"))
+        }
+        let comparison = try JSONDecoder().decode(SinceApproval.Comparison.self, from: Data(result.stdout.utf8))
+        var authorFiles: [SinceApproval.FileChange]?
+        if comparison.needsAuthorFiles, comparison.authorCommits.count <= 10 {
+            var files: [SinceApproval.FileChange] = []
+            for commit in comparison.authorCommits {
+                let one = try await gh(["api", "repos/\(repo.full)/commits/\(commit.sha)",
+                                        "--jq", "[(.files // [])[] | {filename, additions, deletions}]"],
+                                       timeout: 60)
+                guard one.succeeded else {
+                    throw GitHubError.cli(GitHubClient.failureMessage(one, context: "커밋 파일 목록 조회"))
+                }
+                files += try JSONDecoder().decode([SinceApproval.FileChange].self, from: Data(one.stdout.utf8))
+            }
+            authorFiles = files
+        }
+        return SinceApproval.classify(comparison, authorFiles: authorFiles, commentedPaths: commentedPaths)
+    }
+
     /// 승인 임계값. 룰셋 → 클래식 보호 → GraphQL 순으로 시도하고 못 읽으면 nil.
     /// 이 레포의 브랜치별 Approve 규칙과 기본 브랜치. 아무것도 못 읽으면 nil, 읽었는데 규칙이 없으면 빈 배열.
     /// 빈 배열은 "규칙이 없다" 는 뜻으로 쓰이므로, 정말 없다고 확인되지 않으면 빈 배열 대신 nil(못 읽음)을 준다.

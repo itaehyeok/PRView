@@ -461,6 +461,10 @@ final class AppModel {
     @ObservationIgnored var isBackgroundRefreshing = false
     /// 지금 받고 있는 탭 수(`fetchScope`). 받는 동안은 `knownPRs` 를 정리하지 않는다.
     @ObservationIgnored var fetchesInFlight = 0
+    /// 승인한 커밋...head → 그 사이 무엇이 바뀌었나(AppModel+SinceApproval). 행의 이유 칩이 읽는다.
+    var sinceApprovals: [String: SinceApproval] = [:]
+    @ObservationIgnored var sinceApprovalFailedAt: [String: Date] = [:]
+    @ObservationIgnored var sinceApprovalTask: Task<Void, Never>?
     /// 검색칸 아래 구역 — 지금 탭 밖의 PR 을 서버에서 찾은 것(AppModel+Search).
     var extraSearch = ExtraSearchState()
     @ObservationIgnored var extraSearchTask: Task<Void, Never>?
@@ -1045,7 +1049,8 @@ final class AppModel {
         return BadgeResolver.resolve(pr: pr,
                                      isRunning: running,
                                      record: record(for: pr),
-                                     skipReason: skipReason(for: pr))
+                                     skipReason: skipReason(for: pr),
+                                     sinceApproval: sinceApproval(for: pr))
     }
 
     func skipReason(for pr: PullRequestInfo) -> SkipReason? {
@@ -2127,6 +2132,7 @@ final class AppModel {
             }
             consecutiveRefreshFailures = 0
             pruneKnownPRs()
+            loadSinceApprovals()
             Log.info("PR 조회 \(prs.count)건 — \(result.summary) (전체 \(total.map(String.init) ?? "?"), rate 잔여 \(rateRemaining.map(String.init) ?? "?"))", "app")
             // 처음 고를 때는 **필터된 목록**에서 고른다.
             // 전체 목록(prs)의 첫 번째를 고르면 필터에 걸려 왼쪽에 없는 PR 이 오른쪽에 떠서,

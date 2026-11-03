@@ -142,8 +142,54 @@ final class BadgeFollowUpTests: XCTestCase {
         XCTAssertEqual(PRBadgeFollowUp.newCommits(1).label, "+1 commit")
         XCTAssertEqual(PRBadgeFollowUp.newCommits(3).label, "+3 commits")
         XCTAssertEqual(PRBadgeFollowUp.newCommits(nil).label, "New commits")
-        XCTAssertNil(PRBadgeFollowUp.reRequested.shortLabel, "좁을 때는 아이콘만")
-        XCTAssertEqual(PRBadgeFollowUp.newCommits(3).shortLabel, "+3")
+        // 승인 뒤 바뀐 것을 가르면 이름이 그 종류를 말한다(2026-11-02 사용자 결정 — 칩은 아이콘만, 이름은 말풍선에).
+        XCTAssertEqual(PRBadgeFollowUp.sinceApproval(SinceApproval(kind: .commentedFile, commits: 2)).label,
+                       "Commented file changed")
+        XCTAssertEqual(PRBadgeFollowUp.sinceApproval(SinceApproval(kind: .code, commits: 1)).label, "Code changed")
+        XCTAssertEqual(PRBadgeFollowUp.sinceApproval(SinceApproval(kind: .docsOnly, commits: 1)).label, "Docs only")
+        XCTAssertEqual(PRBadgeFollowUp.sinceApproval(SinceApproval(kind: .forcePushed, commits: nil)).label, "Force-pushed")
+        XCTAssertEqual(PRBadgeFollowUp.sinceApproval(SinceApproval(kind: .baseMergeOnly, commits: 1)).label,
+                       "Base merge only")
+    }
+
+    // MARK: - 승인 뒤 바뀐 것
+
+    /// 무엇이 바뀌었는지 알면 "+N commits" 대신 그 종류로 말한다. 모르는 동안은 예전처럼 "+N commits".
+    func testSinceApprovalReplacesCommitCount() {
+        let since = SinceApproval(kind: .commentedFile, commits: 2, files: ["Sources/A.swift"], additions: 120,
+                                  deletions: 38, commentedFiles: ["Sources/A.swift"])
+        let result = BadgeResolver.resolve(pr: pr(reviewCommit: old), isRunning: false, record: nil, skipReason: nil,
+                                           sinceApproval: since)
+        XCTAssertEqual(result.badge, .approved)
+        XCTAssertEqual(result.followUp, .sinceApproval(since))
+        XCTAssertEqual(result.followUp?.detail, "내가 코멘트 단 파일이 바뀌었습니다 · A.swift")
+        XCTAssertEqual(result.followUp?.numbers, "2 commits · 1 file · +120 −38 since approval")
+        // 다시 요청은 사람이 한 말이라 그대로 앞선다.
+        let requested = BadgeResolver.resolve(pr: pr(reviewCommit: old, requested: true), isRunning: false, record: nil,
+                                              skipReason: nil, sinceApproval: since)
+        XCTAssertEqual(requested.followUp, .reRequested)
+    }
+
+    /// 승인한 뒤 스레드에 답만 달아 마지막 리뷰가 COMMENTED 여도 승인은 살아 있다 — 배지는 Approved, 승인 뒤 소식의
+    /// 기준은 승인한 커밋이다.
+    func testCommentAfterApprovalStaysApproved() {
+        var info = pr(reviewState: "COMMENTED", reviewCommit: mid)
+        info.viewerOpinion = ViewerOpinion(state: "APPROVED", commitOid: old)
+        let result = resolve(info)
+        XCTAssertEqual(result.badge, .approved)
+        XCTAssertEqual(result.followUp, .newCommits(2), "기준은 승인한 old 커밋 — 그 뒤 mid·head 두 개")
+        // 내 의견 리뷰를 모르는 옛 캐시는 예전처럼 코멘트로 본다.
+        info.viewerOpinion = nil
+        XCTAssertEqual(resolve(info).badge, .commented)
+    }
+
+    /// 이 앱으로 올린 승인을 레포 설정이 지웠으면 Approved 가 아니라 Dismissed 다.
+    func testDismissedAfterPostedApprovalIsDismissed() {
+        var info = pr(reviewState: "DISMISSED", reviewCommit: old, reviewedAt: postedAt.addingTimeInterval(5))
+        info.viewerOpinion = ViewerOpinion(state: "DISMISSED", commitOid: old)
+        let result = resolve(info, record: posted("APPROVE", pr: info, recordHead: old))
+        XCTAssertEqual(result.badge, .dismissed)
+        XCTAssertNil(result.followUp)
     }
 
     func testCommitCountAfter() {
