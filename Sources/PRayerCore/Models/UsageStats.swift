@@ -26,6 +26,12 @@ public struct UsageStats: Codable, Sendable, Equatable {
         case teamStats = "teamStats.open"
         case notificationOpen = "notification.open"
         case onlyLabel = "list.onlyLabel"
+        /// 리뷰 전 확인 창에서 일부 파일의 체크를 풀고 리뷰했다.
+        case reviewSkipFiles = "review.skipFiles"
+        /// 리뷰 전 확인 창에서 전부 풀고 목록만으로 리뷰했다.
+        case reviewListOnly = "review.listOnly"
+        /// 리뷰 전 확인 창에서 확인 창 기준을 바꿨다.
+        case reviewSizeThreshold = "review.sizeThreshold"
     }
 
     /// 마지막으로 보낸 것. 설정의 "보낸 내용 보기" 가 본문을 글자 그대로 보인다.

@@ -306,6 +306,7 @@ extension AppModel {
         reviewSizeSkips[request.pr.id] = skipped
         if warnLines != settings.manualSizeWarnLines {
             settings.manualSizeWarnLines = warnLines
+            recordUsage(.reviewSizeThreshold)
         }
         let skippedFiles = request.files.filter { skipped.contains($0.path) }
         let listOnly = !request.files.isEmpty && skippedFiles.count == request.files.count
@@ -313,6 +314,11 @@ extension AppModel {
                 modelOverride: request.modelOverride, effortOverride: request.effortOverride,
                 deep: request.deep && !listOnly,
                 skipPaths: skippedFiles.map { ExclusionPattern.file($0.path) })
+        if listOnly {
+            recordUsage(.reviewListOnly)
+        } else if !skippedFiles.isEmpty {
+            recordUsage(.reviewSkipFiles)
+        }
         Task { await save() }
     }
 
