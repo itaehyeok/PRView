@@ -816,7 +816,8 @@ struct AIReviewView: View {
             // 결과는 따로 한 줄이다 — 다시 리뷰 버튼까지 한 줄에 두면 좁은 상세(460pt)에서 넘쳤다.
             if let posted = record.posted, !isPosting {
                 HStack(alignment: .center, spacing: 8) {
-                    PostedStatusLabel(text: "\(PostedStatusLabel.postedAs(posted.event)) 게시됨")
+                    PostedStatusLabel(text: "\(PostedStatusLabel.postedAs(posted.event)) 게시됨",
+                                      detail: RelativeTime.ago(posted.postedAt))
                         .help("\(RelativeTime.ago(posted.postedAt)) GitHub 에 올렸습니다.")
                     Button {
                         NSWorkspaceOpener.open(posted.htmlURL)
@@ -1904,11 +1905,15 @@ struct DraftCommentCard: View {
     }
 }
 
-/// 게시를 마친 자리에 버튼 대신 두는 초록 결과(시안 A — 버튼이 상태를 말한다). 옆 버튼과 같은 높이로 그린다.
+/// 게시를 마친 자리에 버튼 대신 두는 초록 결과(시안 A — 버튼이 상태를 말한다).
+/// 바탕 없이 체크와 글자만 둔다. 이 화면에서 바탕이 있는 것은 누르는 것인데, 예전의 채운 초록 + 흰 글자는
+/// 바로 옆 버튼과 같은 모양이라 눌러야 할 것처럼 읽혔다(2026-11-03 시안 A).
 struct PostedStatusLabel: View {
     let text: String
+    /// 글 뒤에 흐리게 붙이는 말. 언제 올렸는지 등.
+    var detail: String? = nil
 
-    /// 흰 글자를 얹는 초록. 시스템 초록은 흰 글자와 대비가 2:1 남짓이라 한 단계 어둡게 쓴다.
+    /// 흰 체크를 얹는 초록(Approve 연출의 동그라미). 시스템 초록은 흰색과 대비가 2:1 남짓이라 한 단계 어둡게 쓴다.
     static let fill = Color(red: 0.12, green: 0.54, blue: 0.26)
     /// 바탕 위에 바로 쓰는 초록 글자. 밝은 바탕엔 위의 어두운 초록, 어두운 바탕엔 시스템 초록이라야 읽힌다.
     static let text = Color(nsColor: NSColor(name: nil) { appearance in
@@ -1918,13 +1923,18 @@ struct PostedStatusLabel: View {
     })
 
     var body: some View {
-        Label(text, systemImage: "checkmark")
-            .fontWeight(.medium)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Self.fill, in: RoundedRectangle(cornerRadius: 6))
-            .fixedSize()
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            // 채운 동그라미 체크 — Approve 연출이 줄어든 초록 동그라미로 끝나서 그 모양을 잇는다.
+            Label(text, systemImage: "checkmark.circle.fill")
+                .fontWeight(.medium)
+                .foregroundStyle(Self.text)
+            if let detail {
+                Text("· \(detail)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .fixedSize()
     }
 
     /// 게시한 리뷰 종류를 문장 앞에 붙일 때. 버튼 이름("코멘트만")을 그대로 쓰면 "코멘트만 로" 가 되어 따로 둔다.
