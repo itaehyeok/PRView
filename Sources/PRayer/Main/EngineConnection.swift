@@ -143,19 +143,21 @@ struct EngineConnectionSection: View {
     let engine: ReviewEngineKind
 
     var body: some View {
-        @Bindable var model = model
         let status = model.engineStatus(engine)
         Section {
             LabeledContent("상태") {
                 EngineStatusLine(engine: engine)
             }
-            switch engine {
-            case .claude:
-                TextField("실행 파일 경로", text: $model.settings.claudePath)
-                    .onSubmit { Task { await model.save(); await model.checkClaude() } }
-            case .codex:
-                TextField("실행 파일 경로", text: $model.settings.codexPath)
-                    .onSubmit { Task { await model.save(); await model.checkCodex() } }
+            // 경로는 글자로만 보이고 바꾸는 곳은 "경로 변경…" 하나다. 예전의 경로 입력칸은 그 버튼과 같은 일을 했고,
+            // Return 을 쳐야 다시 확인해서 고치고 그냥 닫으면 확인을 건너뛰었다(2026-11-03 사용자 결정).
+            LabeledContent("경로") {
+                Text(((engine == .claude ? model.settings.claudePath : model.settings.codexPath) as NSString)
+                        .abbreviatingWithTildeInPath)
+                    .font(.callout.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
             }
             EngineActions(engine: engine)
             if let status, !status.isInstalled {
