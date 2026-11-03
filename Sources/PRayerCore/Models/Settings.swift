@@ -91,8 +91,8 @@ public struct Settings: Codable, Sendable, Equatable {
     /// 사용자가 직접 쓴 리뷰 규칙(설정 › 리뷰 › 내 리뷰 규칙). 리뷰 글에 대해서는 앱 기본 규칙보다 우선하고, 앱 형식 규칙보다는
     /// 아래다(`ReviewGuideText`). 빈 문자열이면 기본 규칙만으로 돈다.
     public var reviewRules: String
-    /// 리뷰 1건 제한 시간(초). 0 이면 제한 없음.
-    public var concurrency: Int
+    // `concurrency` 는 없앴다 — 읽는 곳이 없었고, 주석은 "리뷰 1건 제한 시간(초)" 이라 이름과도 맞지 않았다(제한 시간은
+    // `reviewTimeout`). 옛 설정 파일에 남은 키는 읽지 않는다.
 
     // 대상·크기
     public var excludedPathPatterns: [String]
@@ -123,11 +123,6 @@ public struct Settings: Codable, Sendable, Equatable {
     // 깊은 리뷰의 모델·effort(`deepReviewModel`·`deepReviewEffort`)는 없앴다 — 리뷰 모델 하나(`model`·`effort`)를 같이 쓴다.
     // 옛 설정 파일에 남은 그 키는 읽지 않는다(diff 리뷰 모델이 둘 다의 모델이 된다).
 
-    /// 게시 항목을 고르는 방식. A/B/C 를 비교해 보고 하나로 정한다.
-    /// A: 각 섹션에서만 켠다(미리보기는 읽기 전용)
-    /// B: 미리보기에서만 켠다(섹션에는 상태 배지만)
-    /// C: 양쪽에서 켠다 + 컨트롤 모양을 역할별로 구분
-
     // 폰트 (빈 이름 = 시스템 폰트)
     public var codeFontName: String
     public var codeFontSize: Double
@@ -146,8 +141,8 @@ public struct Settings: Codable, Sendable, Equatable {
     // 코멘트 스타일
     // 코멘트 수·길이 상한(`maxDraftComments`·`maxCommentBodyChars`)은 없앴다 — 응답 스키마가 6개·400자로 이미
     // 묶어 둬서 올려도 그대로였고, 낮추면 모델은 모른 채 다 쓰고 뒤에서 잘렸다. 상한은 `ReviewLimits` 에 있다.
-    public var minCommentBodyChars: Int
-    public var maxSummaryChars: Int
+    // 코멘트 최소 길이·요약 상한(`minCommentBodyChars`·`maxSummaryChars`)도 `ReviewLimits` 로 옮겼다 — 바꿀 칸이 없는데
+    // 설정 파일에만 저장돼 있었다(2026-11-03). 옛 설정 파일에 남은 두 키는 읽지 않는다.
     // 게시하는 글 끝 표기(`aiAttribution`·`attributionStyle` — 없음 · 👥 · by Claude)는 없앴다 — 보이는 표기는 늘
     // 붙이지 않는다(2026-10-20 사용자 결정). 숨은 마커는 그대로 붙는다(`PostBuilder.decorate`). 옛 설정 파일의 그 칸은 읽지 않는다.
 
@@ -185,7 +180,6 @@ public struct Settings: Codable, Sendable, Equatable {
         githubHost: GitHubHost.dotCom,
         repos: [],
         model: "sonnet",
-        concurrency: 1,
         excludedPathPatterns: Settings.defaultExcludedPatterns,
         autoSizeCapLines: 600,
         manualSizeWarnLines: 3000,
@@ -202,8 +196,6 @@ public struct Settings: Codable, Sendable, Equatable {
         commentFontSize: 13,
         abbreviateMemberNames: true,
         memberNicknames: [:],
-        minCommentBodyChars: 20,
-        maxSummaryChars: 300,
         pollSeconds: 60,
         fiveHourTokenCap: 300_000,
         notifyOnReviewDone: true,
@@ -344,14 +336,13 @@ public struct Settings: Codable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case onboardingCompleted, claudePath, codexPath, ghPath, githubHost, repos
-        case model, effort, prReviewModels, reviewRules, concurrency
+        case model, effort, prReviewModels, reviewRules
         case excludedPathPatterns, autoSizeCapLines, manualSizeWarnLines
         case hiddenLabels
         case ignoredAuthors
         case deepReviewRepoPaths
         case codeFontName, codeFontSize, codeFontChosen, uiFontName, uiFontSize, commentFontName, commentFontSize
         case abbreviateMemberNames, memberNicknames
-        case minCommentBodyChars, maxSummaryChars
         /// 기본 주기를 120 → 60초로 바꾸며 키 이름을 바꿨다(옛 키는 `LegacyKeys.pollSeconds`).
         case pollSeconds = "pollIntervalSeconds"
         case fiveHourTokenCap
@@ -389,7 +380,6 @@ public struct Settings: Codable, Sendable, Equatable {
         effort = v(.effort, d.effort)
         prReviewModels = v(.prReviewModels, d.prReviewModels)
         reviewRules = v(.reviewRules, d.reviewRules)
-        concurrency = v(.concurrency, d.concurrency)
         excludedPathPatterns = v(.excludedPathPatterns, d.excludedPathPatterns)
         autoSizeCapLines = v(.autoSizeCapLines, d.autoSizeCapLines)
         manualSizeWarnLines = v(.manualSizeWarnLines, d.manualSizeWarnLines)
@@ -414,8 +404,6 @@ public struct Settings: Codable, Sendable, Equatable {
         commentFontSize = v(.commentFontSize, d.commentFontSize)
         abbreviateMemberNames = v(.abbreviateMemberNames, d.abbreviateMemberNames)
         memberNicknames = v(.memberNicknames, d.memberNicknames)
-        minCommentBodyChars = v(.minCommentBodyChars, d.minCommentBodyChars)
-        maxSummaryChars = v(.maxSummaryChars, d.maxSummaryChars)
         // 기본 주기를 120 → 60초로 바꿨다(2026-11-02 — 바뀐 PR 만 자세히 받게 되어 한 번 받는 값이 크게 줄었다). 옛 키에
         // 옛 기본값 120 이 그대로 있으면 새 기본으로 옮기고, 사람이 바꿔 둔 값은 그대로 가져온다. 키를 바꾼 것은 다음에
         // 읽을 때 "옛 기본값" 과 "사람이 고른 120" 을 가르려는 것이다 — 새 키에 있는 값은 늘 사람이 고른 것이다.
@@ -438,7 +426,7 @@ public struct Settings: Codable, Sendable, Equatable {
     public init(onboardingCompleted: Bool, claudePath: String, codexPath: String = "/opt/homebrew/bin/codex", ghPath: String,
                 githubHost: String = GitHubHost.dotCom, repos: [RepoConfig],
                 model: String,
-                concurrency: Int, excludedPathPatterns: [String], autoSizeCapLines: Int,
+                excludedPathPatterns: [String], autoSizeCapLines: Int,
                 manualSizeWarnLines: Int, hiddenLabels: [String],
                 ignoredAuthors: [String] = [],
                 deepReviewRepoPaths: [String: String] = [:],
@@ -448,7 +436,6 @@ public struct Settings: Codable, Sendable, Equatable {
                 uiFontName: String = "", uiFontSize: Double = 13,
                 commentFontName: String = "", commentFontSize: Double = 13,
                 abbreviateMemberNames: Bool = true, memberNicknames: [String: String] = [:],
-                minCommentBodyChars: Int, maxSummaryChars: Int,
                 pollSeconds: Int,
                 fiveHourTokenCap: Int,
                 notifyOnReviewDone: Bool, notifyOnFailure: Bool,
@@ -465,7 +452,6 @@ public struct Settings: Codable, Sendable, Equatable {
         self.effort = effort
         self.prReviewModels = prReviewModels
         self.reviewRules = reviewRules
-        self.concurrency = concurrency
         self.excludedPathPatterns = excludedPathPatterns
         self.autoSizeCapLines = autoSizeCapLines
         self.manualSizeWarnLines = manualSizeWarnLines
@@ -481,8 +467,6 @@ public struct Settings: Codable, Sendable, Equatable {
         self.commentFontSize = commentFontSize
         self.abbreviateMemberNames = abbreviateMemberNames
         self.memberNicknames = memberNicknames
-        self.minCommentBodyChars = minCommentBodyChars
-        self.maxSummaryChars = maxSummaryChars
         self.pollSeconds = pollSeconds
         self.fiveHourTokenCap = fiveHourTokenCap
         self.notifyOnReviewDone = notifyOnReviewDone

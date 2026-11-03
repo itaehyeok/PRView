@@ -308,7 +308,7 @@ public struct ReviewEngine: Sendable {
         }
         let validated = DraftValidator.validate(output: output,
                                                 diff: diff,
-                                                limits: ReviewLimits(settings: config.settings))
+                                                limits: .standard)
         // 같은 커밋을 다시 리뷰한 경우 이미 게시한 사실을 잃지 않도록 승계한다
         // (초안 파일은 (repo, number, headSha) 로만 구분돼 덮어쓰기 때문).
         let previouslyPosted = await store.loadRecord(repo: pr.repo, number: pr.number,

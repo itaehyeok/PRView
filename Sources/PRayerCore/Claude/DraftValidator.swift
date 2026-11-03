@@ -20,13 +20,10 @@ public struct ReviewLimits: Sendable {
     /// 두 값이 스키마와 같은지는 PromptContractTests 가 본다.
     public static let schemaMaxComments = 8
     public static let schemaMaxBodyChars = 400
-
-    public init(settings: Settings) {
-        self.init(maxComments: Self.schemaMaxComments,
-                  minBodyChars: settings.minCommentBodyChars,
-                  maxBodyChars: Self.schemaMaxBodyChars,
-                  maxSummaryChars: settings.maxSummaryChars)
-    }
+    /// 리뷰가 실제로 쓰는 상한. 코멘트 최소 길이(20자)와 요약 상한(300자)은 예전에 설정 파일에 있었는데, 바꿀 칸이
+    /// 없어 늘 이 값이었다(2026-11-03 옮김).
+    public static let standard = ReviewLimits(maxComments: schemaMaxComments, minBodyChars: 20,
+                                              maxBodyChars: schemaMaxBodyChars, maxSummaryChars: 300)
 }
 
 public struct ValidatedReview: Sendable {
