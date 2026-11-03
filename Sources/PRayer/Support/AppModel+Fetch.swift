@@ -123,6 +123,7 @@ extension AppModel {
         let fetchedBefore = listFetchedAt[key]
         listCache[key] = fetched
         listFetchedAt[key] = Date()
+        backgroundListVersion &+= 1
         seedOtherCaches(with: fetched, from: scope)
         seedDeparted(from: before, fetched: fetched, since: fetchedBefore, source: scope)
         // 알림은 리뷰 대기 목록으로 본다 — 열린 PR 전부라 새 PR·새 코멘트·머지 가능을 여기서 안다. 지금 탭의 refresh 도

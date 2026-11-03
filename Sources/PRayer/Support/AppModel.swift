@@ -340,6 +340,8 @@ final class AppModel {
         didSet {
             if oldValue != selectedPRID { openRepliesOfSelectedPR() }
             guard let selectedPRID else { return }
+            // 열었다 — Approved 탭의 new 점을 끈다(AppModel+SinceApproval).
+            if oldValue != selectedPRID, !isAutoSelecting { markApprovalNewsSeen(selectedPRID) }
             // 통계를 보다가 PR 을 고르면(행 클릭·방향키·알림) 상세 칸이 그 PR 로 돌아간다(AppModel+TeamStats).
             if showingTeamStats {
                 showingTeamStats = false
@@ -461,10 +463,17 @@ final class AppModel {
     @ObservationIgnored var isBackgroundRefreshing = false
     /// 지금 받고 있는 탭 수(`fetchScope`). 받는 동안은 `knownPRs` 를 정리하지 않는다.
     @ObservationIgnored var fetchesInFlight = 0
+    /// 뒤에서 다른 탭을 받을 때마다 오른다. `listCache` 는 지켜보지 않는 값이라, 그걸로 세는 탭 칩의 new 수
+    /// (`approvalNewsCount`)가 이 값을 읽어 다시 그려진다.
+    var backgroundListVersion = 0
     /// 승인한 커밋...head → 그 사이 무엇이 바뀌었나(AppModel+SinceApproval). 행의 이유 칩이 읽는다.
     var sinceApprovals: [String: SinceApproval] = [:]
     @ObservationIgnored var sinceApprovalFailedAt: [String: Date] = [:]
     @ObservationIgnored var sinceApprovalTask: Task<Void, Never>?
+    /// 승인 뒤 소식을 본 head(키: pr.id). 그 head 를 열어 봤으면 Approved 탭의 new 점을 끈다(AppModel+SinceApproval).
+    var seenApprovalNews: [String: String] = [:]
+    /// 목록을 받은 뒤 앱이 첫 PR 을 스스로 고르는 중. 이때는 new 점을 끄지 않는다(selectedPRID didSet).
+    @ObservationIgnored var isAutoSelecting = false
     /// 검색칸 아래 구역 — 지금 탭 밖의 PR 을 서버에서 찾은 것(AppModel+Search).
     var extraSearch = ExtraSearchState()
     @ObservationIgnored var extraSearchTask: Task<Void, Never>?
@@ -600,8 +609,12 @@ final class AppModel {
         let state = filterState
         let listed = prs.filter { isListed($0, state: state) }
         // 머지·닫힘으로 받은 목록에서 없어진 행은 칩이 떠날 때까지 제자리에 남긴다(applyFetched).
-        guard !departingRows.isEmpty else { return listed }
-        return (listed + departingRows).sorted { $0.createdAt > $1.createdAt }
+        let rows = departingRows.isEmpty ? listed : (listed + departingRows).sorted { $0.createdAt > $1.createdAt }
+        // Approved 탭은 아직 안 본 승인 뒤 소식이 있는 PR 을 맨 위로 올린다 — 안에서는 올린 시각 순 그대로.
+        guard listScope.kind == .myApprovals else { return rows }
+        let news = rows.filter { hasApprovalNews($0) }
+        guard !news.isEmpty else { return rows }
+        return news + rows.filter { !hasApprovalNews($0) }
     }
 
     private func isListed(_ pr: PullRequestInfo, state: PRFilterState) -> Bool {
@@ -869,9 +882,12 @@ final class AppModel {
     }
 
     /// 승인 탭의 기간 조건. 탭의 정의이지 필터가 아니다.
+    ///
+    /// 승인한 뒤 새로 생긴 일을 아직 안 봤으면 기간 밖이어도 넣는다 — 사흘 전에 승인한 PR 에 오늘 커밋이 와도 24h 탭에서
+    /// 보여야 한다(2026-11-02 사용자 결정). 열어 보면 원래 기간 규칙으로 돌아간다.
     func approvedInWindow(_ pr: PullRequestInfo) -> Bool {
         guard let hours = listScope.windowHours else { return true }
-        return viewerApprovedRecently(pr, hours: hours)
+        return viewerApprovedRecently(pr, hours: hours) || hasApprovalNews(pr)
     }
 
     /// 목록이 비었을 때 무엇이 원인인지. 화면 문구가 이걸 읽는다.
@@ -1086,6 +1102,7 @@ final class AppModel {
             hasSnapshotBaseline = true
         }
         await loadMyReplyRead()
+        loadSeenApprovalNews()
         filter = PRFilter.load()
         // 모델 목록을 수확보다 먼저 읽는다 — 수확이 Codex 계열(`codex:sol`)을 실제 모델로 풀 때 쓴다. 늦게 읽으면
         // 초안에 계열 이름이 그대로 남는다(실측 2026-10-29: 머리 줄에 "codex:codex:sol").
@@ -2142,7 +2159,13 @@ final class AppModel {
             // 조회(selectedPR)까지 필터를 걸지는 않는다. 보고 있던 PR 을 승인해 목록에서
             // 빠지는 순간 오른쪽이 비어 버린다 — 5초 유예(markLeaving)와도 어긋난다.
             // 통계를 보는 중이면 고르지 않는다 — 고르는 순간 통계가 닫힌다(selectedPRID didSet).
-            if selectedPRID == nil, !showingTeamStats { selectedPRID = visiblePRs.first?.id }
+            if selectedPRID == nil, !showingTeamStats {
+                // 앱이 스스로 고른 것은 사람이 열어 본 것이 아니다 — 승인 뒤 소식(new 점)을 끄지 않는다. Approved 탭은
+                // 소식 있는 PR 을 맨 위로 올리므로, 그대로 두면 켤 때마다 맨 위 소식 하나가 저절로 사라진다.
+                isAutoSelecting = true
+                selectedPRID = visiblePRs.first?.id
+                isAutoSelecting = false
+            }
         } catch is CancellationError {
             Log.info("PR 조회 취소됨", "app")
         } catch {
