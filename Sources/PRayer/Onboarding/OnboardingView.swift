@@ -440,7 +440,7 @@ struct RepoPickerStep: View {
             }
 
             // 설정 창(레포 줄 아래 PR 스냅샷이 보이는 곳)에서는 목록 아래 긴 설명을 뺐다(2026-10-23 사용자 결정).
-            // 툴바 팝오버의 짧은 줄도 뺐다(2026-11-03 사용자 결정) — 체크가 하는 일은 줄에 마우스를 올리면 나온다.
+            // 툴바 팝오버의 짧은 줄도 뺐다(2026-11-03 사용자 결정) — 스위치가 하는 일은 스위치에 마우스를 올리면 나온다.
             // 처음 고르는 온보딩만 남긴다.
             if !compact && !showsClonePaths {
                 Text("고른 레포는 맨 위로 올라옵니다. 체크를 끄면 조회·알림만 멈추고 Approve 수는 남습니다(아예 빼려면 우클릭 → 목록에서 빼기). `Approve N명 필요` 는 GitHub 브랜치 규칙에서 읽은 머지 조건입니다 — 브랜치마다 다르면 PR 마다 그 PR 이 향하는 브랜치의 수를 쓰고, 못 읽으면 직접 정한 값(처음 3명 — 팀 기준에 맞게 고치세요)을 씁니다. 앱을 켤 때와 새로고침할 때 다시 읽습니다.")
@@ -590,7 +590,7 @@ struct RepoPickerStep: View {
     private var emptyRow: some View {
         if search.isEmpty, compact {
             // 팝오버는 고른 레포만 보이므로, 비었다는 것은 아직 고른 레포가 없다는 뜻이다.
-            Text("위 칸에서 레포를 찾아 체크하세요.")
+            Text("위 칸에서 레포를 찾아 켜세요.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         } else if search.isEmpty {
@@ -618,7 +618,7 @@ struct RepoPickerStep: View {
     }
 }
 
-/// 레포 한 줄 — 체크박스 + 이름, 고른 레포면 머지에 필요한 Approve 수까지.
+/// 레포 한 줄 — 체크박스(레포 관리 팝오버는 줄 끝 스위치) + 이름, 고른 레포면 머지에 필요한 Approve 수까지.
 ///
 /// 고르기와 설정을 한 줄에 둔다. 예전에는 고르는 목록과 설정 목록이 따로 있어서
 /// 같은 레포가 한 화면에 두 번 나왔다.
@@ -638,23 +638,37 @@ struct RepoOptionRow: View {
     @State private var hint: String?
 
     private var isListed: Bool { config != nil }
-    /// 체크 — 켜 두고 보는 중인가(`Settings.setRepo` 주석).
+    /// 체크(팝오버는 스위치) — 켜 두고 보는 중인가(`Settings.setRepo` 주석).
     private var isWatched: Bool { config?.enabled ?? false }
+
+    private var watched: Binding<Bool> {
+        Binding(get: { isWatched }, set: { on in Task { await model.setRepoWatched(option.repo, on) } })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 4 : 6) {
             HStack(spacing: 8) {
-                Toggle(isOn: Binding(get: { isWatched },
-                                     set: { on in Task { await model.setRepoWatched(option.repo, on) } })) {
+                if compact {
+                    // 팝오버는 체크박스 대신 줄 끝 스위치다(2026-11-03 사용자 선택, 시안 B). 체크는 무엇이 꺼지는지
+                    // 읽히지 않아 목록 아래에 안내 문장을 달아야 했다. 이름을 눌러도 켜지지 않는다 — 스위치만 누른다.
                     label
-                }
-                .toggleStyle(.checkbox)
-                Spacer(minLength: 8)
-                if let config {
-                    if !compact {
-                        RepoConfigRow(config: config)
-                    } else if config.enabled {
+                    Spacer(minLength: 8)
+                    if let config, config.enabled {
                         RepoListStatus(config: config, hint: $hint)
+                    }
+                    Toggle(option.repo.full, isOn: watched)
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                        .help(isListed
+                              ? "끄면 위쪽 탭과 목록에서 빠지고 조회·알림을 멈춥니다. 이 줄과 설정은 남아 다시 켜면 돌아옵니다 · 아예 빼려면 우클릭"
+                              : "켜면 이 레포를 더하고 PR 을 가져옵니다")
+                } else {
+                    Toggle(isOn: watched) { label }
+                        .toggleStyle(.checkbox)
+                    Spacer(minLength: 8)
+                    if let config {
+                        RepoConfigRow(config: config)
                     }
                 }
             }
@@ -673,7 +687,7 @@ struct RepoOptionRow: View {
                 .fill(isHighlighted ? Color.accentColor.opacity(0.15) : .clear)
                 .padding(-4)
         }
-        // 체크를 끄는 것은 멈추기라, 아예 빼는 길은 따로 둔다.
+        // 체크·스위치를 끄는 것은 멈추기라, 아예 빼는 길은 따로 둔다.
         .contextMenu {
             if isListed {
                 Button("목록에서 빼기") { Task { await model.removeRepo(option.repo) } }
@@ -683,27 +697,25 @@ struct RepoOptionRow: View {
 
     @ViewBuilder
     private var label: some View {
-        if compact, let config {
+        if compact {
             // 이름 앞에 위쪽 레포 탭과 같은 색점을 단다 — 어느 줄이 어느 탭인지 색으로 잇는다(사용자 요청, 2026-11-03).
             // 이름 아래 Approve 수 줄은 뺐다 — 켜고 끄려고 여는 곳이라 없어도 된다(2026-11-03 사용자 결정, 설정 창에는 남는다).
+            // 꺼 둔 레포는 스위치가 말하므로 "꺼 둠" 글자는 달지 않는다.
             HStack(spacing: 4) {
+                // 아직 안 고른 레포(검색 결과)는 탭에 없으니 점 없이 자리만 둬 이름 줄을 맞춘다.
                 Circle()
-                    .fill(RepoDot.color(for: option.repo.name))
+                    .fill(isListed ? RepoDot.color(for: option.repo.name) : .clear)
                     .frame(width: 7, height: 7)
                     // 꺼 둔 레포는 탭에 없다. 이름처럼 흐리게 둔다.
-                    .opacity(config.enabled ? 1 : 0.4)
-                Text(option.repo.name)
+                    .opacity(isListed && !isWatched ? 0.4 : 1)
+                Text(isListed ? option.repo.name : option.repo.full)
                     .font(.callout)
-                    .foregroundStyle(config.enabled ? .primary : .secondary)
+                    .foregroundStyle(isListed && !isWatched ? .secondary : .primary)
                 if option.isPrivate {
                     Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.secondary)
                 }
-                if !config.enabled {
-                    Text("꺼 둠").font(.caption2).foregroundStyle(.secondary)
-                }
             }
-            // 목록 아래 안내 문장을 뺀 대신, 체크가 무엇을 하는지는 마우스를 올리면 나온다.
-            .help("\(option.repo.full) — 체크를 끄면 조회·알림을 멈춥니다(설정은 남음) · 아예 빼려면 우클릭")
+            .help(option.repo.full)
         } else {
             HStack(spacing: 6) {
                 Text(option.repo.full)

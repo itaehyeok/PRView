@@ -488,7 +488,7 @@ struct PRListView: View {
             ContentUnavailableView {
                 Label("리뷰할 레포가 없습니다", systemImage: "shippingbox")
             } description: {
-                Text("위쪽 레포 줄 끝의 ⚙︎ 에서 레포를 찾아 체크하면 열린 PR 을 가져옵니다.")
+                Text("위쪽 레포 줄 끝의 ⚙︎ 에서 레포를 찾아 켜면 열린 PR 을 가져옵니다.")
             } actions: {
                 SettingsLink { Text("레포 추가…") }
             }
