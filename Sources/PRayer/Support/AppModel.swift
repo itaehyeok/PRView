@@ -107,6 +107,8 @@ struct PRFilter: Codable, Equatable {
     var hiddenRepos: [String] = []
     /// 검색어는 저장하지 않는다. 다시 켰을 때 목록이 비어 있으면 원인을 찾기 어렵다.
     var search = ""
+    /// 목록 행의 라벨을 눌러 고른 라벨 — 이 라벨이 붙은 PR 만 보인다(`PRFilterState.onlyLabel`). 검색어처럼 저장하지 않는다.
+    var onlyLabel: String?
 
     private static let storageKey = "prFilter"
 
@@ -545,7 +547,8 @@ final class AppModel {
                       search: filter.search,
                       hasIgnoredAuthors: !settings.ignoredAuthors.isEmpty,
                       hasHiddenLabels: !settings.hiddenLabels.isEmpty,
-                      hiddenRepos: hiddenRepoKeys)
+                      hiddenRepos: hiddenRepoKeys,
+                      onlyLabel: filter.onlyLabel)
     }
 
     /// 레포 탭에서 뺀 레포 중 **지금 켜져 있는 것만**(`PRFilterState.repoKey`).
@@ -650,7 +653,7 @@ final class AppModel {
     /// 있는 조건이라 내 PR 에는 뜻이 없고, 그 필터가 켜져 있을 때가 바로 이 그룹이 필요한 때다.
     ///
     /// 검색어만은 받는다 — 검색은 "찾기" 라, 찾는 것이 내 PR 일 때 그룹이 안 걸러지면
-    /// 검색 결과 위에 엉뚱한 줄이 계속 남는다. 레포 고르기도 같은 이유로 받는다 — 레포 하나만
+    /// 검색 결과 위에 엉뚱한 줄이 계속 남는다. 레포 고르기·라벨 하나만 보기도 같은 이유로 받는다 — 레포 하나만
     /// 보려는데 다른 레포의 내 PR 이 맨 위에 남으면 좁힌 보람이 없다.
     var myOpenPRs: [PullRequestInfo] {
         guard listScope.kind == .open else { return [] }
@@ -660,6 +663,7 @@ final class AppModel {
             .filter { pr in
                 guard isMineInOpenTab(pr) else { return false }
                 if hiddenRepos.contains(PRFilterState.repoKey(pr.repo)) { return false }
+                if !PRFilterState.hasLabel(pr.labels, filter.onlyLabel) { return false }
                 if PRVisibility.isDismissed(pr: pr, dismissals: dismissedPRs) { return false }
                 guard !needle.isEmpty else { return true }
                 return "\(pr.number) \(pr.title) \(pr.headRefName)".lowercased().contains(needle)
@@ -936,6 +940,7 @@ final class AppModel {
         case .hideIgnoredAuthors: filter.hideIgnoredAuthors = false
         case .hideLabels: filter.hideLabels = false
         case .repos: filter.hiddenRepos = []
+        case .onlyLabel: filter.onlyLabel = nil
         case .search: filter.search = ""
         }
     }
@@ -944,7 +949,24 @@ final class AppModel {
         filter.hideIgnoredAuthors = false
         filter.hideLabels = false
         filter.hiddenRepos = []
+        filter.onlyLabel = nil
         filter.search = ""
+    }
+
+    /// 목록 행의 라벨을 누르면 그 라벨이 붙은 PR 만 보인다. 이미 고른 라벨을 다시 누르면 푼다.
+    func toggleOnlyLabel(_ label: String) {
+        if let current = filter.onlyLabel, current.caseInsensitiveCompare(label) == .orderedSame {
+            filter.onlyLabel = nil
+        } else {
+            filter.onlyLabel = label
+            recordUsage(.onlyLabel)
+        }
+    }
+
+    /// 이 라벨이 지금 "라벨 하나만 보기" 로 고른 라벨인가.
+    func isOnlyLabel(_ label: String) -> Bool {
+        guard let current = filter.onlyLabel else { return false }
+        return current.caseInsensitiveCompare(label) == .orderedSame
     }
 
     var activeJobCount: Int { jobs.filter(\.isActive).count }

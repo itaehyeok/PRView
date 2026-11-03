@@ -80,11 +80,14 @@ import PRayerCore
 ///   `PRAYER_DEBUG_ONBOARDING_STEP=repos` 나 `PRAYER_DEBUG_OPEN_POPOVER=repos` 와 같이 준다.
 /// - `PRAYER_DEBUG_SEARCH=검색어` — 목록 검색칸에 그 말을 넣는다(전체 PR 검색 아래 구역 확인용).
 ///   `PRAYER_DEBUG_SCOPE=open:0|myApprovals:168|recentAll:720` 를 같이 주면 그 탭에서 친다(`PRListScope.storageValue` 꼴).
+/// - `PRAYER_DEBUG_ONLY_LABEL=라벨` — 행의 그 라벨을 누른 것처럼 그 라벨이 붙은 PR 만 보인다(목록 위 띠·고른 라벨 모양 확인).
+///   `PRAYER_DEBUG_SCOPE` 를 같이 주면 그 탭에서.
 ///
 /// `open --env PRAYER_DEBUG_SELECT_PR=o/r#1 <앱>`. 툴바 팝오버는 `PRAYER_DEBUG_OPEN_POPOVER`(ToolbarPopover).
 enum DebugLaunch {
     static var selectPR: String? { value("PRAYER_DEBUG_SELECT_PR") }
     static var search: String? { value("PRAYER_DEBUG_SEARCH") }
+    static var onlyLabel: String? { value("PRAYER_DEBUG_ONLY_LABEL") }
     static var scope: PRListScope? { value("PRAYER_DEBUG_SCOPE").flatMap(PRListScope.init(storageValue:)) }
     static var expandAll: Bool { value("PRAYER_DEBUG_EXPAND_ALL") == "1" }
     static var hoverCode: String? { value("PRAYER_DEBUG_HOVER_CODE") }
@@ -278,7 +281,8 @@ struct DebugLaunchModifier: ViewModifier {
                 || DebugLaunch.windowSize != nil || DebugLaunch.appearance != nil
                 || DebugLaunch.slackRequestCount != nil || DebugLaunch.slackMultiCount != nil
                 || DebugLaunch.listMultiCount != nil || DebugLaunch.teamStats != nil
-                || DebugLaunch.refreshFlightPace != nil || DebugLaunch.search != nil else { return }
+                || DebugLaunch.refreshFlightPace != nil || DebugLaunch.search != nil
+                || DebugLaunch.onlyLabel != nil else { return }
             if let appearance = DebugLaunch.appearance {
                 NSApp.appearance = appearance
             }
@@ -302,6 +306,10 @@ struct DebugLaunchModifier: ViewModifier {
             if let search = DebugLaunch.search {
                 if let scope = DebugLaunch.scope { model.listScope = scope }
                 model.filter.search = search
+            }
+            if let label = DebugLaunch.onlyLabel {
+                if DebugLaunch.search == nil, let scope = DebugLaunch.scope { model.listScope = scope }
+                model.filter.onlyLabel = label
             }
             if DebugLaunch.showAbout {
                 AboutPanel.show()

@@ -271,15 +271,19 @@ struct RepoListStatus: View {
         if reason.byFilter[.hideIgnoredAuthors] != nil || reason.byFilter[.hideLabels] != nil {
             lines.append("숨길 사람·라벨은 목록 위 ‘필터’ 에서 끄거나 고칩니다.")
         }
+        if reason.byFilter[.onlyLabel] != nil {
+            lines.append("라벨 하나만 보기는 목록 위 띠의 라벨 칩(✕)을 눌러 풉니다.")
+        }
         return lines.joined(separator: "\n")
     }
 
-    /// 숨길 사람·라벨 필터면 걸린 이름을 괄호로. 그 밖의 필터는 이름이 없다.
+    /// 숨길 사람·라벨 필터면 걸린 이름을, 라벨 하나만 보기면 고른 라벨을 괄호로. 그 밖의 필터는 이름이 없다.
     private func names(for kind: PRFilterKind, in reason: AppModel.RepoHiddenReason) -> String {
         let names: Set<String>
         switch kind {
         case .hideIgnoredAuthors: names = reason.authors
         case .hideLabels: names = reason.labels
+        case .onlyLabel: names = Set([model.filter.onlyLabel].compactMap { $0 })
         default: return ""
         }
         return names.isEmpty ? "" : "(\(names.sorted().joined(separator: ", ")))"

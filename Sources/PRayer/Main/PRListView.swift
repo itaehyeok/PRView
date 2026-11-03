@@ -21,6 +21,11 @@ struct PRListView: View {
             if !model.settings.enabledRepos.isEmpty {
                 ListHeader()
             }
+            // 행의 라벨을 눌러 좁혔다는 사실은 목록 위가 늘 말한다 — 안 그러면 "PR 이 왜 이것뿐이지" 가 된다.
+            if let label = model.filter.onlyLabel {
+                onlyLabelBar(label)
+                Divider()
+            }
             // 여럿 고른 것은 우클릭해야 쓸 수 있다 — 메뉴는 눈에 안 보이니 고른 사실과 할 일을 목록 위가 말한다.
             // 탭·필터를 바꿔 고른 것이 안 보이게 되면 띠도 내린다(우클릭도 보이는 것만 다룬다 — listTargets).
             let chosenCount = model.listSelection.isMultiple
@@ -173,6 +178,23 @@ struct PRListView: View {
         .background(Color.accentColor.opacity(0.08))
     }
 
+    /// "라벨 하나만 보기" 가 켜져 있다는 띠. 라벨 이름을 행에서 고른 라벨과 같은 모양(강조색 바탕)의 칩으로 보여 줘 무엇으로
+    /// 거르는지 이어 읽히게 하고, 칩을 누르면 푼다(칩 안 ✕ — 사용자 선택 시안 A). 같이 고르기 띠와 같은 자리·같은 바탕이다.
+    private func onlyLabelBar(_ label: String) -> some View {
+        HStack(spacing: 6) {
+            OnlyLabelChip(label: label) { model.filter.onlyLabel = nil }
+            Text("라벨만 보는 중")
+                .foregroundStyle(Color.accentColor)
+                .lineLimit(1)
+                .fixedSize()
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.08))
+    }
+
     /// 행 우클릭 메뉴. 같이 고른 것 안에서 누르면 리뷰는 고른 것 전부에, 밖이면 그 PR 하나에 건다(`AppModel.listTargets`).
     /// 사람·라벨 숨기기는 누른 그 행의 것이다 — 이름이 메뉴에 그대로 나와 무엇을 숨기는지 헷갈리지 않는다.
     @ViewBuilder
@@ -247,10 +269,14 @@ struct PRListView: View {
     @ViewBuilder
     private var hiddenByFilterNote: some View {
         // 레포 탭에서 뺀 레포의 PR 은 세지 않는다. 그건 위 레포 탭이 이미 보여 주고, 여기 섞으면
-        // "필터 완화해서 보기" 를 눌러도(라벨·사람만 푼다) 숫자가 그대로 남는다.
+        // "필터 완화해서 보기" 를 눌러도(라벨·사람만 푼다) 숫자가 그대로 남는다. 라벨 하나만 보기로 빠진 PR 도 같은 이유로
+        // 세지 않는다 — 목록 위 띠가 말한다.
         // 차례를 기다리는 새 행·떠나는 중인 머지된 행은 숨긴 것도 보이는 것도 아니다(AppModel.applyFetched) — 세면
         // 연출하는 1~2초 동안 숫자가 흔들린다.
-        let pool = model.prs.filter { model.isRepoShown($0.repo) && !model.heldBackArrivals.contains($0.id) }
+        let pool = model.prs.filter {
+            model.isRepoShown($0.repo) && PRFilterState.hasLabel($0.labels, model.filter.onlyLabel)
+                && !model.heldBackArrivals.contains($0.id)
+        }
         let hidden = pool.count - (model.visiblePRs.count - model.departingRows.count)
         // 목록이 비면 가운데 빈 화면이 같은 숫자를 레포별로 이미 말한다. 둘 다 띄우면
         // 한 화면에 같은 내용이 두 벌 있게 된다(실측: 상단 띠와 "레포별 숨김" 이 동일).
@@ -508,7 +534,7 @@ struct PRListView: View {
                 VStack(spacing: 4) {
                     ForEach(actionable, id: \.kind) { entry in
                         HStack(spacing: 8) {
-                            Text(entry.kind.label)
+                            Text(filterTitle(entry.kind))
                                 .font(.callout)
                             Spacer(minLength: 12)
                             Text("끄면 +\(entry.gain)건")
@@ -550,6 +576,12 @@ struct PRListView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// 빈 화면 줄의 필터 이름. 라벨 하나만 보기는 무슨 라벨인지까지 적는다.
+    private func filterTitle(_ kind: PRFilterKind) -> String {
+        if kind == .onlyLabel, let label = model.filter.onlyLabel { return "‘\(label)’ 라벨만 보기" }
+        return kind.label
     }
 
     /// ② 검색어만 원인인 경우.
@@ -744,7 +776,7 @@ struct PRRow: View {
                     Tag(text: tag.text, color: tag.color)
                         .layoutValue(key: PRRowFactRoleKey.self, value: .tag)
                 }
-                if !statusTags.isEmpty, labelText != nil {
+                if !statusTags.isEmpty, !pr.labels.isEmpty {
                     // 감싸기 배치에서는 레이아웃이 0×0 을 줘서 숨긴다. LabelSeparator 는 1×10 고정이라 틀로 감싸 잘라 낸다 —
                     // 최소값(0)을 같이 줘야 틀이 받은 0×0 으로 줄어든다(최대값만 주면 안쪽 1×10 을 따라가 그대로 그려졌다).
                     LabelSeparator()
@@ -752,11 +784,10 @@ struct PRRow: View {
                         .clipped()
                         .layoutValue(key: PRRowFactRoleKey.self, value: .separator)
                 }
-                if let labels = labelText {
-                    // 한 줄 배치에서는 레이아웃이 폭을 정하지 않고 물어 한 줄 그대로, 감싸기 배치에서는 행 폭을 줘서 두 줄까지.
-                    labels
-                        .lineLimit(2)
-                        .help(pr.labels.joined(separator: ", "))
+                if !pr.labels.isEmpty {
+                    // 한 줄 배치에서는 레이아웃이 폭을 정하지 않고 물어 한 줄 그대로, 감싸기 배치에서는 행 폭을 줘서 감싼다.
+                    // 라벨을 누르면 그 라벨이 붙은 PR 만 보인다(PRLabelLinks).
+                    PRLabelLinks(labels: pr.labels, limit: Self.labelLimit)
                         .layoutValue(key: PRRowFactRoleKey.self, value: .labels)
                 }
             }
@@ -766,7 +797,8 @@ struct PRRow: View {
         .padding(.vertical, 3)
     }
 
-    /// 라벨은 몇 개까지 보이는가. 넘치면 아랫줄로 흐르므로 폭이 아니라 개수로만 막는다.
+    /// 라벨은 몇 개까지 보이는가(PRLabels — 라벨이 나오는 곳은 다 이 모양). 넘치면 "외 N". 넘치면 아랫줄로 흐르므로 폭이
+    /// 아니라 개수로만 막는다.
     private static let labelLimit = 4
 
     /// 셋째 줄 앞부분 — 작성자·증감·승인 수. 늘 한 줄이고 줄어들지 않는다.
@@ -842,9 +874,6 @@ struct PRRow: View {
         }
         return tags
     }
-
-    /// 라벨 줄(PRLabels — 라벨이 나오는 곳은 다 이 모양). 목록은 좁아서 4개까지, 넘치면 "외 N".
-    private var labelText: Text? { PRLabels.text(pr.labels, limit: Self.labelLimit) }
 
     /// 레포 이름 칩. 칩으로 두면 이름처럼 보이지 않는다. 제목 줄에 올리지 않은 이유는
     /// 제목이 이미 한 줄로 잘리는데 폭을 더 빼앗기 때문이다.
@@ -1425,6 +1454,44 @@ struct Tag: View {
     }
 }
 
+
+/// 목록 위 띠의 라벨 칩 `[🏷 라벨 ✕]`. 칩 전체가 푸는 버튼이다 — ✕ 만 누르게 하면 자리가 너무 작다.
+/// 마우스를 올리면 바탕이 한 단계 짙어지고 손 모양 커서가 된다(행의 라벨과 같은 규칙).
+private struct OnlyLabelChip: View {
+    let label: String
+    let clear: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: clear) {
+            HStack(spacing: 3) {
+                Image(systemName: "tag.fill")
+                Text(verbatim: label)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .padding(.leading, 1)
+            }
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.accentColor.opacity(isHovering ? 0.26 : 0.16), in: RoundedRectangle(cornerRadius: 4))
+            .contentShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            isHovering = inside
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+        // 누르면 띠가 내려가 칩이 사라진다 — 나갔다는 알림이 없어 손 모양 커서가 남는다(ReplyChip 과 같다).
+        .onDisappear {
+            if isHovering { NSCursor.pop() }
+        }
+        .help("누르면 ‘\(label)’ 라벨로 좁힌 것을 풀고 모든 PR 을 봅니다")
+    }
+}
 
 /// 목록 탭 하나. 기간이 있는 탭은 [몸통 | ⌄] 두 조각이다.
 private struct ScopeTab: View {

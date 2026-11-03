@@ -1572,6 +1572,8 @@ struct ExplainBox: View {
 /// 칩이 넘치면 다음 줄로 흘려보낸다.
 struct FlowRow: Layout {
     var spacing: CGFloat = 4
+    /// 줄 사이. nil 이면 `spacing` 과 같다 — 글자 조각을 이을 때(PRLabelLinks)는 옆 간격보다 좁게 준다.
+    var lineSpacing: CGFloat?
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
@@ -1580,7 +1582,7 @@ struct FlowRow: Layout {
             let size = subview.sizeThatFits(.unspecified)
             if x > 0, x + size.width > maxWidth {
                 x = 0
-                y += rowHeight + spacing
+                y += rowHeight + (lineSpacing ?? spacing)
                 rowHeight = 0
             }
             x += size.width + spacing
@@ -1595,7 +1597,7 @@ struct FlowRow: Layout {
             let size = subview.sizeThatFits(.unspecified)
             if x > bounds.minX, x + size.width > bounds.maxX {
                 x = bounds.minX
-                y += rowHeight + spacing
+                y += rowHeight + (lineSpacing ?? spacing)
                 rowHeight = 0
             }
             subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
