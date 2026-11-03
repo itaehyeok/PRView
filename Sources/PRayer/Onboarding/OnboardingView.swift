@@ -630,7 +630,7 @@ struct RepoOptionRow: View {
     /// 켜 둔 레포 아래에 전체 리뷰 클론 줄(PR 스냅샷·예전 연결)을 붙인다(설정 화면).
     var showsClonePath = false
     var isHighlighted = false
-    /// 레포 관리 팝오버의 줄 — 이름 한 줄과, 오른쪽에 목록 건수·숨은 이유를 둔다.
+    /// 레포 관리 팝오버의 줄 — 색점·이름 한 줄과, 오른쪽에 목록 건수·숨은 이유를 둔다.
     /// 대상 브랜치를 고치는 칸은 설정 창에만 둔다(한 번 정하면 거의 바꾸지 않는다).
     var compact = false
 
@@ -684,8 +684,14 @@ struct RepoOptionRow: View {
     @ViewBuilder
     private var label: some View {
         if compact, let config {
+            // 이름 앞에 위쪽 레포 탭과 같은 색점을 단다 — 어느 줄이 어느 탭인지 색으로 잇는다(사용자 요청, 2026-11-03).
             // 이름 아래 Approve 수 줄은 뺐다 — 켜고 끄려고 여는 곳이라 없어도 된다(2026-11-03 사용자 결정, 설정 창에는 남는다).
             HStack(spacing: 4) {
+                Circle()
+                    .fill(RepoDot.color(for: option.repo.name))
+                    .frame(width: 7, height: 7)
+                    // 꺼 둔 레포는 탭에 없다. 이름처럼 흐리게 둔다.
+                    .opacity(config.enabled ? 1 : 0.4)
                 Text(option.repo.name)
                     .font(.callout)
                     .foregroundStyle(config.enabled ? .primary : .secondary)
