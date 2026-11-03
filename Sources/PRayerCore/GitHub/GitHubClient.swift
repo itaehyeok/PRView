@@ -136,12 +136,35 @@ public struct GitHubClient: Sendable {
                                stdin: stdin,
                                environment: ProcessEnvironment.base(),
                                timeout: timeout)
+        let startedAt = Date()
         let result = try await runner.run(spec)
+        if GitHubClient.logsCalls {
+            let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
+            Log.info("호출 \(GitHubClient.callLabel(arguments, stdin: stdin)) \(ms)ms\(result.succeeded ? "" : " 실패")", "github")
+        }
         // 화면을 바꾸면 진행 중이던 요청이 취소된다. 이건 오류가 아니다.
         if result.cancelled || Task.isCancelled {
             throw CancellationError()
         }
         return result
+    }
+
+    /// `PRAYER_DEBUG_GH_CALLS=1` 로 띄우면 GitHub 호출을 한 줄씩 로그에 남긴다 — 주기마다 몇 번 부르는지 잴 때 쓴다
+    /// (`open --env PRAYER_DEBUG_GH_CALLS=1 <앱>`).
+    static let logsCalls = ProcessInfo.processInfo.environment["PRAYER_DEBUG_GH_CALLS"] == "1"
+
+    /// 호출 이름 — GraphQL 이면 쿼리 이름(`query PRProbe(...)` → `graphql PRProbe`), REST 면 경로(물음표 앞).
+    static func callLabel(_ arguments: [String], stdin: String?) -> String {
+        if arguments.contains("graphql") {
+            let text = stdin ?? arguments.first { $0.hasPrefix("query=") } ?? ""
+            if let range = text.range(of: #"query\s+(\w+)"#, options: .regularExpression) {
+                let name = text[range].split(whereSeparator: \.isWhitespace).last.map(String.init) ?? ""
+                return "graphql \(name)"
+            }
+            return "graphql"
+        }
+        let path = arguments.dropFirst().first { !$0.hasPrefix("-") } ?? arguments.joined(separator: " ")
+        return "rest " + (path.split(separator: "?").first.map(String.init) ?? path)
     }
 
     /// 모든 호출이 `gh api` 다. `--hostname` 을 **여기 한 자리에서** 붙여야, 호출 하나를

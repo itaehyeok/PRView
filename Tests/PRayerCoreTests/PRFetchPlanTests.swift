@@ -86,6 +86,18 @@ final class PRFetchPlanTests: XCTestCase {
         XCTAssertTrue(PRFetchPlan.needsFullSync(lastFullSync: now.addingTimeInterval(-PRFetchPlan.fullSyncInterval), now: now))
     }
 
+    /// 디버그 호출 로그(`PRAYER_DEBUG_GH_CALLS`)의 이름 — 쿼리 이름과 REST 경로.
+    func testCallLabel() {
+        XCTAssertEqual(GitHubClient.callLabel(["api", "graphql", "-f", "query=query PRProbe($q: String!) { x }"], stdin: nil),
+                       "graphql PRProbe")
+        XCTAssertEqual(GitHubClient.callLabel(["api", "graphql", "--input", "-"],
+                                              stdin: #"{"query":"query PRNodes($ids: [ID!]!) { x }"}"#),
+                       "graphql PRNodes")
+        XCTAssertEqual(GitHubClient.callLabel(["api", "repos/acme/app/compare/a...b?per_page=100", "--jq", "."], stdin: nil),
+                       "rest repos/acme/app/compare/a...b")
+        XCTAssertEqual(GitHubClient.callLabel(["api", "-i", "user"], stdin: nil), "rest user")
+    }
+
     /// 훑기 응답의 키는 `PullRequestInfo.id` 와 같아야 받아 둔 것과 맞춰진다.
     func testProbeDecodesSameKeyAsInfo() throws {
         let json = """
