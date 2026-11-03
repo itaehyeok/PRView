@@ -465,9 +465,6 @@ final class AppModel {
     @ObservationIgnored var isBackgroundRefreshing = false
     /// 지금 받고 있는 탭 수(`fetchScope`). 받는 동안은 `knownPRs` 를 정리하지 않는다.
     @ObservationIgnored var fetchesInFlight = 0
-    /// 뒤에서 다른 탭을 받을 때마다 오른다. `listCache` 는 지켜보지 않는 값이라, 그걸로 세는 탭 칩의 new 수
-    /// (`approvalNewsCount`)가 이 값을 읽어 다시 그려진다.
-    var backgroundListVersion = 0
     /// 승인한 커밋...head → 그 사이 무엇이 바뀌었나(AppModel+SinceApproval). 행의 이유 칩이 읽는다.
     var sinceApprovals: [String: SinceApproval] = [:]
     @ObservationIgnored var sinceApprovalFailedAt: [String: Date] = [:]

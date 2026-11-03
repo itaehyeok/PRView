@@ -1450,24 +1450,13 @@ private struct ScopeTab: View {
                 guard model.listScope != target else { return }
                 model.listScope = target
             } label: {
-                HStack(spacing: 5) {
-                    Text(target.label)
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                        // 목록이 좁으면(320pt) "최근 Approve 24h" 가 두 줄로 접혔다('승인' 을 'Approve' 로 바꾼 뒤 길어져서).
-                        // 이름은 그대로 두고, 자리가 모자랄 때만 글자를 조금 줄여 한 줄을 지킨다(사용자 선택).
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    // 승인 뒤 아직 안 본 소식 수 — 이 탭을 열지 않아도 뒤에서 받은 목록으로 센다(AppModel+SinceApproval).
-                    if kind == .myApprovals, model.approvalNewsCount > 0 {
-                        Text(verbatim: "\(model.approvalNewsCount)")
-                            .font(.system(size: 9, weight: .bold).monospacedDigit())
-                            .foregroundStyle(isSelected ? Color.accentColor : Color.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(isSelected ? Color.white : Color.blue, in: Capsule())
-                            .help("승인 뒤 아직 안 본 소식 \(model.approvalNewsCount)건")
-                    }
-                }
+                // 승인 뒤 안 본 소식 수는 달지 않는다 — Approved 목록의 행 앞 점만 둔다(2026-11-03 사용자 결정).
+                Text(target.label)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                    // 목록이 좁으면(320pt) "최근 Approve 24h" 가 두 줄로 접혔다('승인' 을 'Approve' 로 바꾼 뒤 길어져서).
+                    // 이름은 그대로 두고, 자리가 모자랄 때만 글자를 조금 줄여 한 줄을 지킨다(사용자 선택).
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.leading, 10)
                     .padding(.trailing, kind.usesWindow ? 6 : 10)
                     .padding(.vertical, 4)

@@ -6,6 +6,8 @@ import PRayerCore
 /// 2026-11-02 사용자 결정: 리뷰 대기에는 나를 부른 것(다시 요청·승인 취소)만 다시 온다. 승인한 뒤 커밋이 올라온 PR 은 Approved
 /// 탭에서 new 점으로 알리고, 칩에 마우스를 올리면 무엇이 바뀌었는지(내 코멘트 단 파일·코드·문서·강제 푸시) 짧게 보인다.
 /// PR 을 열면 new 가 꺼진다 — "새 답글" 과 같은 규칙이다.
+///
+/// 탭 칩에는 new 수를 달지 않는다 — 행 앞 점만 둔다(2026-11-03 사용자 결정).
 extension AppModel {
     /// 승인한 커밋...head. 바뀐 것이 없거나 승인이 살아 있지 않으면 nil.
     func sinceApprovalKey(_ pr: PullRequestInfo) -> String? {
@@ -22,13 +24,6 @@ extension AppModel {
         guard sinceApprovalKey(pr) != nil else { return false }
         if sinceApproval(for: pr)?.kind == .baseMergeOnly { return false }
         return seenApprovalNews[pr.id] != pr.headRefOid
-    }
-
-    /// Approved 탭 칩에 붙는 new 수. 그 탭을 열지 않아도 뒤에서 받은 목록(`refreshInBackground`)으로 센다.
-    var approvalNewsCount: Int {
-        _ = backgroundListVersion  // 뒤에서 받은 목록이 바뀌면 다시 센다
-        let list = listScope.kind == .myApprovals ? prs : (listCache[scope(for: .myApprovals).storageValue] ?? [])
-        return list.filter { hasApprovalNews($0) }.count
     }
 
     /// 열었다 — 이 head 까지 본 것으로 적는다.
