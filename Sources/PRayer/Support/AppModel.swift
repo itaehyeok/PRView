@@ -451,6 +451,14 @@ final class AppModel {
     @ObservationIgnored var listCache: [String: [PullRequestInfo]] = [:]
     /// 탭마다 마지막으로 다 받은 때(키: 탭의 storageValue). 앱을 켤 때는 디스크에 남긴 때로 채운다.
     @ObservationIgnored private var listFetchedAt: [String: Date] = [:]
+    /// GitHub 이 준 그대로의 PR(키: pr.id). 훑은 목록과 견줘 바뀐 것만 자세히 받는 기준이다(`fetchScope`).
+    /// 다른 탭에 미리 채운 모습(ListCacheSeeding)처럼 앱이 지어낸 것은 넣지 않는다 — 넣으면 GitHub 이 바뀐 것을 놓친다.
+    @ObservationIgnored var knownPRs: [String: PullRequestInfo] = [:]
+    /// 탭마다 마지막으로 전부 받은 때. 30분마다(`PRFetchPlan.fullSyncInterval`), 그리고 사람이 새로고침을 누르거나 맥이
+    /// 깨어나면 바뀐 것만이 아니라 전부 받는다 — 훑기로 못 가르는 변화가 있어도 그때 바로잡힌다.
+    @ObservationIgnored var lastFullSync: [String: Date] = [:]
+    /// 지금 받고 있는 탭 수(`fetchScope`). 받는 동안은 `knownPRs` 를 정리하지 않는다.
+    @ObservationIgnored var fetchesInFlight = 0
     /// 검색칸 아래 구역 — 지금 탭 밖의 PR 을 서버에서 찾은 것(AppModel+Search).
     var extraSearch = ExtraSearchState()
     @ObservationIgnored var extraSearchTask: Task<Void, Never>?
@@ -772,6 +780,7 @@ final class AppModel {
         seedOtherCaches(with: [fresh], from: listScope)
         // 검색 아래 구역에서 고른 PR 도 게시·Approve 뒤 새 모습으로 바꾼다 — 탭 목록에 없어 아래 guard 에서 끝난다.
         replaceInExtraSearch(fresh)
+        knownPRs[fresh.id] = fresh
         guard let index = prs.firstIndex(where: { $0.id == fresh.id }) else { return }
         forgetDiffsIfBaseChanged(from: [prs[index]], to: [fresh])
         prs[index] = fresh
@@ -1741,6 +1750,8 @@ final class AppModel {
         while isRefreshing {
             try? await Task.sleep(for: .milliseconds(150))
         }
+        // 사람이 누른 새로고침은 바뀐 것만이 아니라 전부 받는다 — 무언가 이상해서 누르는 것이다.
+        lastFullSync.removeAll()
         await refresh(reloadThresholds: true)
     }
 
@@ -2053,61 +2064,29 @@ final class AppModel {
             isLoadingMore = false
         }
         do {
-            let repos = settings.enabledRepos.map(\.repo)
-            // 한 페이지씩 받아 **오는 대로 그린다.** 30일 탭은 전부 받는 데 40초가 넘게 걸려서
-            // (실측) 다 받고 나서 그리면 그동안 빈 화면을 본다.
-            //
-            // 뒷 페이지가 앞 페이지 위로 끼어들지 않는 것은 서버 정렬(sort:created-desc)과
-            // 아래 정렬 기준이 같기 때문이다. 둘 중 하나만 바꾸면 읽는 도중에 목록이 재배열된다.
+            // 가볍게 훑고 바뀐 PR 만 자세히 받는다(`fetchScope`). 처음 채울 때처럼 자세히 받을 것이 많으면 받은 데까지
+            // **먼저 그린다** — 30일 탭은 전부 받는 데 40초가 넘게 걸려서(실측) 다 받고 나서 그리면 그동안 빈 화면을 본다.
+            // 늘어놓는 순서는 서버 정렬(sort:created-desc)과 같은 올린 시각이라 뒤에 받은 것이 앞 것 위로 끼어들지 않는다.
             let scopeAtStart = listScope
-            let limit = listScope.maxResults
             // 받기 전에 이 탭에 그려 둔 목록(지난 목록·앞 조회). 여기 없던 PR 만 "새로 온 것" 으로 보고 펼쳐 넣는다
             // (applyFetched). 그려 둔 적이 없는 탭이면 nil — 처음 채우는 것은 펼치지 않는다.
             let baseline = listCache[scopeAtStart.storageValue] == nil ? nil : Set(prs.map(\.id))
-            var collected: [PullRequestInfo] = []
-            var cursor: String?
-            var pageSize: Int?
-            var total: Int?
-            var truncated = false
-            var pages = 0
-            while pages < GitHubClient.searchPageCeiling {
-                let slice = try await github.pullRequestSlice(repos: repos,
-                                                              scope: scopeAtStart,
-                                                              viewerLogin: githubAccount?.login,
-                                                              cursor: cursor,
-                                                              pageSize: pageSize)
-                pages += 1
+            let result = try await fetchScope(scopeAtStart) { [weak self] partial in
                 // 받는 도중에 탭을 옮겼다면 이 결과는 남의 것이다. 붙이면 목록이 섞인다.
-                // 그냥 return 하면 탭을 옮기며 예약한 갱신이 뒤에서 확인되지 않을 수 있어, 예약을 확실히 걸고 끝낸다.
-                guard listScope == scopeAtStart else {
-                    pendingRefresh = true
-                    throw CancellationError()
-                }
-                collected.append(contentsOf: slice.prs)
-                total = slice.totalCount ?? total
-                rateRemaining = slice.rateRemaining ?? rateRemaining
-                pageSize = slice.nextPageSize
-
+                guard let self, self.listScope == scopeAtStart else { return false }
                 // 아직 받는 중이라는 것을 목록이 알아야 "필터로 N건 숨김" 을 단정하지 않는다.
-                isLoadingMore = slice.hasNextPage && collected.count < limit
-                // 뒤가 남았으면 받은 데까지 먼저 그린다. 다 받은 것은 아래에서 한 번에 바꾼다 — 빠진 것은 그때야 안다.
-                // 올린 시각(최신 PR 이 위) 기준. 마지막 활동 시각은 행에 함께 보여준다.
-                if isLoadingMore {
-                    applyFetched(GitHubClient.deduped(collected).sorted { $0.createdAt > $1.createdAt },
-                                 baseline: baseline, isFinal: false)
-                }
-                if pages == 1 {
-                    // 이 줄과 아래 "PR 조회" 줄의 시각 차이가 곧 "먼저 그리고 이어 받은" 시간이다.
-                    Log.info("첫 페이지 \(collected.count)건 받음\(isLoadingMore ? " — 뒤는 이어 받는 중" : "")", "app")
-                }
-
-                guard slice.hasNextPage, let end = slice.endCursor else { break }
-                cursor = end
-                if collected.count >= limit {
-                    truncated = true
-                    break
-                }
+                self.isLoadingMore = true
+                self.applyFetched(partial, baseline: baseline, isFinal: false)
+                return true
             }
+            // 그냥 return 하면 탭을 옮기며 예약한 갱신이 뒤에서 확인되지 않을 수 있어, 예약을 확실히 걸고 끝낸다.
+            guard listScope == scopeAtStart else {
+                pendingRefresh = true
+                throw CancellationError()
+            }
+            var collected = result.prs
+            let total = result.total
+            let truncated = result.truncated
             isLoadingMore = false
             // 승인 탭: GitHub 검색 색인이 승인을 늦게 반영해, 방금 승인한 PR 이 한동안 검색에 안 온다
             // (사용자 피드백 — 방금 승인했는데 승인 탭에 없었다). 이 앱에서 승인한 것이면 따로 받아 합친다.
@@ -2119,6 +2098,7 @@ final class AppModel {
                 }
                 if !extra.isEmpty {
                     collected.append(contentsOf: extra)
+                    for pr in extra { knownPRs[pr.id] = pr }
                     Log.info("승인 탭: 검색에 아직 없는 방금 승인한 PR \(extra.count)건을 따로 받아 합쳤다", "app")
                 }
             }
@@ -2131,7 +2111,6 @@ final class AppModel {
             listFetchedAt[scopeAtStart.storageValue] = Date()
             seedOtherCaches(with: fetched, from: scopeAtStart)
             seedDeparted(from: before, fetched: fetched, since: fetchedBefore, source: scopeAtStart)
-            if let total, collected.count < total { truncated = true }
             listTruncated = truncated
             lastRefreshedAt = Date()
             githubError = nil
@@ -2144,7 +2123,8 @@ final class AppModel {
                 Task { [store] in await store.save(list: cached) }
             }
             consecutiveRefreshFailures = 0
-            Log.info("PR 조회 \(prs.count)건 / \(pages)페이지 (전체 \(total.map(String.init) ?? "?"), rate 잔여 \(rateRemaining.map(String.init) ?? "?"))", "app")
+            pruneKnownPRs()
+            Log.info("PR 조회 \(prs.count)건 — \(result.summary) (전체 \(total.map(String.init) ?? "?"), rate 잔여 \(rateRemaining.map(String.init) ?? "?"))", "app")
             // 처음 고를 때는 **필터된 목록**에서 고른다.
             // 전체 목록(prs)의 첫 번째를 고르면 필터에 걸려 왼쪽에 없는 PR 이 오른쪽에 떠서,
             // 목록에서 찾을 수 없는 것을 보고 있게 된다(실측: 재시작할 때마다 전체 최신 PR 이
@@ -2383,6 +2363,8 @@ final class AppModel {
                 Log.info("잠자기 해제", "queue")
                 // 잠자기 때문에 워커가 멈췄을 수 있다. 큐에 남은 잡을 반드시 다시 돌린다.
                 self.startWorkerIfNeeded()
+                // 자는 동안 무엇이 바뀌었는지 훑기만으로는 다 못 가를 수 있어 깨어나면 전부 받는다.
+                self.lastFullSync.removeAll()
                 Task {
                     await self.refresh()
                     self.startWorkerIfNeeded()

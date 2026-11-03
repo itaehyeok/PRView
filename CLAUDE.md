@@ -55,6 +55,7 @@ bash Scripts/release.sh 0.5.0 --promote   # 0.5.0 의 마지막 베타 zip 을 �
 bash Scripts/release.sh 0.6.0 --beta      # 공개한 뒤 새 목표의 첫 베타(목표 번호는 사용자가 정한다)
 bash Scripts/setup.sh             # 남에게 주는 설치·업데이트 (빌드 없이 릴리스를 받는다)
 bash Scripts/test.sh --integration        # 실제 gh 호출까지 (토큰 안 씀)
+bash Scripts/test.sh --fetch              # 두 단계 받기(훑기 → 바뀐 것만)가 전부 받기와 같은 목록인지 실제 GitHub 으로 (GraphQL 백 점 남짓)
 bash Scripts/test.sh --models             # 설치된 claude 에 별칭 → 모델을 묻는다 (토큰 안 씀)
 bash Scripts/test.sh --review <번호>      # 실제 Claude 리뷰 1건 (토큰 씀)
 PRAYER_EVAL_DIR=PRayer-eval-r1 bash Scripts/test.sh --review-batch <번호>,<번호> 4

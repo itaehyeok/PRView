@@ -105,6 +105,8 @@ public enum GitHubError: Error, LocalizedError, Sendable {
 enum GQLValue: Sendable {
     case string(String)
     case int(Int)
+    /// 배열은 `-f`/`-F` 로 넘길 수 없어 늘 JSON 본문으로 보낸다(`graphQLRequest`).
+    case strings([String])
 }
 
 /// 모든 GitHub 호출은 `gh` 서브프로세스를 경유한다. 앱은 토큰을 직접 보관하지 않는다.
@@ -200,8 +202,11 @@ public struct GitHubClient: Sendable {
     /// 그 밖의 글자가 든 요청만 본문(JSON)을 표준 입력으로 넘긴다 — 표준 입력은 바이트 그대로 간다.
     static func graphQLRequest(_ query: String, variables: [String: GQLValue]) -> (arguments: [String], stdin: String?) {
         let needsBody = variables.values.contains { value in
-            if case .string(let s) = value { return !s.unicodeScalars.allSatisfy(\.isASCII) }
-            return false
+            switch value {
+            case .string(let s): return !s.unicodeScalars.allSatisfy(\.isASCII)
+            case .int: return false
+            case .strings: return true
+            }
         }
         if needsBody {
             var values: [String: Any] = [:]
@@ -209,6 +214,7 @@ public struct GitHubClient: Sendable {
                 switch value {
                 case .string(let s): values[key] = s
                 case .int(let i): values[key] = i
+                case .strings(let list): values[key] = list
                 }
             }
             let body = (try? JSONSerialization.data(withJSONObject: ["query": query, "variables": values]))
@@ -220,6 +226,7 @@ public struct GitHubClient: Sendable {
             switch value {
             case .string(let s): args += ["-f", "\(key)=\(s)"]
             case .int(let i): args += ["-F", "\(key)=\(i)"]
+            case .strings: break  // needsBody 가 늘 본문으로 보낸다
             }
         }
         return (args, nil)
@@ -463,6 +470,56 @@ public struct GitHubClient: Sendable {
                                 endCursor: search.pageInfo?.endCursor,
                                 hasNextPage: search.pageInfo?.hasNextPage == true,
                                 nextPageSize: usedSize)
+    }
+
+    /// 훑은 목록 한 페이지(`PRProbe`).
+    public struct ProbeSlice: Sendable {
+        public var probes: [PRProbe]
+        public var totalCount: Int?
+        public var endCursor: String?
+        public var hasNextPage: Bool
+        public var rateRemaining: Int?
+        /// 이 요청에 든 값(GitHub 이 알려 준 rateLimit.cost).
+        public var cost: Int
+    }
+
+    /// 한 번에 훑는 건수. 훑기는 건수와 상관없이 1점이라 크게 잡는다(실측: 100건 1점).
+    public static let probePageSize = 100
+
+    /// 탭의 검색 조건 그대로 목록을 가볍게 훑는다 — 검색 쿼리는 `pullRequestSlice` 와 같아 순서(올린 시각)도 같다.
+    public func probeSlice(repos: [RepoID], scope: PRListScope, viewerLogin: String?,
+                           cursor: String? = nil) async throws -> ProbeSlice {
+        guard !repos.isEmpty else {
+            return ProbeSlice(probes: [], totalCount: 0, endCursor: nil, hasNextPage: false, rateRemaining: nil, cost: 0)
+        }
+        var variables: [String: GQLValue] = [
+            "q": .string(GitHubClient.searchQuery(repos: repos, scope: scope, viewerLogin: viewerLogin)),
+            "n": .int(GitHubClient.probePageSize),
+        ]
+        if let cursor { variables["after"] = .string(cursor) }
+        let data = try await withGatewayRetry(context: "PR 훑기") {
+            try await graphQL(GraphQL.prProbeList, variables: variables, as: PRProbeData.self)
+        }
+        guard let search = data.search else {
+            throw GitHubError.graphQL(["검색 결과가 비어 있습니다(권한 또는 rate limit 확인)."])
+        }
+        return ProbeSlice(probes: (search.nodes ?? []).compactMap { $0.toProbe() },
+                          totalCount: search.issueCount,
+                          endCursor: search.pageInfo?.endCursor,
+                          hasNextPage: search.pageInfo?.hasNextPage == true,
+                          rateRemaining: data.rateLimit?.remaining,
+                          cost: data.rateLimit?.cost ?? 0)
+    }
+
+    /// 노드 id 로 PR 을 자세히 받는다 — 목록과 같은 필드(`GraphQL.prFields`). 받을 것이 많으면 `PRFetchPlan.detailChunk`
+    /// 씩 나눠 부르는 것은 부르는 쪽 몫이다(그 사이사이 먼저 그리려고).
+    public func pullRequests(nodeIDs: [String]) async throws -> (prs: [PullRequestInfo], rateRemaining: Int?, cost: Int) {
+        guard !nodeIDs.isEmpty else { return ([], nil, 0) }
+        let data = try await withGatewayRetry(context: "PR 자세히") {
+            try await graphQL(GraphQL.prNodes, variables: ["ids": .strings(nodeIDs)], as: PRNodesData.self)
+        }
+        let prs = (data.nodes ?? []).compactMap { $0?.toInfo() }
+        return (prs, data.rateLimit?.remaining, data.rateLimit?.cost ?? 0)
     }
 
     public func pullRequests(repos: [RepoID],

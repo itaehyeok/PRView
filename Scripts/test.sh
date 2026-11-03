@@ -2,6 +2,7 @@
 # 단위 테스트(기본) / 통합 테스트(실제 gh·Claude 호출, 토큰 소모)
 #   Scripts/test.sh                 → 단위 테스트만
 #   Scripts/test.sh --integration   → GitHub 읽기 경로까지
+#   Scripts/test.sh --fetch         → 두 단계 받기가 전부 받기와 같은지(실제 GitHub)
 #   Scripts/test.sh --review 2717   → 실제 리뷰 1건까지 (토큰 소모)
 #   Scripts/test.sh --review-batch 2741,2806 [동시수] → 여러 건 리뷰 + 문체 채점 (토큰 소모)
 #   Scripts/test.sh --explain 2725 → 남의 코멘트 1건 쉬운 설명 (아주 적게 소모)
@@ -56,6 +57,10 @@ ARGS=(-project PRayer.xcodeproj -scheme PRayerCoreTests -configuration Debug
 case "${1:-}" in
   --integration)
     export TEST_RUNNER_PRAYER_INTEGRATION=1 ;;
+  --fetch)
+    # 두 단계 받기(훑기 → 바뀐 것만)가 전부 받기와 같은 목록을 내는지 실제 GitHub 으로 잰다(GraphQL 백 점 남짓).
+    export TEST_RUNNER_PRAYER_INTEGRATION=1
+    ARGS+=(-only-testing:PRayerCoreTests/TwoPhaseFetchIntegrationTests) ;;
   --models)
     export TEST_RUNNER_PRAYER_INTEGRATION=1
     ARGS+=(-only-testing:PRayerCoreTests/ModelCatalogTests/testInstalledCLIAnswersWithoutSpendingTokens) ;;
@@ -102,7 +107,7 @@ case "${1:-}" in
     [ -n "${4:-}" ] && export TEST_RUNNER_PRAYER_DEEP_MODEL="$4"
     ARGS+=(-only-testing:PRayerCoreTests/IntegrationTests/testDeepReviewPipeline) ;;
   *)
-    ARGS+=(-skip-testing:PRayerCoreTests/IntegrationTests) ;;
+    ARGS+=(-skip-testing:PRayerCoreTests/IntegrationTests -skip-testing:PRayerCoreTests/TwoPhaseFetchIntegrationTests) ;;
 esac
 
 run() { xcodebuild "${ARGS[@]}" >"$1" 2>&1; }
