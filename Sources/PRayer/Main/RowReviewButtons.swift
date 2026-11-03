@@ -14,11 +14,13 @@ import PRayerCore
 struct RowReviewButtons: View {
     @Environment(AppModel.self) private var model
     let pr: PullRequestInfo
+    /// 좁은 목록에서 "전체 리뷰" 를 "전체" 로 줄인다 — 번호가 밀려 두 줄로 접히지 않게(PRRow 가 자리를 보고 고른다).
+    var compact = false
 
     var body: some View {
         HStack(spacing: 4) {
             // 전체 리뷰를 앞에 둔다 — 더 꼼꼼한 쪽이다(우클릭 메뉴·리뷰 전 카드와 같은 순서). diff 는 폭을 아끼려고 아이콘을 뺐다.
-            button(.worktree, title: "전체 리뷰", showsSymbol: true)
+            button(.worktree, title: compact ? "전체" : "전체 리뷰", showsSymbol: true)
             button(.diff, title: "diff", showsSymbol: false)
         }
         .fixedSize()
@@ -52,6 +54,8 @@ struct RowCancelReviewButton: View {
     @Environment(AppModel.self) private var model
     let jobID: String
     let isQueued: Bool
+    /// 좁은 목록에서 "리뷰 취소" 를 "취소" 로 줄인다(RowReviewButtons.compact 와 같다).
+    var compact = false
 
     var body: some View {
         Button {
@@ -60,7 +64,7 @@ struct RowCancelReviewButton: View {
             HStack(spacing: 3) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .semibold))
-                Text("리뷰 취소")
+                Text(compact ? "취소" : "리뷰 취소")
                     .font(.caption2.weight(.medium))
             }
         }
