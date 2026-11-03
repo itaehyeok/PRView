@@ -473,7 +473,8 @@ struct ExclusionSettings: View {
             Section("크기 상한") {
                 Stepper("'큼' 표시 기준 \(model.settings.autoSizeCapLines)줄",
                         value: $model.settings.autoSizeCapLines, in: 100...5000, step: 100)
-                Stepper("리뷰 전 경고 \(model.settings.manualSizeWarnLines)줄",
+                // 리뷰 전 확인 창(ReviewSizeSheet)의 기준 칸과 같은 말로 쓴다 — 그 창에서도 이 값을 바꾼다.
+                Stepper("\(model.settings.manualSizeWarnLines.formatted())줄 넘으면 확인 창 띄우기",
                         value: $model.settings.manualSizeWarnLines, in: 200...10000, step: 100)
                 Text("리뷰에서 빼는 파일(아래)을 뺀 뒤의 변경 줄 수로 판단합니다. 상한을 넘으면 '큼' 표시만 붙고, 리뷰는 그대로 돌릴 수 있습니다.")
                     .font(.caption)

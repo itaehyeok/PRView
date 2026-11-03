@@ -3,7 +3,7 @@ import PRayerCore
 
 /// PR 여러 개에 한꺼번에 거는 리뷰의 확인 창(AppModel+BatchReview).
 ///
-/// 한 개일 때 따로 뜨던 확인 — 스냅샷 클론(SnapshotCloneConfirm)·큰 파일 빼기(SkipFilesSheet)·변경 많음(LargeReviewConfirm) —
+/// 한 개일 때 따로 뜨던 확인 — 스냅샷 클론(SnapshotCloneConfirm)·변경 많음과 큰 파일 빼기(ReviewSizeSheet) —
 /// 을 한 화면에 모아 한 번만 묻는다. 줄마다 체크를 빼면 그 PR 은 안 건다. 이미 리뷰 중인 PR 은 큐가 다시 받지 않으므로
 /// 체크를 끄고 막아 둔다. Esc 는 아무것도 걸지 않고 닫는다.
 struct BatchReviewSheet: View {

@@ -31,17 +31,11 @@ struct MainWindow: View {
             OnboardingView()
                 .interactiveDismissDisabled()
         }
-        // 변경이 많은 PR 은 큐에 넣기 전에 묻는다. 창을 닫는 길이 취소밖에 없으면
-        // 실수로 바깥을 눌렀을 때 요청이 사라진 건지 취소된 건지 알 수 없으므로,
-        // 어느 쪽으로 닫히든 요청을 비운다.
-        .sheet(item: Binding(get: { model.pendingLargeReview },
-                             set: { if $0 == nil { model.cancelPendingLargeReview() } })) { request in
-            LargeReviewConfirm(request: request)
-        }
-        // 한 파일이 1,000줄 넘게 바뀌었으면 "빼고 리뷰할까요?" 를 묻는다. 닫히는 길이 어느 쪽이든 요청을 비운다(위와 같은 이유).
-        .sheet(item: Binding(get: { model.pendingSkipFiles },
-                             set: { if $0 == nil { model.cancelPendingSkipFiles() } })) { request in
-            SkipFilesSheet(request: request)
+        // 변경이 많은 PR 은 큐에 넣기 전에 묻는다(경고 기준을 넘었거나 한 파일이 1,000줄 넘게 바뀜). 창을 닫는 길이
+        // 취소밖에 없으면 실수로 바깥을 눌렀을 때 요청이 사라진 건지 취소된 건지 알 수 없으므로, 어느 쪽으로 닫히든 요청을 비운다.
+        .sheet(item: Binding(get: { model.pendingReviewSize },
+                             set: { if $0 == nil { model.cancelPendingReviewSize() } })) { request in
+            ReviewSizeSheet(request: request)
         }
         // 전체 리뷰를 처음 누르면 PR 스냅샷을 받을지 묻는다. 닫히는 길이 어느 쪽이든 요청을 비운다(위와 같은 이유).
         .sheet(item: Binding(get: { model.pendingSnapshotClone },

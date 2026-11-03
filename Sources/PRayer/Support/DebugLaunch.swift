@@ -108,9 +108,12 @@ enum DebugLaunch {
         return min(first, last)...max(first, last)
     }
     static var addExclusion: String? { value("PRAYER_DEBUG_ADD_EXCLUSION") }
-    /// `PRAYER_DEBUG_SKIP_SHEET=줄수` — 고른 PR 에서 그 줄 수 넘게 바뀐 파일로 리뷰 전 확인 창(SkipFilesSheet)을 띄운다.
+    /// `PRAYER_DEBUG_SKIP_SHEET=줄수` — 고른 PR 로 리뷰 전 확인 창(ReviewSizeSheet)을 기준과 상관없이 띄운다(줄 수는 이 창에선 안 쓴다).
     /// 묶음 확인 창(`PRAYER_DEBUG_BATCH_REVIEW`)에서는 "큰 파일" 기준을 그 줄 수로 낮춘다.
     static var skipSheetMinLines: Int? { value("PRAYER_DEBUG_SKIP_SHEET").flatMap(Int.init) }
+    /// `PRAYER_DEBUG_SKIP_SHEET_OFF=개수|all` — 그 창을 위에서부터 그 개수만큼(all 이면 전부) 체크를 푼 채로 연다.
+    /// 앱에 클릭을 넣을 수 없어서, 푼 모양(흐린 줄·버튼 이름·목록만 안내)을 찍으려고 둔다.
+    static var skipSheetOff: String? { value("PRAYER_DEBUG_SKIP_SHEET_OFF") }
     static var snapshotConfirm: String? { value("PRAYER_DEBUG_SNAPSHOT_CONFIRM") }
     static var exclusionQuery: String? { value("PRAYER_DEBUG_EXCLUSION_QUERY") }
     static var repoQuery: String? { value("PRAYER_DEBUG_REPO_QUERY") }
@@ -326,19 +329,21 @@ struct DebugLaunchModifier: ViewModifier {
                 if let confirm = DebugLaunch.snapshotConfirm, let pr = model.selectedPR {
                     model.pendingSnapshotClone = PendingSnapshotClone(pr: pr, missingLinkedPath: confirm == "1" ? nil : confirm)
                 }
-                // 리뷰 전 확인 창만 띄운다(위와 같은 이유로 reviewNow 는 부르지 않는다). 값은 물을 줄 수 기준 —
-                // 지금 PR 에 해당 파일이 없어도 창 모양을 볼 수 있게 낮춰서 고른다.
+                // 리뷰 전 확인 창만 띄운다(위와 같은 이유로 reviewNow 는 부르지 않는다). 기준과 상관없이 띄워
+                // 작은 PR 로도 창 모양을 볼 수 있게 한다.
                 // 목록에 없는 PR 이면 받아 오는 동안 selectedPR 이 비어 있다. 잠깐 기다린다.
                 for _ in 0..<100 where DebugLaunch.skipSheetMinLines != nil && model.selectedPR == nil {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
-                if let minLines = DebugLaunch.skipSheetMinLines, let pr = model.selectedPR {
+                if DebugLaunch.skipSheetMinLines != nil, let pr = model.selectedPR {
                     if let diff = await model.waitForDiff(for: pr) {
-                        let files = diff.files.filter { !$0.isBinary && !$0.isDeleted && $0.changedLines >= minLines }
-                        if !files.isEmpty {
-                            model.pendingSkipFiles = PendingSkipFiles(pr: pr, deep: false, files: files,
-                                                                      totalLines: diff.changedLines)
+                        let request = PendingReviewSize(pr: pr, deep: false, diff: diff,
+                                                        modelOverride: nil, effortOverride: nil)
+                        if let off = DebugLaunch.skipSheetOff {
+                            let count = off == "all" ? request.files.count : Int(off) ?? 0
+                            model.reviewSizeSkips[pr.id] = Set(request.files.prefix(count).map(\.path))
                         }
+                        model.pendingReviewSize = request
                     }
                 }
                 if let stage = DebugLaunch.cloneProgress, let pr = model.selectedPR,

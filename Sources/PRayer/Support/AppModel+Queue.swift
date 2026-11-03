@@ -263,8 +263,8 @@ extension AppModel {
     /// 모델·effort 는 이 PR 에 고른 것이 있으면 그것, 없으면 기본값이다(모델·Effort 두 칸 — ReviewModelControl).
     ///
     /// 전체 리뷰인데 PR 스냅샷이 아직 없으면 먼저 묻는다(처음 한 번 클론 — `snapshotConfirmed` 는 그 확인을 거쳤다는 뜻).
-    /// - Parameter skipPaths: 리뷰 전 확인 창의 답. nil 이면 아직 묻지 않았다 — 한 파일이 1,000줄 넘게 바뀌었으면 묻는다.
-    ///   빈 배열은 "모두 리뷰", 값이 있으면 이번 리뷰에서만 그 파일을 뺀다.
+    /// - Parameter skipPaths: 리뷰 전 창의 답. nil 이면 아직 묻지 않았다 — 변경이 확인 창 기준보다 많거나 한 파일이 1,000줄 넘게
+    ///   바뀌었으면 묻는다. 빈 배열은 "전부 리뷰", 값이 있으면 이번 리뷰에서만 그 파일의 내용을 뺀다(파일명·줄 수는 간다).
     func reviewNow(pr: PullRequestInfo, deep: Bool = false, snapshotConfirmed: Bool = false, skipPaths: [String]? = nil) {
         guard pr.isOpen else {
             banner = Banner(kind: .warning, message: "닫힌 PR 은 리뷰할 수 없습니다.")
@@ -274,9 +274,11 @@ extension AppModel {
             pendingSnapshotClone = PendingSnapshotClone(pr: pr, missingLinkedPath: missing)
             return
         }
+        let choice = reviewModelChoice(for: pr)
         if skipPaths == nil {
             guard let diff = parsedDiff(for: pr) else {
-                // 목록에서 바로 누르면 diff 를 아직 안 받았을 수 있다. 받아 본 뒤 다시 들어온다 — 못 받으면 묻지 않고 진행한다.
+                // 목록에서 바로 누르면 diff 를 아직 안 받았을 수 있다. 받아 본 뒤 다시 들어온다 — 못 받으면 고를 파일 목록을
+                // 만들 수 없으니 묻지 않고 진행한다.
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     let loaded = await self.waitForDiff(for: pr)
@@ -284,63 +286,38 @@ extension AppModel {
                 }
                 return
             }
-            let files = SkippableFiles.find(in: diff)
-            if !files.isEmpty {
-                pendingSkipFiles = PendingSkipFiles(pr: pr, deep: deep, files: files, totalLines: diff.changedLines)
+            if diff.changedLines > settings.manualSizeWarnLines || !SkippableFiles.find(in: diff).isEmpty {
+                pendingReviewSize = PendingReviewSize(pr: pr, deep: deep, diff: diff,
+                                                      modelOverride: choice.model, effortOverride: choice.effort)
                 return
             }
         }
-        let skip = skipPaths ?? []
-        let choice = reviewModelChoice(for: pr)
-        let lines = parsedDiff(for: pr)?.applyingExclusions(settings.excludedPathPatterns + skip).changedLines
-            ?? pr.changedLines
-        if lines > settings.manualSizeWarnLines {
-            pendingLargeReview = PendingLargeReview(pr: pr, lines: lines,
-                                                    modelOverride: choice.model, effortOverride: choice.effort,
-                                                    deep: deep, skipPaths: skip, fallbackModel: settings.model)
-            return
-        }
         enqueue(pr: pr, trigger: .manual, front: true,
-                modelOverride: choice.model, effortOverride: choice.effort, deep: deep, skipPaths: skip)
+                modelOverride: choice.model, effortOverride: choice.effort, deep: deep, skipPaths: skipPaths ?? [])
     }
 
-    /// 확인 창에서 "그대로 진행" 을 누른 뒤.
-    func confirmPendingLargeReview() {
-        guard let request = pendingLargeReview else { return }
-        pendingLargeReview = nil
+    /// 리뷰 전 창의 답. `skipped` 는 체크를 푼 파일 경로 — 이번 리뷰에서만 내용을 빼고 파일명·줄 수만 보낸다.
+    ///
+    /// 전부 풀었으면 목록만으로 리뷰하므로 전체 리뷰를 눌렀어도 클론을 쓰지 않는다(엔진도 막지만, 큐 카드가 '전체 리뷰' 로
+    /// 보이고 클론을 준비하지 않게 여기서 끈다). 창에서 고친 확인 창 기준은 리뷰를 시작할 때 저장한다 — 취소하면 남기지 않는다.
+    func answerPendingReviewSize(skipped: Set<String>, warnLines: Int) {
+        guard let request = pendingReviewSize else { return }
+        pendingReviewSize = nil
+        reviewSizeSkips[request.pr.id] = skipped
+        if warnLines != settings.manualSizeWarnLines {
+            settings.manualSizeWarnLines = warnLines
+        }
+        let skippedFiles = request.files.filter { skipped.contains($0.path) }
+        let listOnly = !request.files.isEmpty && skippedFiles.count == request.files.count
         enqueue(pr: request.pr, trigger: .manual, front: true,
-                modelOverride: request.modelOverride, effortOverride: request.effortOverride, deep: request.deep,
-                skipPaths: request.skipPaths)
+                modelOverride: request.modelOverride, effortOverride: request.effortOverride,
+                deep: request.deep && !listOnly,
+                skipPaths: skippedFiles.map { ExclusionPattern.file($0.path) })
         Task { await save() }
     }
 
-    /// 리뷰 전 확인 창의 답. `skip` 이면 물은 파일을 이번 리뷰에서 빼고, `remember` 면 제외 경로에도 넣어 다음부터 묻지 않는다.
-    func answerPendingSkipFiles(skip: Bool, remember: Bool) {
-        guard let request = pendingSkipFiles else { return }
-        pendingSkipFiles = nil
-        let rules = request.files.map { ExclusionPattern.file($0.path) }
-        var skipPaths: [String] = []
-        if skip, remember {
-            // 규칙이 되면 이번 리뷰에서도 저절로 빠진다.
-            for rule in rules { addExclusion(rule) }
-            banner = Banner(kind: .info,
-                            message: "다음부터 이 파일 \(rules.count)개는 묻지 않고 뺍니다. 설정 › 대상 제외에서 지울 수 있습니다.")
-        } else if skip {
-            skipPaths = rules
-        }
-        // 변경이 많으면 이어서 그 확인 창이 뜬다. 앞 창이 내려가는 중에 다음 창을 올리면 SwiftUI 가 무시해서 잠깐 기다린다.
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            self?.reviewNow(pr: request.pr, deep: request.deep, snapshotConfirmed: true, skipPaths: skipPaths)
-        }
-    }
-
-    func cancelPendingSkipFiles() {
-        pendingSkipFiles = nil
-    }
-
-    func cancelPendingLargeReview() {
-        pendingLargeReview = nil
+    func cancelPendingReviewSize() {
+        pendingReviewSize = nil
     }
 
     // MARK: - PR 스냅샷

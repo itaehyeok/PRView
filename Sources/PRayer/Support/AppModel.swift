@@ -374,10 +374,11 @@ final class AppModel {
     /// 내 채널을 받는 중인가(`loadMySlackChannels`). 판을 닫았다 열어도 이어서 보이게 모델에 둔다 — 처음 한 번 1분 넘게 걸린다.
     var slackChannelsLoading: SlackChannelsLoading?
     var slackChannelsError: SlackConnectorError?
-    /// 변경이 많아 확인을 기다리는 리뷰. 값이 있으면 확인 창이 뜬다.
-    var pendingLargeReview: PendingLargeReview?
-    /// 한 파일이 1,000줄 넘게 바뀌어 "빼고 리뷰할까요?" 를 기다리는 리뷰(SkippableFiles). 값이 있으면 창이 뜬다.
-    var pendingSkipFiles: PendingSkipFiles?
+    /// 변경이 많아 리뷰 전 창(ReviewSizeSheet)의 답을 기다리는 리뷰. 값이 있으면 창이 뜬다.
+    var pendingReviewSize: PendingReviewSize?
+    /// PR 마다 리뷰 전 창에서 체크를 푼 파일. 같은 PR 을 다시 리뷰할 때(새 커밋 등) 그대로 풀린 채로 연다.
+    /// 앱을 끄면 잊는다 — 같은 날 다시 리뷰할 때 고르기를 되풀이하지 않게 하려는 것이라 저장까지 하지 않았다.
+    var reviewSizeSkips: [String: Set<String>] = [:]
     /// 제외 규칙 자동완성의 재료(레포 파일·최근 PR 의 바뀐 파일). 설정 › 대상 제외를 열 때 받는다(AppModel+Exclusions).
     var exclusionCatalog: ExclusionCatalog?
     var exclusionCatalogState: ExclusionCatalogState = .idle
@@ -2545,32 +2546,29 @@ struct PendingCloneAction: Identifiable {
     }
 }
 
-struct PendingLargeReview: Identifiable {
+/// 리뷰 버튼을 눌렀는데 변경이 커서 확인 창(ReviewSizeSheet)의 답을 기다리는 리뷰 — 변경이 확인 창 기준보다 많거나,
+/// 한 파일이 1,000줄 넘게 바뀌었다.
+struct PendingReviewSize: Identifiable {
     let pr: PullRequestInfo
-    let lines: Int
+    let deep: Bool
+    /// 고를 수 있는 파일 — 지금 규칙(잠금 파일·제외 경로)을 뺀 뒤 내용이 있는 것, 바뀐 줄 많은 순.
+    /// 바이너리·이름만 바뀐 파일은 원래 이름만 가서 고를 것이 없다.
+    let files: [DiffFile]
+    /// 지금 규칙을 뺀 뒤의 변경 줄 수.
+    let totalLines: Int
     let modelOverride: String?
     let effortOverride: String?
-    let deep: Bool
-    /// 앞 창(빼고 리뷰할까요?)에서 이번만 빼기로 한 파일.
-    var skipPaths: [String] = []
-    /// 모델을 따로 고르지 않았을 때 실제로 쓸 모델(설정의 기본값).
-    let fallbackModel: String
+
+    init(pr: PullRequestInfo, deep: Bool, diff: ParsedDiff, modelOverride: String?, effortOverride: String?) {
+        self.pr = pr
+        self.deep = deep
+        self.files = diff.files
+            .filter { !$0.isBinary && $0.changedLines > 0 }
+            .sorted { $0.changedLines != $1.changedLines ? $0.changedLines > $1.changedLines : $0.path < $1.path }
+        self.totalLines = diff.changedLines
+        self.modelOverride = modelOverride
+        self.effortOverride = effortOverride
+    }
 
     var id: String { pr.id }
-    var number: Int { pr.number }
-    var title: String { pr.title }
-    var modelID: String { modelOverride ?? fallbackModel }
-}
-
-/// 리뷰 버튼을 눌렀는데 한 파일이 1,000줄 넘게 바뀌어 묻는 중인 리뷰(SkipFilesSheet).
-struct PendingSkipFiles: Identifiable {
-    let pr: PullRequestInfo
-    let deep: Bool
-    /// 물을 파일들(`SkippableFiles.find`).
-    let files: [DiffFile]
-    /// 지금 규칙(잠금 파일·제외 경로)을 뺀 뒤의 변경 줄 수.
-    let totalLines: Int
-
-    var id: String { pr.id }
-    var skippedLines: Int { files.reduce(0) { $0 + $1.changedLines } }
 }
