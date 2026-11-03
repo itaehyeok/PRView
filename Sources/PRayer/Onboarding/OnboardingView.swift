@@ -369,8 +369,9 @@ struct RepoPickerStep: View {
     @Environment(AppModel.self) private var model
     /// 온보딩에서는 제목이 필요하지만, 설정 화면은 섹션 제목이 이미 같은 말을 한다.
     var showsTitle = true
-    /// 켜 둔 레포 아래에 전체 리뷰용 로컬 클론 경로 칸을 붙인다. 설정 화면과 레포 관리 팝오버에서 켠다 —
-    /// 온보딩은 레포 고르기에 집중하고, 전체 리뷰는 나중에 필요할 때 정해도 된다.
+    /// 켜 둔 레포 아래에 전체 리뷰용 로컬 클론 경로 칸을 붙인다. 설정 화면에서 켠다 —
+    /// 온보딩은 레포 고르기에 집중하고, 전체 리뷰는 나중에 필요할 때 정해도 된다. 레포 관리 팝오버도 예전엔 켰는데,
+    /// 켜고 끄려고 여는 곳이라 "PR 스냅샷 없음" 줄이 레포마다 붙어 길기만 해서 뺐다(2026-11-03 사용자 결정).
     var showsClonePaths = false
     /// 잠깐 강조할 레포("경로 설정…" 바로 가기로 왔을 때). 목록을 그 줄까지 내린다.
     var highlightedRepo: RepoID?
@@ -439,12 +440,11 @@ struct RepoPickerStep: View {
             }
 
             // 설정 창(레포 줄 아래 PR 스냅샷이 보이는 곳)에서는 목록 아래 긴 설명을 뺐다(2026-10-23 사용자 결정).
-            // 처음 고르는 온보딩과 툴바 팝오버의 짧은 줄은 그대로 둔다.
-            if compact || !showsClonePaths {
-                Text(compact
-                     ? "체크를 끄면 조회·알림만 멈춥니다(설정은 남음) · 아예 빼려면 우클릭 · Approve N명 필요 는 머지 조건"
-                     : "고른 레포는 맨 위로 올라옵니다. 체크를 끄면 조회·알림만 멈추고 Approve 수는 남습니다(아예 빼려면 우클릭 → 목록에서 빼기). `Approve N명 필요` 는 GitHub 브랜치 규칙에서 읽은 머지 조건입니다 — 브랜치마다 다르면 PR 마다 그 PR 이 향하는 브랜치의 수를 쓰고, 못 읽으면 직접 정한 값(처음 3명 — 팀 기준에 맞게 고치세요)을 씁니다. 앱을 켤 때와 새로고침할 때 다시 읽습니다.")
-                    .font(compact ? .caption2 : .caption)
+            // 툴바 팝오버의 짧은 줄도 뺐다(2026-11-03 사용자 결정) — 체크가 하는 일은 줄에 마우스를 올리면 나온다.
+            // 처음 고르는 온보딩만 남긴다.
+            if !compact && !showsClonePaths {
+                Text("고른 레포는 맨 위로 올라옵니다. 체크를 끄면 조회·알림만 멈추고 Approve 수는 남습니다(아예 빼려면 우클릭 → 목록에서 빼기). `Approve N명 필요` 는 GitHub 브랜치 규칙에서 읽은 머지 조건입니다 — 브랜치마다 다르면 PR 마다 그 PR 이 향하는 브랜치의 수를 쓰고, 못 읽으면 직접 정한 값(처음 3명 — 팀 기준에 맞게 고치세요)을 씁니다. 앱을 켤 때와 새로고침할 때 다시 읽습니다.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -627,10 +627,10 @@ struct RepoOptionRow: View {
     let option: RepoOption
     /// 목록에 올린 레포면 설정이 있다(켜 뒀든 꺼 뒀든). 없으면 아직 고른 적이 없다.
     let config: RepoConfig?
-    /// 켜 둔 레포 아래에 전체 리뷰 클론 줄(PR 스냅샷·예전 연결)을 붙인다(설정 화면·레포 관리 팝오버).
+    /// 켜 둔 레포 아래에 전체 리뷰 클론 줄(PR 스냅샷·예전 연결)을 붙인다(설정 화면).
     var showsClonePath = false
     var isHighlighted = false
-    /// 레포 관리 팝오버의 줄 — 이름 아래에 Approve 수를 적고, 오른쪽에 목록 건수·숨은 이유를 둔다.
+    /// 레포 관리 팝오버의 줄 — 이름 한 줄과, 오른쪽에 목록 건수·숨은 이유를 둔다.
     /// 대상 브랜치를 고치는 칸은 설정 창에만 둔다(한 번 정하면 거의 바꾸지 않는다).
     var compact = false
 
@@ -684,21 +684,20 @@ struct RepoOptionRow: View {
     @ViewBuilder
     private var label: some View {
         if compact, let config {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    Text(option.repo.name).font(.callout)
-                    if option.isPrivate {
-                        Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.secondary)
-                    }
+            // 이름 아래 Approve 수 줄은 뺐다 — 켜고 끄려고 여는 곳이라 없어도 된다(2026-11-03 사용자 결정, 설정 창에는 남는다).
+            HStack(spacing: 4) {
+                Text(option.repo.name)
+                    .font(.callout)
+                    .foregroundStyle(config.enabled ? .primary : .secondary)
+                if option.isPrivate {
+                    Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.secondary)
                 }
-                .foregroundStyle(config.enabled ? .primary : .secondary)
-                Text(RepoConfigRow.summary(config)
-                     + (RepoConfigRow.sourceLabel(config).map { " · \($0)" } ?? "")
-                     + (config.enabled ? "" : " · 꺼 둠"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if !config.enabled {
+                    Text("꺼 둠").font(.caption2).foregroundStyle(.secondary)
+                }
             }
-            .help(option.repo.full)
+            // 목록 아래 안내 문장을 뺀 대신, 체크가 무엇을 하는지는 마우스를 올리면 나온다.
+            .help("\(option.repo.full) — 체크를 끄면 조회·알림을 멈춥니다(설정은 남음) · 아예 빼려면 우클릭")
         } else {
             HStack(spacing: 6) {
                 Text(option.repo.full)
