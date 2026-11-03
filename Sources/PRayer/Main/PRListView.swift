@@ -736,8 +736,11 @@ struct PRRow: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 4)
-                // 리뷰 전 PR 에 마우스를 올리면 시각 자리에 리뷰 버튼을 띄운다(RowReviewButtons). 좁아서 시각을 뺀 행에도 띄운다.
-                if showsRowActions, badge.badge == .notReviewed, pr.isOpen {
+                // 마우스를 올리면 시각 자리에 리뷰 버튼(리뷰 전)이나 취소 버튼(도는 중·대기 중)을 띄운다(RowReviewButtons).
+                // 좁아서 시각을 뺀 행에도 띄운다.
+                if let activeJob, showsRowActions {
+                    RowCancelReviewButton(jobID: activeJob.id, isQueued: activeJob.state == .queued)
+                } else if showsRowActions, badge.badge == .notReviewed, pr.isOpen {
                     RowReviewButtons(pr: pr)
                 // 마지막 활동 시각은 따로 찍지 않는다 — 아래 Recent activity 첫 줄이 곧 그 시각이다.
                 } else if density.showsCreatedAt {
@@ -803,7 +806,7 @@ struct PRRow: View {
         .onHover { isHovering = $0 }
     }
 
-    /// 행에 마우스가 올라와 있다 — 시각 자리에 행 버튼을 띄운다. 리뷰가 돌기 시작하면 배지가 바뀌어 버튼이 바로 빠진다.
+    /// 행에 마우스가 올라와 있다 — 시각 자리에 행 버튼을 띄운다. 리뷰가 돌기 시작하면 리뷰 버튼이 취소 버튼으로 바로 바뀐다.
     private var showsRowActions: Bool {
         isHovering || DebugLaunch.rowReviewButtons == pr.number
     }

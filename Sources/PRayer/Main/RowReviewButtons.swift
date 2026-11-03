@@ -43,15 +43,44 @@ struct RowReviewButtons: View {
     }
 }
 
-/// 행 버튼 모양. 평소엔 회색 테두리만, 올리면 강조색 — 행 안에서 시각 글자 자리를 차지하므로 튀지 않게 옅게 그린다.
+/// 리뷰가 도는 중이거나 큐에서 기다리는 PR 행에 마우스를 올리면 같은 자리에 뜨는 취소 버튼. 우클릭 메뉴의 "리뷰 취소" 와
+/// 같은 일을 한다 — 우클릭은 눈에 안 보여서, 리뷰를 건 자리에서 바로 거둘 수 있게 했다(사용자, 2026-11-03).
+/// 확인은 묻지 않는다 — 초안은 리뷰가 끝나야 저장되므로 취소해서 잃는 것은 그때까지 쓴 토큰뿐이고, 전에 만든 초안은
+/// 그대로 남는다(우클릭 취소와 같다).
+struct RowCancelReviewButton: View {
+    @Environment(AppModel.self) private var model
+    let jobID: String
+    let isQueued: Bool
+
+    var body: some View {
+        Button {
+            model.cancel(jobID: jobID)
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .semibold))
+                Text("리뷰 취소")
+                    .font(.caption2.weight(.medium))
+            }
+        }
+        .buttonStyle(RowReviewButtonStyle(tint: .red))
+        .fixedSize()
+        .help(isQueued ? "큐에서 뺍니다 — 아직 시작하지 않았습니다" : "도는 리뷰를 멈춥니다 — 이번 리뷰의 초안은 만들어지지 않습니다")
+    }
+}
+
+/// 행 버튼 모양. 평소엔 회색 테두리만, 올리면 `tint` 색 — 행 안에서 시각 글자 자리를 차지하므로 튀지 않게 옅게 그린다.
 /// 높이는 상태 칩보다 낮게 둬서 버튼이 떠도 행 높이가 바뀌지 않는다.
 private struct RowReviewButtonStyle: ButtonStyle {
+    var tint: Color = .accentColor
+
     func makeBody(configuration: Configuration) -> some View {
-        Styled(configuration: configuration)
+        Styled(configuration: configuration, tint: tint)
     }
 
     private struct Styled: View {
         let configuration: ButtonStyleConfiguration
+        let tint: Color
         @State private var isHovering = false
 
         var body: some View {
@@ -60,9 +89,9 @@ private struct RowReviewButtonStyle: ButtonStyle {
                 .lineLimit(1)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1)
-                .foregroundStyle(isHovering ? Color.accentColor : Color.secondary)
-                .background(shape.fill(Color.accentColor.opacity(configuration.isPressed ? 0.22 : (isHovering ? 0.12 : 0))))
-                .overlay(shape.strokeBorder(isHovering ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.18),
+                .foregroundStyle(isHovering ? tint : Color.secondary)
+                .background(shape.fill(tint.opacity(configuration.isPressed ? 0.22 : (isHovering ? 0.12 : 0))))
+                .overlay(shape.strokeBorder(isHovering ? tint.opacity(0.55) : Color.primary.opacity(0.18),
                                             lineWidth: 0.5))
                 .contentShape(shape)
                 .onHover { isHovering = $0 }
