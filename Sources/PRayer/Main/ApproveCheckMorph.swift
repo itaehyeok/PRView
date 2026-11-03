@@ -1,12 +1,12 @@
 import SwiftUI
 
 /// "리뷰 없이 Approve" 가 올라간 순간의 짧은 연출(시안 B, 사용자 선택 2026-10-27). 누른 버튼이 초록 동그라미로
-/// 줄어들며 체크가 그려지고 물결이 한 번 퍼진 뒤, 결과 알약("이 커밋에 Approve 했어요")으로 바뀐다.
-/// 예전에는 결과 알약으로 뚝 바뀌어 눌러서 무슨 일이 났는지가 한눈에 안 들어왔다.
+/// 줄어들며 체크가 그려지고 물결이 한 번 퍼진 뒤, 결과 글("이 커밋에 Approve 했어요")로 바뀐다.
+/// 예전에는 결과로 뚝 바뀌어 눌러서 무슨 일이 났는지가 한눈에 안 들어왔다.
 ///
 /// 시스템 버튼은 모양·색을 바꿀 수 없어서, 올라간 순간 버튼 자리를 같은 크기의 이 뷰로 바꿔 그린다.
 /// 끝나면 `onFinish` — 부르는 쪽이 이 뷰를 걷고 진짜 `PostedStatusLabel` 을 그린다(마지막 모습이 같아 튀지 않는다).
-/// 손쉬운 사용의 "동작 줄이기" 가 켜져 있으면 줄고 그려지는 움직임 없이 결과 알약으로 서서히 바뀌기만 한다.
+/// 손쉬운 사용의 "동작 줄이기" 가 켜져 있으면 줄고 그려지는 움직임 없이 결과 글로 서서히 바뀌기만 한다.
 struct ApproveCheckMorph: View {
     /// 바뀌기 전 버튼 크기. 이 자리에서 줄어들기 시작한다.
     let from: CGSize
@@ -23,6 +23,12 @@ struct ApproveCheckMorph: View {
     @State private var rippleScale: CGFloat = 0.7
     @State private var rippleOpacity: Double = 0
     @State private var showsLabel = false
+    /// 결과 글의 폭. 끝에 동그라미가 그 글 앞 체크 아이콘 자리로 옮겨 가려고 잰다.
+    @State private var labelWidth: CGFloat = 0
+
+    /// 결과 글 앞 체크 아이콘의 지름과, 글 왼쪽 끝에서 그 가운데까지(본문 글자 크기, 캡처로 잼).
+    private static let iconDiameter: CGFloat = 14
+    private static let iconCenterInset: CGFloat = 7
 
     var body: some View {
         let side = max(from.height, 20)
@@ -52,9 +58,13 @@ struct ApproveCheckMorph: View {
                     .frame(width: side * 0.6, height: side * 0.6)
             }
             .scaleEffect(pulse ? 1.14 : 1)
-            .scaleEffect(showsLabel ? 0.7 : 1)
+            // 끝에는 결과 글 앞 체크 아이콘 자리로 줄어들며 옮겨 가 그 아이콘이 된다. 제자리에서 흐려지면 바탕 없는
+            // 결과 글의 글자 위에 동그라미가 겹쳐 비쳤다. 동작 줄이기(접지 않음)에서는 예전처럼 제자리에서 흐려진다.
+            .scaleEffect(showsLabel ? (collapsed ? Self.iconDiameter / side : 0.7) : 1)
+            .offset(x: showsLabel && collapsed ? Self.iconCenterInset - labelWidth / 2 : 0)
             .opacity(showsLabel ? 0 : 1)
             PostedStatusLabel(text: text)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { labelWidth = $0 }
                 .opacity(showsLabel ? 1 : 0)
                 .offset(y: showsLabel ? 0 : 4)
         }
