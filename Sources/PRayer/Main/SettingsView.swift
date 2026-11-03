@@ -7,7 +7,7 @@ import PRayerCore
 /// 설정 창은 늘 "연결" 탭으로 열린다. 그래서 다른 탭의 칸을 가리키며 "설정 열기" 를 누르면 그 칸이 없는
 /// 탭이 떠서 칸이 사라진 것처럼 보였다. 그래서 여는 쪽이 목적지를 같이 넘긴다.
 enum SettingsFocus: Equatable {
-    /// "레포·팀 규칙" 탭에서 이 레포 줄(바로 아래에 PR 스냅샷 줄이 있다). nil 이면 탭만 연다.
+    /// "레포·팀원" 탭에서 이 레포 줄(바로 아래에 PR 스냅샷 줄이 있다). nil 이면 탭만 연다.
     case clonePath(RepoID?)
     /// "연결" 탭 — 리뷰 모델 메뉴의 "Codex 연결하기…" 처럼 안 붙인 엔진을 붙이러 올 때.
     case connection
@@ -35,9 +35,11 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $selection) {
             ConnectionSettings().tabItem { Label("연결", systemImage: "link") }.tag("연결")
-            ReposSettings().tabItem { Label("레포·팀 규칙", systemImage: "shippingbox") }.tag("레포")
+            // 탭 이름은 든 것을 말한다(2026-11-03 사용자 결정). "레포·팀 규칙" 은 리뷰 탭의 "내 리뷰 규칙" 과 헷갈렸고,
+            // "대상 제외" 에는 빼는 파일 말고 크기 기준도 있다. 태그는 DebugLaunch 가 쓰니 그대로 둔다.
+            ReposSettings().tabItem { Label("레포·팀원", systemImage: "shippingbox") }.tag("레포")
             ReviewSettings().tabItem { Label("리뷰", systemImage: "sparkles") }.tag("리뷰")
-            ExclusionSettings().tabItem { Label("대상 제외", systemImage: "line.3.horizontal.decrease.circle") }.tag("제외")
+            ExclusionSettings().tabItem { Label("리뷰 대상", systemImage: "line.3.horizontal.decrease.circle") }.tag("제외")
             // 내 PR 우클릭 "슬랙 리뷰 요청 글 만들기" 의 연동·보낼 곳(글 형식은 고정이라 칸이 없다).
             SlackSettingsTab().tabItem { Label("슬랙", systemImage: "paperplane") }.tag("슬랙")
             NotificationSettings().tabItem { Label("알림·기타", systemImage: "bell") }.tag("알림")
@@ -457,7 +459,7 @@ struct ReviewSettings: View {
             ReviewRulesSection(rules: $model.settings.reviewRules)
 
             // "전체 리뷰"(기본 모델을 같이 쓴다·PR 스냅샷 위치·동작 방식)와 "코멘트·게시"(상한·게시 방식) 설명 절은
-            // 뺐다 — 고칠 칸 없이 설명만 있었다(2026-10-23 사용자 결정). PR 스냅샷은 '레포·팀 규칙' 탭의 각 레포 아래에 있다.
+            // 뺐다 — 고칠 칸 없이 설명만 있었다(2026-10-23 사용자 결정). PR 스냅샷은 '레포·팀원' 탭의 각 레포 아래에 있다.
         }
         .formStyle(.grouped)
         .onDisappear { Task { await model.save() } }

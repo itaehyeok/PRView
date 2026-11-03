@@ -269,7 +269,7 @@ public enum WorktreeError: LocalizedError {
             return "폴더가 아닙니다: \(path)"
         case .notARepository(let path):
             // 클론 폴더를 고르는 칸은 0.5.0 에서 없앴다(PR 스냅샷). 예전에 연결한 폴더이거나 망가진 스냅샷이다.
-            return "git 저장소가 아닙니다: \(path)\n설정 → 레포·팀 규칙에서 이 레포의 클론 연결을 끊거나 PR 스냅샷을 지우면, 다음 전체 리뷰 때 PR 스냅샷을 새로 받습니다."
+            return "git 저장소가 아닙니다: \(path)\n설정 → 레포·팀원에서 이 레포의 클론 연결을 끊거나 PR 스냅샷을 지우면, 다음 전체 리뷰 때 PR 스냅샷을 새로 받습니다."
         case .addFailed(let message):
             return "워크트리를 만들지 못했습니다: \(message)"
         case .checkoutFailed(let message):
@@ -282,7 +282,7 @@ public enum WorktreeError: LocalizedError {
                 고른 폴더: \(path)
                 그 폴더의 origin: \(found)
                 필요한 저장소: \(expected)
-                설정 → 레포·팀 규칙에서 이 레포의 연결을 끊으면 PR 스냅샷으로 리뷰합니다.
+                설정 → 레포·팀원에서 이 레포의 연결을 끊으면 PR 스냅샷으로 리뷰합니다.
                 """
         case .poolBusy(let limit):
             return "리뷰 워크트리 \(limit)개가 모두 리뷰 중입니다. 지금은 전체 리뷰를 시작할 수 없습니다 — 돌고 있는 리뷰가 끝나면 다시 시도하세요."

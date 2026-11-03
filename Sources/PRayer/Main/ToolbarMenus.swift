@@ -149,8 +149,8 @@ struct RepoManageButton: View {
                 .frame(width: 26, height: 22)
                 .contentShape(Rectangle())
         } content: {
-            // 설정 창 "레포·팀 규칙" 탭과 같은 목록(RepoPickerStep)이다 — 레포를 찾아 고르고, 켜고 끄고,
-            // 전체 리뷰 폴더까지 여기서 정한다. 예전에는 "레포·팀 규칙 설정…" 으로 설정 창에 보냈다(사용자 요청).
+            // 설정 창 "레포·팀원" 탭과 같은 목록(RepoPickerStep)이다 — 레포를 찾아 고르고, 켜고 끄고,
+            // 전체 리뷰 폴더까지 여기서 정한다. 예전에는 "레포·팀 규칙 설정…"(지금 레포·팀원 탭) 으로 설정 창에 보냈다(사용자 요청).
             // "승인 임계값 다시 읽기" 도 뺐다 — 앱을 켤 때·새로고침(⌘R)·레포를 켤 때 같이 다시 읽는다.
             VStack(alignment: .leading, spacing: 8) {
                 Text("레포").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -548,8 +548,8 @@ struct StatusToolbarMenu: View {
         }
         .help(over
               ? "최근 5시간 동안 쓴 토큰이 정해 둔 상한(\(cap / 1000)k)을 넘었습니다. 리뷰를 막지는 않습니다 — "
-                + "Claude 사용 한도에 걸리기 전에 알려 주는 표시입니다. 상한은 설정 → ‘대상 제외’ → 사용량 방어에서 바꿉니다."
-              : "최근 5시간 동안 리뷰에 쓴 토큰입니다. 상한은 설정 → ‘대상 제외’ → 사용량 방어에서 바꿉니다.")
+                + "Claude 사용 한도에 걸리기 전에 알려 주는 표시입니다. 상한은 설정 → ‘리뷰 대상’ → 사용량 방어에서 바꿉니다."
+              : "최근 5시간 동안 리뷰에 쓴 토큰입니다. 상한은 설정 → ‘리뷰 대상’ → 사용량 방어에서 바꿉니다.")
     }
 
     private var statusHelp: String {

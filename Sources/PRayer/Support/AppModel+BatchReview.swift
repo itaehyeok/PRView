@@ -175,7 +175,7 @@ extension AppModel {
                  "queue")
         banner = Banner(kind: .info,
                         message: "PR \(chosen.count)개를 리뷰 큐에 넣었습니다 — 하나씩 차례로 돕니다."
-                            + (skipLargeFiles && remember ? " 큰 파일은 다음부터 묻지 않고 뺍니다(설정 › 대상 제외)." : ""))
+                            + (skipLargeFiles && remember ? " 큰 파일은 다음부터 묻지 않고 뺍니다(설정 › 리뷰 대상)." : ""))
     }
 
     func cancelPendingBatchReview() {

@@ -13,7 +13,7 @@ import PRayerCore
 /// - `PRAYER_DEBUG_CLONE_PROGRESS=clone|files|unpack|again|running` — 고른 PR 에 진행 중인 가짜 잡을 걸어 둔다(running 은 Claude 단계)
 ///   (리뷰 카드·목록 배지 모양 확인용. 아무것도 받거나 돌리지 않는다).
 ///
-/// - `PRAYER_DEBUG_EXCLUSION_QUERY=*.pl` — 설정 › 대상 제외의 규칙 칸에 그 글자를 미리 넣는다(자동완성 모양 확인).
+/// - `PRAYER_DEBUG_EXCLUSION_QUERY=*.pl` — 설정 › 리뷰 대상의 규칙 칸에 그 글자를 미리 넣는다(자동완성 모양 확인).
 ///   `PRAYER_DEBUG_SETTINGS_TAB=제외` 와 같이 준다.
 /// - `PRAYER_DEBUG_SHOW_APPROVAL_RULES=1` — 설정 레포 줄의 브랜치별 Approve 수 말풍선을 띄워 둔다(마우스를 올린 것처럼).
 ///   `PRAYER_DEBUG_SETTINGS_TAB=레포` 와 같이 준다.

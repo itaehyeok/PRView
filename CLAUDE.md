@@ -191,7 +191,7 @@ Finder 에 `PRView - <작업>` 으로 뜨게 한다** — 이름만 보고 어�
   머지면 받아온 변경이라 누를 때만 받는다. 여러 커밋 범위는 compare 라 사이에 그런 머지가 있으면 받아온 변경이 섞인다.
   화면 확인은 `PRAYER_DEMO=1` + `PRAYER_DEBUG_DETAIL_TAB=diff` + `PRAYER_DEBUG_DIFF_BY_COMMIT=1`(`DemoData.branchCommits`), 리뷰한 지점·선택은
   `PRAYER_DEBUG_COMMITS_REVIEWED`·`PRAYER_DEBUG_COMMITS_SELECT`(DebugLaunch).
-- **리뷰 제외 규칙** — 잠금 파일 32종은 앱이 늘 뺀다(`LockFiles`). 그 밖의 규칙은 설정 › 대상 제외 칸에 사람이 적고,
+- **리뷰 제외 규칙** — 잠금 파일 32종은 앱이 늘 뺀다(`LockFiles`). 그 밖의 규칙은 설정 › 리뷰 대상 칸에 사람이 적고,
   치는 동안 레포 파일 기준 자동완성이 뜬다(`ExclusionCatalog`, 2026-10-06 사용자 결정 — 베타 6 에서 칸을 없앴다가 되살림).
   후보는 `Glob` 이 읽는 꼴 그대로(`*.plist`·`*.xcassets/*`·`Pods/*`·`Package.resolved`, 특수 글자는 escape)이고,
   최근 PR 에서 자주 바뀐 것이 위로 온다. 재료는 탭을 열 때 받는다 — 기본 브랜치 트리(`git/trees/HEAD?recursive=1`,

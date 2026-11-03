@@ -379,7 +379,7 @@ final class AppModel {
     /// PR 마다 리뷰 전 창에서 체크를 푼 파일. 같은 PR 을 다시 리뷰할 때(새 커밋 등) 그대로 풀린 채로 연다.
     /// 앱을 끄면 잊는다 — 같은 날 다시 리뷰할 때 고르기를 되풀이하지 않게 하려는 것이라 저장까지 하지 않았다.
     var reviewSizeSkips: [String: Set<String>] = [:]
-    /// 제외 규칙 자동완성의 재료(레포 파일·최근 PR 의 바뀐 파일). 설정 › 대상 제외를 열 때 받는다(AppModel+Exclusions).
+    /// 제외 규칙 자동완성의 재료(레포 파일·최근 PR 의 바뀐 파일). 설정 › 리뷰 대상을 열 때 받는다(AppModel+Exclusions).
     var exclusionCatalog: ExclusionCatalog?
     var exclusionCatalogState: ExclusionCatalogState = .idle
     /// PR 스냅샷을 처음 받기 전에 묻는 전체 리뷰. 값이 있으면 "현재 PR의 스냅샷을 클론합니다" 창이 뜬다.

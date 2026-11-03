@@ -231,11 +231,11 @@ struct SettingsTransferSheet: View {
                     .font(.callout)
                 }
                 if !report.unreachableRepos.isEmpty {
-                    notice("내 계정으로 볼 수 없어 넣지 않은 레포: \(report.unreachableRepos.joined(separator: ", ")). 권한을 받은 뒤 ‘레포·팀 규칙’ 탭에서 추가하세요.",
+                    notice("내 계정으로 볼 수 없어 넣지 않은 레포: \(report.unreachableRepos.joined(separator: ", ")). 권한을 받은 뒤 ‘레포·팀원’ 탭에서 추가하세요.",
                            color: .orange)
                 }
                 if !report.uncheckedRepos.isEmpty {
-                    notice("볼 수 있는지 확인하지 못하고 넣은 레포: \(report.uncheckedRepos.joined(separator: ", ")). 목록에 PR 이 뜨지 않으면 ‘레포·팀 규칙’ 탭에서 빼세요.",
+                    notice("볼 수 있는지 확인하지 못하고 넣은 레포: \(report.uncheckedRepos.joined(separator: ", ")). 목록에 PR 이 뜨지 않으면 ‘레포·팀원’ 탭에서 빼세요.",
                            color: .orange)
                 }
                 ForEach(report.problems, id: \.self) { notice($0, color: .red) }

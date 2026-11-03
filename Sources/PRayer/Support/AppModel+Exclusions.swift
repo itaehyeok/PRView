@@ -1,7 +1,7 @@
 import Foundation
 import PRayerCore
 
-/// 리뷰 제외 규칙(설정 › 대상 제외의 "리뷰에서 빼는 파일")을 더하고 지운다. 더하기는 설정의 칸(레포 파일 기준
+/// 리뷰 제외 규칙(설정 › 리뷰 대상의 "리뷰에서 빼는 파일")을 더하고 지운다. 더하기는 설정의 칸(레포 파일 기준
 /// 자동완성 — ExclusionCatalog)과 리뷰 전 확인 창의 "다음부터 묻지 않고 빼기"(다음 버전)가 쓴다. 베타 6 에서 칸을
 /// 없앴다가(고르게 하면 귀찮다) 자동완성과 함께 되살렸다(사용자 결정, 2026-10-06).
 /// 잠금 파일은 이 규칙과 상관없이 늘 빠진다(`LockFiles`).
@@ -18,7 +18,7 @@ extension AppModel {
         Task { await save() }
         if announce {
             banner = Banner(kind: .info,
-                            message: "리뷰 제외에 더했습니다: \(rule) — 다음 리뷰부터 모델에 보내지 않습니다. 설정 › 대상 제외에서 뺄 수 있습니다.",
+                            message: "리뷰 제외에 더했습니다: \(rule) — 다음 리뷰부터 모델에 보내지 않습니다. 설정 › 리뷰 대상에서 뺄 수 있습니다.",
                             actionTitle: "되돌리기",
                             action: { [weak self] in self?.removeExclusions([rule]) })
         }

@@ -348,7 +348,7 @@ struct ReviewSizeSheet: View {
         model.addExclusion(ExclusionPattern.file(file.path))
         skipped.insert(file.path)
         model.banner = Banner(kind: .info,
-                              message: "\((file.path as NSString).lastPathComponent) 를 대상 제외에 넣었습니다 — 설정 › 대상 제외에서 되돌릴 수 있습니다")
+                              message: "\((file.path as NSString).lastPathComponent) 를 리뷰에서 빼는 파일에 넣었습니다 — 설정 › 리뷰 대상에서 되돌릴 수 있습니다")
     }
 
     private func start(skipping paths: Set<String>) {
