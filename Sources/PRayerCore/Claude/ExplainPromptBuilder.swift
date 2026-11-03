@@ -58,7 +58,7 @@ public enum ExplainPromptBuilder {
         case .deletion: marker = "-"
         default: marker = " "
         }
-        return "\(number) \(marker)\(line.text)"
+        return "\(number) \(marker)\(DiffElision.promptText(line.text))"
     }
 
     public static func estimatedTokens(bodyChars: Int) -> Int {

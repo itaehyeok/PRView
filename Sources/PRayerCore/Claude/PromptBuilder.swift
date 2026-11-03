@@ -106,9 +106,20 @@ public enum PromptBuilder {
             out += "</excluded_files>\n"
         }
 
-        let numbered = numberedDiff(input.diff, maxCharacters: input.maxCharacters)
+        let numbered = numberedDiffDetail(input.diff, maxCharacters: input.maxCharacters)
+        if !numbered.shortened.isEmpty {
+            out += "<shortened_lines 이유=\"\(DiffElision.characterLimit.formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))))자 넘는 줄은 "
+                + "앞 \(DiffElision.promptHead)자·끝 \(DiffElision.promptTail)자만 보냈다. 가운데 내용은 추측해 지적하지 않는다\">\n"
+            for place in numbered.shortened.prefix(30) {
+                out += "- \(place)\n"
+            }
+            if numbered.shortened.count > 30 {
+                out += "- … 외 \(numbered.shortened.count - 30)줄\n"
+            }
+            out += "</shortened_lines>\n"
+        }
         out += "<diff files=\(input.diff.files.count) lines=\(input.diff.changedLines)>\n"
-        out += numbered
+        out += numbered.text
         out += "\n</diff>\n</pr_data>\n\n"
         out += "위 PR 을 리뷰한다. 지정된 JSON 스키마로만 답한다."
         return out
@@ -117,7 +128,15 @@ public enum PromptBuilder {
     /// 줄 접두어 `R123`(새 파일, side=RIGHT) / `L045`(옛 파일, side=LEFT)를 붙인 diff.
     /// 모델이 hunk 헤더에서 줄을 직접 세면 자주 틀리므로 앱이 번호를 제공한다.
     public static func numberedDiff(_ diff: ParsedDiff, maxCharacters: Int = 600_000) -> String {
+        numberedDiffDetail(diff, maxCharacters: maxCharacters).text
+    }
+
+    /// `numberedDiff` 와 함께, 줄여서 보낸 긴 줄의 자리(`파일 R054`)를 돌려준다. 상한에 걸려 보내지 않은 줄은 빠진다.
+    static func numberedDiffDetail(_ diff: ParsedDiff, maxCharacters: Int) -> (text: String, shortened: [String]) {
         var out = ""
+        // 보낸 글자 수. 상한을 넘을지 줄을 붙이기 전에 재려고 따로 센다 — `out.count` 는 매번 처음부터 센다.
+        var length = 0
+        var shortened: [String] = []
         // 내용이 없는 파일(바이너리·이름만 바뀜)은 파일마다 머리 줄을 쓰지 않고 끝에 묶는다. 파일 천여 개를
         // 옮긴 PR 에서 거의 다 이런 파일이라(실측), 하나씩 쓰면 볼 것 없는 머리 줄에 수만 토큰을 쓴다.
         let binaries = diff.files.filter { $0.isBinary }
@@ -149,35 +168,52 @@ public enum PromptBuilder {
         }
         let contentless = Set((binaries + renamedOnly).map(\.path))
         for file in diff.files where !contentless.contains(file.path) {
-            out += "\n--- FILE: \(file.path)"
-            if file.isNew { out += " (신규 파일)" }
-            if file.isDeleted { out += " (삭제됨)" }
-            out += " ---\n"
+            var header = "\n--- FILE: \(file.path)"
+            if file.isNew { header += " (신규 파일)" }
+            if file.isDeleted { header += " (삭제됨)" }
+            header += " ---\n"
+            out += header
+            length += header.count
             for line in file.lines {
+                let place: String
                 switch line.kind {
                 case .hunk:
-                    out += "\(line.raw)\n"
+                    place = ""
                 case .addition, .context:
-                    if let newLine = line.newLine {
-                        out += String(format: "R%03d |%@\n", newLine, line.raw)
-                    }
+                    guard let newLine = line.newLine else { continue }
+                    place = String(format: "R%03d", newLine)
                 case .deletion:
-                    if let oldLine = line.oldLine {
-                        out += String(format: "L%03d |%@\n", oldLine, line.raw)
-                    }
+                    guard let oldLine = line.oldLine else { continue }
+                    place = String(format: "L%03d", oldLine)
                 case .meta:
                     continue
                 }
-                if out.count > maxCharacters {
+                let short = line.kind == .hunk ? nil : DiffElision.shortenedForPrompt(line.text)
+                let piece: String
+                if place.isEmpty {
+                    piece = "\(line.raw)\n"
+                } else if let short {
+                    // 기호(+/-/공백)는 두고 본문만 줄인다. anchor_text 는 기호를 뗀 본문으로 돌아온다.
+                    piece = "\(place) |\(line.raw.prefix(1))\(short)\n"
+                } else {
+                    piece = "\(place) |\(line.raw)\n"
+                }
+                // 붙이기 전에 잰다. 붙인 뒤에 재면 한 줄이 상한을 통째로 넘겨 들어간다.
+                if length + piece.count > maxCharacters {
                     out += "\n(diff 가 너무 길어 이후 내용은 생략됨)\n"
                     // 잘렸어도 무엇이 더 있었는지(내용 없는 파일)는 알린다 — 짧은 목록이다.
                     appendContentless()
-                    return out
+                    return (out, shortened)
+                }
+                out += piece
+                length += piece.count
+                if short != nil {
+                    shortened.append("\(file.path) \(place)")
                 }
             }
         }
         appendContentless()
-        return out
+        return (out, shortened)
     }
 
     /// 내용 없는 파일(바이너리·이름만 바뀜)은 이만큼만 이름을 적고 나머지는 개수로 묶는다.
@@ -231,6 +267,7 @@ public enum PromptBuilder {
         ("<pr_meta", "(pr_meta"), ("</pr_meta>", "(/pr_meta)"),
         ("<existing_threads>", "(existing_threads)"), ("</existing_threads>", "(/existing_threads)"),
         ("<excluded_files", "(excluded_files"), ("</excluded_files>", "(/excluded_files)"),
+        ("<shortened_lines", "(shortened_lines"), ("</shortened_lines>", "(/shortened_lines)"),
         ("<diff", "(diff"), ("</diff>", "(/diff)"),
         ("<prior_review", "(prior_review"), ("</prior_review>", "(/prior_review)"),
         ("--- FILE:", "··· 파일 표기 제거 ···")

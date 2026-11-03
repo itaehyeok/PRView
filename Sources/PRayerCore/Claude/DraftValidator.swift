@@ -160,7 +160,13 @@ public enum DraftValidator {
         let anchor = normalize(comment.anchorText)
 
         func matches(_ line: DiffLine) -> Bool {
-            let text = normalize(line.text)
+            // 긴 줄은 모델이 줄인 꼴(`DiffElision.shortenedForPrompt`)만 봤으니 그 꼴로 먼저 맞춰 본다.
+            // 줄이기 전에 만든 초안은 원문을 들고 있어 원문으로도 본다.
+            if let shortened = DiffElision.shortenedForPrompt(line.text), same(normalize(shortened)) { return true }
+            return same(normalize(line.text))
+        }
+
+        func same(_ text: String) -> Bool {
             if anchor.isEmpty || text.isEmpty { return false }
             if text == anchor { return true }
             // 부분 일치는 양쪽이 충분히 길 때만 허용한다. 그렇지 않으면 "}" 같은 줄이

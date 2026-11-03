@@ -100,7 +100,8 @@ extension ReviewRecord {
                             body: (body ?? item.title).trimmingCharacters(in: .whitespacesAndNewlines),
                             // 질문은 결함 지적이 아니다. 머지를 막는 심각도로 세지 않게 보통으로 둔다.
                             severity: item.severity ?? .minor,
-                            anchorText: found.line.text,
+                            // 모델이 단 코멘트와 같은 꼴로 둔다 — 긴 줄 원문을 초안마다 통째로 저장하지 않는다.
+                            anchorText: DiffElision.promptText(found.line.text),
                             duplicatesExisting: item.isDuplicate ? true : nil,
                             existingNote: item.existingNote,
                             rationaleKo: item.rationale,
