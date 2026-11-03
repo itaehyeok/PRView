@@ -60,7 +60,7 @@ public struct ListRefreshChange: Equatable, Sendable {
         guard let pr else { return .recentAll }
         if !pr.isOpen || pr.isDraft { return .recentAll }
         // 리뷰 대기 탭이 빼는 조건(PRVisibility.scopeIncludes)과 같다 — 다시 요청이 오면 승인했어도 남는다.
-        if pr.viewerApprovedCurrentHead, !pr.viewerHasReviewRequest { return .myApprovals }
+        if pr.viewerApprovalAlive, !pr.viewerHasReviewRequest { return .myApprovals }
         return nil
     }
 }

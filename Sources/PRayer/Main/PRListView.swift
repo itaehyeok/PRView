@@ -684,6 +684,13 @@ struct PRRow: View {
                     CloneProgressChip(fraction: fraction)
                 } else {
                     let isFlightSource = model.isFlightSource(pr)
+                    // 승인 뒤 아직 안 본 소식(AppModel+SinceApproval). 열면 사라진다.
+                    if model.listScope.kind == .myApprovals, model.hasApprovalNews(pr) {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 7, height: 7)
+                            .help("승인 뒤 아직 안 본 소식이 있습니다 — 열면 사라집니다")
+                    }
                     BadgeChip(result: badge)
                         // Approve 칩은 이 배지 자리에서 뜬다(ApprovalFlight). 날 차례인 행만 적는다.
                         .anchorPreference(key: ApprovalFlightAnchorsKey.self, value: .bounds) { anchor in
@@ -1102,8 +1109,6 @@ struct CloneProgressChip: View {
 
 struct BadgeChip: View {
     let result: BadgeResult
-    /// 좁은 목록에서는 이유 칩을 아이콘(·숫자)만 남긴다. 다 적은 말은 마우스를 올리면 나온다.
-    @Environment(\.prRowDensity) private var density
 
     var body: some View {
         if let followUp = result.followUp {
@@ -1118,7 +1123,7 @@ struct BadgeChip: View {
                     .background(Self.half(leading: true).fill(color.opacity(0.14)))
                     .overlay(Self.half(leading: true).stroke(color.opacity(0.35), lineWidth: 0.5))
                     .help(followUp.detail)
-                FollowUpChip(followUp: followUp, compact: density != .full, attached: true)
+                FollowUpChip(followUp: followUp, attached: true)
             }
             .fixedSize(horizontal: true, vertical: false)
         } else if let help = result.help {
@@ -1251,41 +1256,76 @@ struct VerdictChipLabel: View {
     }
 }
 
-/// 승인한 PR 이 다시 뜬 이유 — 재요청(파랑)·새 커밋(주황). BadgeChip 이 Approved 오른쪽에 붙여 캡슐 하나로 만든다.
+/// 승인한 PR 에 그 뒤로 생긴 일 — BadgeChip 이 Approved 오른쪽에 붙여 캡슐 하나로 만든다.
+///
+/// 아이콘만 그린다(2026-11-02 사용자 결정). 올리면 칩이 살짝 커지며 진해지고, 아래에 말풍선이 바로 뜬다 — 이름(영어,
+/// 배지 이름과 같은 말투) · 짧은 설명 · 승인 뒤 바뀐 양. `.help` 툴팁은 1초쯤 늦게 떠서 쓰지 않는다.
+/// 색은 급한 순서다: 파랑 다시 요청 · 주황 내 코멘트 단 파일(새 커밋을 아직 못 가른 것도) · 보라 강제 푸시 · 회색 그 밖.
 struct FollowUpChip: View {
     let followUp: PRBadgeFollowUp
-    /// 좁은 목록: 아이콘만(재요청) 또는 아이콘 + 숫자(`+2`).
-    var compact = false
     /// Approved 오른쪽에 붙은 반쪽 — 왼쪽 모서리를 곧게 그린다.
     var attached = false
+    @State private var isHovering = false
 
     var body: some View {
-        let text = compact ? followUp.shortLabel : followUp.label
         let shape = attached ? AnyShape(BadgeChip.half(leading: false)) : AnyShape(Capsule())
-        HStack(spacing: 3) {
-            Image(systemName: followUp.symbolName)
-                .font(.caption2)
-            if let text {
-                Text(text)
-                    .font(.caption2.weight(.medium))
-                    .lineLimit(1)
+        Image(systemName: followUp.symbolName)
+            .font(.caption2)
+            .padding(.leading, attached ? 5 : 4)
+            .padding(.trailing, 5)
+            .padding(.vertical, 2)
+            .foregroundStyle(color)
+            .background(shape.fill(color.opacity(isHovering ? 0.26 : 0.14)))
+            .overlay(shape.stroke(color.opacity(isHovering ? 0.7 : 0.35), lineWidth: isHovering ? 1 : 0.5))
+            .scaleEffect(isHovering ? 1.08 : 1)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .fixedSize()
+            .contentShape(Rectangle())
+            .onHover { isHovering = $0 }
+            .popover(isPresented: $isHovering, arrowEdge: .bottom) {
+                FollowUpTip(followUp: followUp, color: color)
             }
-        }
-        .padding(.leading, attached ? 5 : (text == nil ? 4 : 6))
-        .padding(.trailing, text == nil ? 4 : 6)
-        .padding(.vertical, 2)
-        .foregroundStyle(color)
-        .background(shape.fill(color.opacity(0.14)))
-        .overlay(shape.stroke(color.opacity(0.35), lineWidth: 0.5))
-        .fixedSize(horizontal: true, vertical: false)
-        .help(followUp.detail)
+            .accessibilityLabel(followUp.label)
+            .accessibilityHint(followUp.detail)
     }
 
     private var color: Color {
         switch followUp {
         case .reRequested: return .blue
         case .newCommits: return .orange
+        case .sinceApproval(let since):
+            switch since.kind {
+            case .commentedFile: return .orange
+            case .forcePushed: return .purple
+            case .code: return .primary
+            case .docsOnly, .baseMergeOnly: return .secondary
+            }
         }
+    }
+}
+
+/// 이유 칩에 마우스를 올리면 뜨는 말풍선.
+private struct FollowUpTip: View {
+    let followUp: PRBadgeFollowUp
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(followUp.label, systemImage: followUp.symbolName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(color)
+            Text(followUp.detail)
+                .font(.caption)
+            if let numbers = followUp.numbers {
+                Text(numbers)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 300, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -1410,12 +1450,24 @@ private struct ScopeTab: View {
                 guard model.listScope != target else { return }
                 model.listScope = target
             } label: {
-                Text(target.label)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                    // 목록이 좁으면(320pt) "최근 Approve 24h" 가 두 줄로 접혔다('승인' 을 'Approve' 로 바꾼 뒤 길어져서).
-                    // 이름은 그대로 두고, 자리가 모자랄 때만 글자를 조금 줄여 한 줄을 지킨다(사용자 선택).
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                HStack(spacing: 5) {
+                    Text(target.label)
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        // 목록이 좁으면(320pt) "최근 Approve 24h" 가 두 줄로 접혔다('승인' 을 'Approve' 로 바꾼 뒤 길어져서).
+                        // 이름은 그대로 두고, 자리가 모자랄 때만 글자를 조금 줄여 한 줄을 지킨다(사용자 선택).
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    // 승인 뒤 아직 안 본 소식 수 — 이 탭을 열지 않아도 뒤에서 받은 목록으로 센다(AppModel+SinceApproval).
+                    if kind == .myApprovals, model.approvalNewsCount > 0 {
+                        Text(verbatim: "\(model.approvalNewsCount)")
+                            .font(.system(size: 9, weight: .bold).monospacedDigit())
+                            .foregroundStyle(isSelected ? Color.accentColor : Color.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(isSelected ? Color.white : Color.blue, in: Capsule())
+                            .help("승인 뒤 아직 안 본 소식 \(model.approvalNewsCount)건")
+                    }
+                }
                     .padding(.leading, 10)
                     .padding(.trailing, kind.usesWindow ? 6 : 10)
                     .padding(.vertical, 4)

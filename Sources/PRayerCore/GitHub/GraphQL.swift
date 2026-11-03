@@ -40,7 +40,7 @@ enum GraphQL {
         labels(first: 20) { nodes { name } }
         reviewRequests(first: 20) { nodes { requestedReviewer {
           __typename ... on User { login } ... on Team { slug } } } }
-        latestOpinionatedReviews(first: 20) { nodes { state author { login } commit { oid } } }
+        latestOpinionatedReviews(first: 20) { nodes { state author { login } commit { oid } viewerDidAuthor } }
         commits(last: 30) {
           totalCount
           nodes {
@@ -89,6 +89,38 @@ enum GraphQL {
           ... on PullRequest {
     \(prFields)
           }
+        }
+      }
+    }
+    """
+
+    /// 목록을 가볍게 훑는다 — 무엇이 바뀌었는지 가를 칸만(`PRProbe`). GitHub 은 요청한 연결(connection) 칸 수로 값을
+    /// 매겨서 `prList` 는 100건에 40점인데, 이건 100건이어도 1점이다(실측). CI 상태와 머지 가능 여부는 PR 의
+    /// `updatedAt` 을 바꾸지 않아서(실측: CI 가 끝난 시각이 updatedAt 보다 늦은 PR 이 있었다) 따로 받는다.
+    static let prProbeList = """
+    query PRProbe($q: String!, $n: Int!, $after: String) {
+      rateLimit { cost remaining resetAt }
+      search(query: $q, type: ISSUE, first: $n, after: $after) {
+        issueCount
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          ... on PullRequest {
+            id number updatedAt headRefOid state isDraft mergeable
+            repository { name owner { login } }
+            commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+          }
+        }
+      }
+    }
+    """
+
+    /// 훑어서 바뀐 것으로 고른 PR 만 자세히 받는다. 값은 `prList` 와 같이 건수에 비례한다(실측 1건 1점, 25건 10점).
+    static let prNodes = """
+    query PRNodes($ids: [ID!]!) {
+      rateLimit { cost remaining resetAt }
+      nodes(ids: $ids) {
+        ... on PullRequest {
+    \(prFields)
         }
       }
     }
@@ -242,7 +274,7 @@ struct PRNodeDTO: Decodable {
     struct Login: Decodable { let login: String? }
     struct Repo: Decodable { let name: String?; let owner: Login? }
     struct Commit: Decodable { let oid: String? }
-    struct ReviewNode: Decodable { let state: String?; let author: Login?; let commit: Commit? }
+    struct ReviewNode: Decodable { let state: String?; let author: Login?; let commit: Commit?; let viewerDidAuthor: Bool? }
     struct ReviewsConn: Decodable { let nodes: [ReviewNode]? }
     struct LabelNode: Decodable { let name: String? }
     struct ReviewRequestsConn: Decodable {
@@ -452,6 +484,10 @@ struct LabelsConn: Decodable { let nodes: [LabelNode]? }
         info.viewerReviewRequestedAt = viewerReviewRequestedAt
         info.viewerRequestedAsCodeOwner = viewerLatestReviewRequest?.asCodeOwner
         info.viewerCanUpdate = viewerCanUpdate
+        if let opinionated = latestOpinionatedReviews?.nodes {
+            let mine = opinionated.first { $0.viewerDidAuthor == true }
+            info.viewerOpinion = ViewerOpinion(state: mine?.state, commitOid: mine?.commit?.oid)
+        }
         return info
     }
 
@@ -474,6 +510,50 @@ struct PRListData: Decodable {
     }
     let rateLimit: GQLRateLimit?
     let search: Search?
+}
+
+struct PRProbeData: Decodable {
+    struct Rollup: Decodable { let state: String? }
+    struct CommitInner: Decodable { let statusCheckRollup: Rollup? }
+    struct CommitNode: Decodable { let commit: CommitInner? }
+    struct Commits: Decodable { let nodes: [CommitNode]? }
+    struct Node: Decodable {
+        let id: String?
+        let number: Int?
+        let updatedAt: String?
+        let headRefOid: String?
+        let state: String?
+        let isDraft: Bool?
+        let mergeable: String?
+        let repository: PRNodeDTO.Repo?
+        let commits: Commits?
+
+        func toProbe() -> PRProbe? {
+            guard let id, let number, let headRefOid,
+                  let name = repository?.name, let owner = repository?.owner?.login,
+                  let updated = updatedAt.flatMap({ try? Date($0, strategy: .iso8601) }) else { return nil }
+            return PRProbe(key: "\(owner)/\(name)#\(number)",
+                           nodeID: id,
+                           updatedAt: updated,
+                           headRefOid: headRefOid,
+                           state: state ?? "OPEN",
+                           isDraft: isDraft ?? false,
+                           mergeable: MergeableState(rawValue: mergeable ?? "") ?? .unknown,
+                           checkState: commits?.nodes?.last?.commit?.statusCheckRollup?.state)
+        }
+    }
+    struct Search: Decodable {
+        let issueCount: Int?
+        let pageInfo: PRListData.PageInfo?
+        let nodes: [Node]?
+    }
+    let rateLimit: GQLRateLimit?
+    let search: Search?
+}
+
+struct PRNodesData: Decodable {
+    let rateLimit: GQLRateLimit?
+    let nodes: [PRNodeDTO?]?
 }
 
 struct SinglePRData: Decodable {

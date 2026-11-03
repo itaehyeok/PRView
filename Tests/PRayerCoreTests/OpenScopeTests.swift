@@ -38,12 +38,36 @@ final class OpenScopeTests: XCTestCase {
         XCTAssertTrue(included(pr, all))
     }
 
-    /// 승인한 뒤 새 커밋이 오면 그 커밋은 아직 안 본 것이라 다시 보여야 한다.
-    func testNewCommitBringsItBack() {
+    /// 승인한 뒤 새 커밋이 와도 다시 띄우지 않는다 — 승인은 그대로 살아 있고, 리뷰 대기는 나를 부른 것만 모은다
+    /// (2026-11-02 사용자 결정). 승인 뒤 바뀐 것은 Approved 탭이 알린다.
+    func testNewCommitDoesNotBringItBack() {
         var pr = approvedAtHead()
         pr.headRefOid = "bbbbbbbbbbbb2222"   // 승인은 옛 커밋 기준으로 남는다
         XCTAssertFalse(pr.viewerApprovedCurrentHead)
+        XCTAssertTrue(pr.viewerApprovalAlive)
+        XCTAssertFalse(included(pr, open))
+    }
+
+    /// 레포 설정이 내 승인을 지웠으면 다시 승인해야 머지된다 — 다시 띄운다.
+    func testDismissedApprovalComesBack() {
+        var pr = approvedAtHead()
+        pr.headRefOid = "bbbbbbbbbbbb2222"
+        pr.viewerLatestReviewState = "DISMISSED"
+        pr.viewerOpinion = ViewerOpinion(state: "DISMISSED", commitOid: "aaaaaaaaaaaa1111")
+        XCTAssertTrue(pr.viewerApprovalDismissed)
         XCTAssertTrue(included(pr, open))
+    }
+
+    /// 승인한 뒤 스레드에 답만 달면 GitHub 의 "마지막 리뷰" 는 COMMENTED 가 되지만 승인은 살아 있다.
+    /// 그걸로 다시 띄우면 답을 달 때마다 리뷰 대기로 돌아온다.
+    func testCommentAfterApprovalKeepsApproval() {
+        var pr = Fixtures.pr(viewerHasReviewRequest: false, viewerLatestReviewState: "COMMENTED")
+        pr.viewerOpinion = ViewerOpinion(state: "APPROVED", commitOid: pr.headRefOid)
+        XCTAssertTrue(pr.viewerApprovalAlive)
+        XCTAssertFalse(included(pr, open))
+        // 옛 캐시(내 의견 리뷰를 모름)는 마지막 리뷰로 가른다 — 예전 동작 그대로.
+        pr.viewerOpinion = nil
+        XCTAssertFalse(pr.viewerApprovalAlive)
     }
 
     /// 다시 봐 달라는 요청(Re-request review)이 왔으면 남긴다.
@@ -58,6 +82,22 @@ final class OpenScopeTests: XCTestCase {
     func testCommentedStaysInTheQueue() {
         let pr = Fixtures.pr(viewerHasReviewRequest: false, viewerLatestReviewState: "COMMENTED")
         XCTAssertTrue(included(pr, open))
+    }
+
+    /// 내 의견 리뷰는 `viewerDidAuthor` 로 가른다 — 로그인 이름을 몰라도 된다.
+    func testViewerOpinionIsRead() throws {
+        func info(_ reviews: String) throws -> PullRequestInfo? {
+            let json = """
+            {"id": "PR_1", "number": 42, "repository": {"name": "app", "owner": {"login": "acme"}},
+             "latestOpinionatedReviews": {"nodes": \(reviews)}}
+            """
+            return try JSONDecoder().decode(PRNodeDTO.self, from: Data(json.utf8)).toInfo()
+        }
+        let mine = #"[{"state": "APPROVED", "author": {"login": "alex"}, "commit": {"oid": "old1"}, "viewerDidAuthor": false},"#
+            + #" {"state": "APPROVED", "author": {"login": "jamie"}, "commit": {"oid": "old2"}, "viewerDidAuthor": true}]"#
+        XCTAssertEqual(try info(mine)?.viewerOpinion, ViewerOpinion(state: "APPROVED", commitOid: "old2"))
+        XCTAssertEqual(try info(mine)?.viewerApprovedCommit, "old2")
+        XCTAssertEqual(try info("[]")?.viewerOpinion, ViewerOpinion(state: nil, commitOid: nil))
     }
 
     // MARK: 닫힘·머지

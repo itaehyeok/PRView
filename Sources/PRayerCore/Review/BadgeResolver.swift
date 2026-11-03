@@ -117,47 +117,79 @@ public enum PRBadgeOverlay: String, Sendable {
     }
 }
 
-/// 승인한 PR 이 **왜 다시 떴는지**. 승인한 PR 은 리뷰 대기에서 빠지는데, 다시 요청이 오거나 새 커밋이 오면
-/// 돌아온다. 그때 배지가 Approved 만 말하면 "승인했는데 왜 또 떴지?" 가 된다(사용자 피드백).
+/// 승인한 PR 에 **그 뒤로 생긴 일**. 승인한 PR 은 리뷰 대기에서 빠지고 Approved 탭에 남는데, 그 뒤 일을 배지가 말하지 않으면
+/// "승인했는데 왜 또 떴지?" 가 된다(사용자 피드백). 리뷰 대기로 다시 오는 것은 다시 요청과 승인 취소뿐이고(2026-11-02 사용자
+/// 결정 — 승인 취소는 이유 칩이 아니라 Dismissed 배지가 말한다), 나머지는 Approved 탭에서 아이콘으로만 보이고 마우스를
+/// 올리면 설명이 뜬다(`FollowUpChip`).
 public enum PRBadgeFollowUp: Sendable, Equatable {
     /// 승인한 뒤 다시 리뷰 요청이 왔다.
     case reRequested
-    /// 승인한 뒤 새 커밋이 올라왔다. 개수를 모르면(받아 둔 커밋 목록에 승인한 커밋이 없음) nil.
+    /// 승인한 뒤 무엇이 바뀌었는지 가른 것.
+    case sinceApproval(SinceApproval)
+    /// 승인한 뒤 새 커밋이 올라왔다 — 무엇이 바뀌었는지 아직 모른다(받는 중·못 받음). 개수를 모르면 nil.
     case newCommits(Int?)
 
-    /// 넓을 때 칩 글자.
+    /// 이름 — 마우스를 올리면 뜨는 말풍선의 첫 줄. 목록의 배지 이름처럼 영어다.
     public var label: String {
         switch self {
         case .reRequested: return "Re-requested"
+        case .sinceApproval(let since):
+            switch since.kind {
+            case .commentedFile: return "Commented file changed"
+            case .code: return "Code changed"
+            case .docsOnly: return "Docs only"
+            case .forcePushed: return "Force-pushed"
+            case .baseMergeOnly: return "Base merge only"
+            }
         case .newCommits(let count?): return count == 1 ? "+1 commit" : "+\(count) commits"
         case .newCommits(nil): return "New commits"
-        }
-    }
-
-    /// 좁을 때 칩 글자 — 아이콘 옆에 숫자만. nil 이면 아이콘만.
-    public var shortLabel: String? {
-        switch self {
-        case .reRequested: return nil
-        case .newCommits(let count?): return "+\(count)"
-        case .newCommits(nil): return nil
         }
     }
 
     public var symbolName: String {
         switch self {
         case .reRequested: return "arrow.clockwise"
+        case .sinceApproval(let since):
+            switch since.kind {
+            case .commentedFile: return "text.bubble"
+            case .code: return "chevron.left.forwardslash.chevron.right"
+            case .docsOnly: return "doc.text"
+            case .forcePushed: return "arrow.triangle.branch"
+            case .baseMergeOnly: return "arrow.triangle.merge"
+            }
         // 활동 목록의 "Pushed commits" 와 같은 아이콘.
         case .newCommits: return "arrow.up.circle"
         }
     }
 
-    /// 마우스를 올렸을 때.
+    /// 말풍선 둘째 줄 — 짧은 설명.
     public var detail: String {
         switch self {
-        case .reRequested: return "지난번 Approved — 그 뒤 다시 리뷰 요청이 왔습니다"
-        case .newCommits(let count?): return "지난번 Approved — 그 뒤 새 커밋 \(count)개"
-        case .newCommits(nil): return "지난번 Approved — 그 뒤 새 커밋이 올라왔습니다"
+        case .reRequested: return "승인한 뒤 다시 리뷰 요청이 왔습니다"
+        case .sinceApproval(let since):
+            switch since.kind {
+            case .commentedFile: return "내가 코멘트 단 파일이 바뀌었습니다 · " + Self.names(since.commentedFiles)
+            case .code: return "코드가 바뀌었습니다 · " + Self.names(since.files)
+            case .docsOnly: return "문서만 바뀌었습니다 · " + Self.names(since.files)
+            case .forcePushed: return "강제 푸시로 승인한 커밋이 브랜치에서 사라졌습니다"
+            case .baseMergeOnly: return "base 브랜치를 받아온 머지뿐입니다 · 작성자가 바꾼 것은 없습니다"
+            }
+        case .newCommits(let count?): return "승인한 뒤 새 커밋 \(count)개"
+        case .newCommits(nil): return "승인한 뒤 새 커밋이 올라왔습니다"
         }
+    }
+
+    /// 말풍선 셋째 줄 — 승인 뒤 바뀐 양. 모르면 nil.
+    public var numbers: String? {
+        if case .sinceApproval(let since) = self { return since.numbersLine }
+        return nil
+    }
+
+    /// 파일 이름만 셋까지 — "Player.swift, README.md 외 2개".
+    private static func names(_ paths: [String]) -> String {
+        let names = paths.map { ($0 as NSString).lastPathComponent }
+        guard names.count > 3 else { return names.joined(separator: ", ") }
+        return names.prefix(3).joined(separator: ", ") + " 외 \(names.count - 3)개"
     }
 }
 
@@ -299,7 +331,8 @@ public enum BadgeResolver {
     public static func resolve(pr: PullRequestInfo,
                                isRunning: Bool,
                                record: ReviewRecord?,
-                               skipReason: SkipReason?) -> BadgeResult {
+                               skipReason: SkipReason?,
+                               sinceApproval: SinceApproval? = nil) -> BadgeResult {
         var overlays: [PRBadgeOverlay] = []
         if let record, record.headSha != pr.headRefOid { overlays.append(.stale) }
         if case .tooLarge = skipReason { overlays.append(.tooBig) }
@@ -314,9 +347,13 @@ public enum BadgeResolver {
                 // 리뷰한 커밋은 GitHub 이 이 리뷰를 알면 GitHub 말을 따른다 — 그 뒤 웹에서 다시 승인했을 수 있다.
                 // 모르면(게시 직후 옛 상태) 그쪽 커밋은 예전 리뷰의 것이라 이 기록의 커밋을 쓴다.
                 let known = pr.knowsReview(postedAt: posted.postedAt)
-                return submitted(.forPostedEvent(posted.event), pr: pr,
-                                 reviewedCommit: known ? (pr.viewerLatestReviewCommit ?? record.headSha) : record.headSha,
+                let standing = known ? approvalStanding(.forPostedEvent(posted.event), pr: pr) : nil
+                return submitted(standing?.badge ?? .forPostedEvent(posted.event), pr: pr,
+                                 reviewedCommit: standing?.commit
+                                    ?? (known ? (pr.viewerLatestReviewCommit ?? record.headSha) : record.headSha),
                                  reRequested: pr.isReRequested(postedAt: posted.postedAt),
+                                 dismissed: known && pr.viewerApprovalDismissed,
+                                 sinceApproval: sinceApproval,
                                  overlays: overlays)
             }
             // 아직 안 올린 초안. 지적이 0건이면 LGTM, 필수 지적이 있으면 Blocker, 권장·참고뿐이면 Non-blocker.
@@ -329,10 +366,21 @@ public enum BadgeResolver {
         }
         // 이 앱을 거치지 않고 웹 등에서 낸 리뷰.
         if let badge = PRBadge.forReviewState(pr.viewerLatestReviewState) {
-            return submitted(badge, pr: pr, reviewedCommit: pr.viewerLatestReviewCommit,
-                             reRequested: pr.isReRequested(), overlays: overlays)
+            let standing = approvalStanding(badge, pr: pr)
+            return submitted(standing?.badge ?? badge, pr: pr,
+                             reviewedCommit: standing?.commit ?? pr.viewerLatestReviewCommit,
+                             reRequested: pr.isReRequested(), dismissed: pr.viewerApprovalDismissed,
+                             sinceApproval: sinceApproval, overlays: overlays)
         }
         return BadgeResult(badge: .notReviewed, overlays: overlays)
+    }
+
+    /// 승인한 뒤 코멘트만 달았으면 내 리뷰 상태는 여전히 승인이다(`viewerApprovalAlive`). 마지막 리뷰가 코멘트라고
+    /// "You commented" 로 보이면 승인이 사라진 것처럼 읽히고, 승인 뒤 소식(이유 칩)도 붙지 않는다. 그때의 기준 커밋은
+    /// 코멘트를 단 커밋이 아니라 승인한 커밋이다.
+    private static func approvalStanding(_ badge: PRBadge, pr: PullRequestInfo) -> (badge: PRBadge, commit: String?)? {
+        guard badge == .commented, pr.viewerApprovalAlive else { return nil }
+        return (.approved, pr.viewerApprovedCommit)
     }
 
     /// 낸 리뷰(이 앱으로든 웹으로든) 위에 "그 뒤로 생긴 일" 을 얹는다.
@@ -344,10 +392,18 @@ public enum BadgeResolver {
     ///
     /// 닫힌 PR 에는 얹지 않는다. 다시 뜰 리뷰 대기에 있지 않으니 "왜 다시 떴나" 가 뜻이 없다 — 머지된 PR 의
     /// Approved 옆에 +2 commits 가 붙으면 할 일이 있는 것처럼 읽힌다.
+    ///
+    /// - Parameter dismissed: 레포 설정이 내 승인을 지웠다(이 앱으로 올린 승인이어도). 그러면 승인이 아니라 Dismissed 다.
+    /// - Parameter sinceApproval: 승인한 커밋부터 지금까지 무엇이 바뀌었는지(`AppModel.sinceApproval`). 아직 모르면 nil 이고
+    ///   그동안은 "+N commits" 로 보인다.
     private static func submitted(_ badge: PRBadge, pr: PullRequestInfo, reviewedCommit: String?,
-                                  reRequested: Bool, overlays: [PRBadgeOverlay]) -> BadgeResult {
+                                  reRequested: Bool, dismissed: Bool, sinceApproval: SinceApproval?,
+                                  overlays: [PRBadgeOverlay]) -> BadgeResult {
         guard pr.isOpen else {
             return BadgeResult(badge: badge, overlays: overlays)
+        }
+        if badge == .approved, dismissed {
+            return BadgeResult(badge: .dismissed, overlays: overlays)
         }
         guard badge == .approved else {
             if reRequested {
@@ -361,6 +417,9 @@ public enum BadgeResolver {
             return BadgeResult(badge: .approved, overlays: others, followUp: .reRequested)
         }
         if let reviewedCommit, reviewedCommit != pr.headRefOid {
+            if let sinceApproval {
+                return BadgeResult(badge: .approved, overlays: others, followUp: .sinceApproval(sinceApproval))
+            }
             return BadgeResult(badge: .approved, overlays: others,
                                followUp: .newCommits(pr.commitCount(after: reviewedCommit)))
         }

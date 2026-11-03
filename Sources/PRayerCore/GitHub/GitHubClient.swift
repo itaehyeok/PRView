@@ -105,6 +105,8 @@ public enum GitHubError: Error, LocalizedError, Sendable {
 enum GQLValue: Sendable {
     case string(String)
     case int(Int)
+    /// 배열은 `-f`/`-F` 로 넘길 수 없어 늘 JSON 본문으로 보낸다(`graphQLRequest`).
+    case strings([String])
 }
 
 /// 모든 GitHub 호출은 `gh` 서브프로세스를 경유한다. 앱은 토큰을 직접 보관하지 않는다.
@@ -134,12 +136,35 @@ public struct GitHubClient: Sendable {
                                stdin: stdin,
                                environment: ProcessEnvironment.base(),
                                timeout: timeout)
+        let startedAt = Date()
         let result = try await runner.run(spec)
+        if GitHubClient.logsCalls {
+            let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
+            Log.info("호출 \(GitHubClient.callLabel(arguments, stdin: stdin)) \(ms)ms\(result.succeeded ? "" : " 실패")", "github")
+        }
         // 화면을 바꾸면 진행 중이던 요청이 취소된다. 이건 오류가 아니다.
         if result.cancelled || Task.isCancelled {
             throw CancellationError()
         }
         return result
+    }
+
+    /// `PRAYER_DEBUG_GH_CALLS=1` 로 띄우면 GitHub 호출을 한 줄씩 로그에 남긴다 — 주기마다 몇 번 부르는지 잴 때 쓴다
+    /// (`open --env PRAYER_DEBUG_GH_CALLS=1 <앱>`).
+    static let logsCalls = ProcessInfo.processInfo.environment["PRAYER_DEBUG_GH_CALLS"] == "1"
+
+    /// 호출 이름 — GraphQL 이면 쿼리 이름(`query PRProbe(...)` → `graphql PRProbe`), REST 면 경로(물음표 앞).
+    static func callLabel(_ arguments: [String], stdin: String?) -> String {
+        if arguments.contains("graphql") {
+            let text = stdin ?? arguments.first { $0.hasPrefix("query=") } ?? ""
+            if let range = text.range(of: #"query\s+(\w+)"#, options: .regularExpression) {
+                let name = text[range].split(whereSeparator: \.isWhitespace).last.map(String.init) ?? ""
+                return "graphql \(name)"
+            }
+            return "graphql"
+        }
+        let path = arguments.dropFirst().first { !$0.hasPrefix("-") } ?? arguments.joined(separator: " ")
+        return "rest " + (path.split(separator: "?").first.map(String.init) ?? path)
     }
 
     /// 모든 호출이 `gh api` 다. `--hostname` 을 **여기 한 자리에서** 붙여야, 호출 하나를
@@ -200,8 +225,11 @@ public struct GitHubClient: Sendable {
     /// 그 밖의 글자가 든 요청만 본문(JSON)을 표준 입력으로 넘긴다 — 표준 입력은 바이트 그대로 간다.
     static func graphQLRequest(_ query: String, variables: [String: GQLValue]) -> (arguments: [String], stdin: String?) {
         let needsBody = variables.values.contains { value in
-            if case .string(let s) = value { return !s.unicodeScalars.allSatisfy(\.isASCII) }
-            return false
+            switch value {
+            case .string(let s): return !s.unicodeScalars.allSatisfy(\.isASCII)
+            case .int: return false
+            case .strings: return true
+            }
         }
         if needsBody {
             var values: [String: Any] = [:]
@@ -209,6 +237,7 @@ public struct GitHubClient: Sendable {
                 switch value {
                 case .string(let s): values[key] = s
                 case .int(let i): values[key] = i
+                case .strings(let list): values[key] = list
                 }
             }
             let body = (try? JSONSerialization.data(withJSONObject: ["query": query, "variables": values]))
@@ -220,6 +249,7 @@ public struct GitHubClient: Sendable {
             switch value {
             case .string(let s): args += ["-f", "\(key)=\(s)"]
             case .int(let i): args += ["-F", "\(key)=\(i)"]
+            case .strings: break  // needsBody 가 늘 본문으로 보낸다
             }
         }
         return (args, nil)
@@ -463,6 +493,56 @@ public struct GitHubClient: Sendable {
                                 endCursor: search.pageInfo?.endCursor,
                                 hasNextPage: search.pageInfo?.hasNextPage == true,
                                 nextPageSize: usedSize)
+    }
+
+    /// 훑은 목록 한 페이지(`PRProbe`).
+    public struct ProbeSlice: Sendable {
+        public var probes: [PRProbe]
+        public var totalCount: Int?
+        public var endCursor: String?
+        public var hasNextPage: Bool
+        public var rateRemaining: Int?
+        /// 이 요청에 든 값(GitHub 이 알려 준 rateLimit.cost).
+        public var cost: Int
+    }
+
+    /// 한 번에 훑는 건수. 훑기는 건수와 상관없이 1점이라 크게 잡는다(실측: 100건 1점).
+    public static let probePageSize = 100
+
+    /// 탭의 검색 조건 그대로 목록을 가볍게 훑는다 — 검색 쿼리는 `pullRequestSlice` 와 같아 순서(올린 시각)도 같다.
+    public func probeSlice(repos: [RepoID], scope: PRListScope, viewerLogin: String?,
+                           cursor: String? = nil) async throws -> ProbeSlice {
+        guard !repos.isEmpty else {
+            return ProbeSlice(probes: [], totalCount: 0, endCursor: nil, hasNextPage: false, rateRemaining: nil, cost: 0)
+        }
+        var variables: [String: GQLValue] = [
+            "q": .string(GitHubClient.searchQuery(repos: repos, scope: scope, viewerLogin: viewerLogin)),
+            "n": .int(GitHubClient.probePageSize),
+        ]
+        if let cursor { variables["after"] = .string(cursor) }
+        let data = try await withGatewayRetry(context: "PR 훑기") {
+            try await graphQL(GraphQL.prProbeList, variables: variables, as: PRProbeData.self)
+        }
+        guard let search = data.search else {
+            throw GitHubError.graphQL(["검색 결과가 비어 있습니다(권한 또는 rate limit 확인)."])
+        }
+        return ProbeSlice(probes: (search.nodes ?? []).compactMap { $0.toProbe() },
+                          totalCount: search.issueCount,
+                          endCursor: search.pageInfo?.endCursor,
+                          hasNextPage: search.pageInfo?.hasNextPage == true,
+                          rateRemaining: data.rateLimit?.remaining,
+                          cost: data.rateLimit?.cost ?? 0)
+    }
+
+    /// 노드 id 로 PR 을 자세히 받는다 — 목록과 같은 필드(`GraphQL.prFields`). 받을 것이 많으면 `PRFetchPlan.detailChunk`
+    /// 씩 나눠 부르는 것은 부르는 쪽 몫이다(그 사이사이 먼저 그리려고).
+    public func pullRequests(nodeIDs: [String]) async throws -> (prs: [PullRequestInfo], rateRemaining: Int?, cost: Int) {
+        guard !nodeIDs.isEmpty else { return ([], nil, 0) }
+        let data = try await withGatewayRetry(context: "PR 자세히") {
+            try await graphQL(GraphQL.prNodes, variables: ["ids": .strings(nodeIDs)], as: PRNodesData.self)
+        }
+        let prs = (data.nodes ?? []).compactMap { $0?.toInfo() }
+        return (prs, data.rateLimit?.remaining, data.rateLimit?.cost ?? 0)
     }
 
     public func pullRequests(repos: [RepoID],
@@ -780,6 +860,41 @@ public struct GitHubClient: Sendable {
             throw GitHubError.cli(GitHubClient.failureMessage(result, context: "커밋 비교"))
         }
         return .compared(try JSONDecoder().decode(CommitComparison.self, from: Data(result.stdout.utf8)))
+    }
+
+    /// 승인한 커밋부터 head 까지 무엇이 바뀌었나(`SinceApproval`). 승인한 PR 의 이유 칩이 쓴다.
+    ///
+    /// 커밋 사이 비교(compare)는 REST 라 GraphQL 한도와 따로 센다. 머지와 작성자 커밋이 섞였으면 compare 의 파일 목록에
+    /// base 에서 받아온 변경까지 들어 있어서, 작성자 커밋마다 파일을 따로 받는다(열 개를 넘으면 compare 것을 그대로 쓴다).
+    public func sinceApproval(_ repo: RepoID, base: String, head: String,
+                              commentedPaths: Set<String>) async throws -> SinceApproval {
+        let result = try await gh(["api", "repos/\(repo.full)/compare/\(base)...\(head)?per_page=100",
+                                   "--jq", "{status: .status, commits: [.commits[] | {sha: .sha, parents: (.parents | length)}],"
+                                       + " files: [(.files // [])[] | {filename, additions, deletions}]}"],
+                                  timeout: 60)
+        guard result.succeeded else {
+            // 승인한 커밋이 아예 없어졌다(강제 푸시 뒤 지워짐).
+            if CommitComparison.isMissingBase(result.stderr + result.stdout) {
+                return SinceApproval.classify(nil, commentedPaths: commentedPaths)
+            }
+            throw GitHubError.cli(GitHubClient.failureMessage(result, context: "승인 뒤 비교"))
+        }
+        let comparison = try JSONDecoder().decode(SinceApproval.Comparison.self, from: Data(result.stdout.utf8))
+        var authorFiles: [SinceApproval.FileChange]?
+        if comparison.needsAuthorFiles, comparison.authorCommits.count <= 10 {
+            var files: [SinceApproval.FileChange] = []
+            for commit in comparison.authorCommits {
+                let one = try await gh(["api", "repos/\(repo.full)/commits/\(commit.sha)",
+                                        "--jq", "[(.files // [])[] | {filename, additions, deletions}]"],
+                                       timeout: 60)
+                guard one.succeeded else {
+                    throw GitHubError.cli(GitHubClient.failureMessage(one, context: "커밋 파일 목록 조회"))
+                }
+                files += try JSONDecoder().decode([SinceApproval.FileChange].self, from: Data(one.stdout.utf8))
+            }
+            authorFiles = files
+        }
+        return SinceApproval.classify(comparison, authorFiles: authorFiles, commentedPaths: commentedPaths)
     }
 
     /// 승인 임계값. 룰셋 → 클래식 보호 → GraphQL 순으로 시도하고 못 읽으면 nil.

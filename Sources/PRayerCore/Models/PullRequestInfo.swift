@@ -99,6 +99,18 @@ public struct ApprovalInfo: Sendable, Codable, Hashable {
     }
 }
 
+/// 내 의견 리뷰(`latestOpinionatedReviews` 중 내 것) — 승인·변경 요청·Dismiss. 코멘트만 단 리뷰는 들지 않는다.
+public struct ViewerOpinion: Sendable, Codable, Hashable {
+    /// 내 의견 리뷰가 없으면 nil.
+    public var state: String?
+    public var commitOid: String?
+
+    public init(state: String?, commitOid: String?) {
+        self.state = state
+        self.commitOid = commitOid
+    }
+}
+
 public struct PullRequestInfo: Sendable, Codable, Hashable, Identifiable {
     public var repo: RepoID
     public var number: Int
@@ -137,6 +149,9 @@ public struct PullRequestInfo: Sendable, Codable, Hashable, Identifiable {
     /// 내 마지막 리뷰를 낸 시각(GitHub 기준). 게시 직후 GitHub 이 옛 상태를 돌려주는지 가를 때 쓴다(`knowsReview`).
     /// 옛 캐시에는 없다.
     public var viewerLatestReviewAt: Date? = nil
+    /// 내 의견 리뷰. `viewerLatestReview` 는 코멘트만 단 리뷰도 마지막 리뷰로 쳐서, 승인한 뒤 스레드에 답만 달아도
+    /// 승인이 없는 것처럼 보인다 — 승인이 살아 있는지는 이걸로 본다(`viewerApprovalAlive`). 옛 캐시에는 없다(nil = 모름).
+    public var viewerOpinion: ViewerOpinion? = nil
     /// 나에게(또는 팀에) 리뷰 요청이 마지막으로 걸린 시각(GitHub 기준, 타임라인 사건).
     /// 걸려 있는 요청이 내 리뷰보다 **먼저** 걸린 것이면 GitHub 이 아직 안 지운 것이다(`isReRequested`).
     /// 옛 캐시에는 없고, 요청이 아주 많아 받은 사건 안에 없을 때도 nil 이다.
@@ -239,6 +254,27 @@ public struct PullRequestInfo: Sendable, Codable, Hashable, Identifiable {
     /// 내가 승인까지 마쳤는가.
     public var viewerApproved: Bool {
         viewerLatestReviewState?.uppercased() == "APPROVED"
+    }
+
+    /// 내 승인이 아직 살아 있는가. 새 커밋이 와도 GitHub 은 승인을 그대로 둔다 — 레포가 지우게 해 두었을 때만
+    /// Dismiss 된다(`viewerApprovalDismissed`). 리뷰 대기 탭은 이걸로 거른다: 살아 있으면 다시 띄우지 않는다.
+    public var viewerApprovalAlive: Bool {
+        if let viewerOpinion { return viewerOpinion.state?.uppercased() == "APPROVED" }
+        return viewerApproved
+    }
+
+    /// 레포 설정(새 커밋이 오면 승인 지우기)이 내 승인을 지웠는가. 다시 승인해야 머지된다.
+    public var viewerApprovalDismissed: Bool {
+        if viewerOpinion?.state?.uppercased() == "DISMISSED" { return true }
+        return viewerLatestReviewState?.uppercased() == "DISMISSED"
+    }
+
+    /// 내가 승인한 커밋 — "승인 뒤 바뀐 것" 의 시작점. 승인이 살아 있지 않으면 nil.
+    public var viewerApprovedCommit: String? {
+        if let viewerOpinion {
+            return viewerOpinion.state?.uppercased() == "APPROVED" ? viewerOpinion.commitOid : nil
+        }
+        return viewerApproved ? viewerLatestReviewCommit : nil
     }
 
     /// GitHub 이 `postedAt` 에 낸 내 리뷰를 벌써 아는가.

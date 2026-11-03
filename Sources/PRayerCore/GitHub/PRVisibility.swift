@@ -104,10 +104,11 @@ public enum PRVisibility {
             // 초안은 아직 봐 달라는 게 아니다. 내가 올린 초안은 맨 위 "내가 올린 PR"
             // 그룹이 따로 맡으므로(그쪽은 필터를 안 탄다) 여기서 빠져도 안 보이지 않는다.
             if pr.isDraft { return false }
-            // 승인한 뒤 새 커밋이 오면 다시 봐야 하므로 "지금 커밋 기준" 으로 본다.
-            // 다시 봐 달라는 요청(Re-request review)이 왔으면 남긴다 — 승인은 그대로지만
-            // 사람이 한 번 더 봐 달라고 한 것이다.
-            if pr.viewerApprovedCurrentHead, !pr.viewerHasReviewRequest { return false }
+            // 내 승인이 살아 있으면 새 커밋이 와도 다시 띄우지 않는다 — 리뷰 대기는 "나를 부른 것" 만 모은다
+            // (2026-11-02 사용자 결정). 승인 뒤에 생긴 일은 Approved 탭이 알린다. 다시 띄우는 것은 둘뿐이다:
+            // 다시 봐 달라는 요청(Re-request review)이 왔을 때, 레포 설정이 내 승인을 지웠을 때(승인이 살아
+            // 있지 않으니 여기 걸리지 않는다 — 다시 승인해야 머지된다).
+            if pr.viewerApprovalAlive, !pr.viewerHasReviewRequest { return false }
             return true
         }
         guard scope.requiresMyApproval else { return true }

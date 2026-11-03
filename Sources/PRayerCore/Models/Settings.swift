@@ -201,7 +201,7 @@ public struct Settings: Codable, Sendable, Equatable {
         memberNicknames: [:],
         minCommentBodyChars: 20,
         maxSummaryChars: 300,
-        pollSeconds: 120,
+        pollSeconds: 60,
         fiveHourTokenCap: 300_000,
         notifyOnReviewDone: true,
         notifyOnFailure: true,
@@ -349,7 +349,9 @@ public struct Settings: Codable, Sendable, Equatable {
         case codeFontName, codeFontSize, codeFontChosen, uiFontName, uiFontSize, commentFontName, commentFontSize
         case abbreviateMemberNames, memberNicknames
         case minCommentBodyChars, maxSummaryChars
-        case pollSeconds, fiveHourTokenCap
+        /// 기본 주기를 120 → 60초로 바꾸며 키 이름을 바꿨다(옛 키는 `LegacyKeys.pollSeconds`).
+        case pollSeconds = "pollIntervalSeconds"
+        case fiveHourTokenCap
         case notifyOnReviewDone, notifyOnFailure, prChangeNotifications
         case repoColors
         case slack
@@ -359,6 +361,8 @@ public struct Settings: Codable, Sendable, Equatable {
     private enum LegacyKeys: String, CodingKey {
         /// `hiddenLabels` 의 옛 이름(0.3.0 까지). 지우면 그 전 설정의 라벨 목록이 기본값으로 돌아간다.
         case doNotReviewLabels
+        /// 갱신 주기의 옛 키(0.6.5 베타 9 까지). 옛 기본값 120 이 그대로면 새 기본으로 옮긴다.
+        case pollSeconds
     }
 
     /// 결측 필드가 있는 옛 설정 파일도 읽히도록 모든 키에 기본값을 준다.
@@ -409,7 +413,16 @@ public struct Settings: Codable, Sendable, Equatable {
         memberNicknames = v(.memberNicknames, d.memberNicknames)
         minCommentBodyChars = v(.minCommentBodyChars, d.minCommentBodyChars)
         maxSummaryChars = v(.maxSummaryChars, d.maxSummaryChars)
-        pollSeconds = v(.pollSeconds, d.pollSeconds)
+        // 기본 주기를 120 → 60초로 바꿨다(2026-11-02 — 바뀐 PR 만 자세히 받게 되어 한 번 받는 값이 크게 줄었다). 옛 키에
+        // 옛 기본값 120 이 그대로 있으면 새 기본으로 옮기고, 사람이 바꿔 둔 값은 그대로 가져온다. 키를 바꾼 것은 다음에
+        // 읽을 때 "옛 기본값" 과 "사람이 고른 120" 을 가르려는 것이다 — 새 키에 있는 값은 늘 사람이 고른 것이다.
+        if let saved = try? c.decodeIfPresent(Int.self, forKey: .pollSeconds) {
+            pollSeconds = saved
+        } else if let old = try? legacy?.decodeIfPresent(Int.self, forKey: .pollSeconds) {
+            pollSeconds = old == 120 ? d.pollSeconds : old
+        } else {
+            pollSeconds = d.pollSeconds
+        }
         fiveHourTokenCap = v(.fiveHourTokenCap, d.fiveHourTokenCap)
         notifyOnReviewDone = v(.notifyOnReviewDone, d.notifyOnReviewDone)
         notifyOnFailure = v(.notifyOnFailure, d.notifyOnFailure)
