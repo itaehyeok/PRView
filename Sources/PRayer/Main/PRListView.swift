@@ -695,6 +695,7 @@ struct PRRow: View {
 
     var body: some View {
         let badge = model.badge(for: pr)
+        let activeJob = model.job(for: pr).flatMap { $0.isActive ? $0 : nil }
         // 작성자 아바타를 행의 첫 요소로 둔다 — 이름을 읽지 않아도 색과 머리글자로 잡히게.
         // 높이는 **상태 칩 줄 + 제목을 합친 덩어리의 가운데**에 맞춘다(사용자 결정, 2026-10-20).
         // 제목 첫 줄에만 맞췄을 때는 아바타가 제목 쪽에 붙어 칩 줄이 따로 떠 보였다.
@@ -724,7 +725,7 @@ struct PRRow: View {
                             .frame(width: 7, height: 7)
                             .help("승인 뒤 아직 안 본 소식이 있습니다 — 열면 사라집니다")
                     }
-                    BadgeChip(result: badge)
+                    BadgeChip(result: badge, spins: activeJob?.state == .running)
                         // Approve 칩은 이 배지 자리에서 뜬다(ApprovalFlight). 날 차례인 행만 적는다.
                         .anchorPreference(key: ApprovalFlightAnchorsKey.self, value: .bounds) { anchor in
                             isFlightSource ? ApprovalFlightAnchors(sources: [pr.id: anchor]) : ApprovalFlightAnchors()
@@ -1148,6 +1149,8 @@ struct CloneProgressChip: View {
 
 struct BadgeChip: View {
     let result: BadgeResult
+    /// 아이콘 자리에 도는 고리를 그린다 — 리뷰가 실제로 돌고 있을 때(PRRow). 큐에서 기다리는 중이면 모래시계 그대로다.
+    var spins = false
 
     var body: some View {
         if let followUp = result.followUp {
@@ -1206,8 +1209,13 @@ struct BadgeChip: View {
 
     private var label: some View {
         HStack(spacing: 3) {
-            Image(systemName: result.badge.symbolName)
-                .font(.caption2)
+            if spins {
+                ReviewSpinner()
+                    .frame(width: 9, height: 9)
+            } else {
+                Image(systemName: result.badge.symbolName)
+                    .font(.caption2)
+            }
             Text(result.text)
                 .font(.caption2.weight(.medium))
                 // 좁아지면 "미리뷰" 가 "미리 / 뷰" 로 접혔다. 뱃지는 늘 한 줄이다.
@@ -1262,6 +1270,22 @@ struct BadgeChip: View {
         case .dismissed: return .secondary
         case .reRequested: return .blue
         case .notReviewed: return .secondary
+        }
+    }
+}
+
+/// 리뷰가 도는 동안 Reviewing 칩의 아이콘 자리에서 도는 고리. 모래시계만으로는 기다리는 중인지 돌고 있는지,
+/// 멈춘 건 아닌지가 목록에서 안 보였다(사용자, 2026-11-03). 글자색을 따라가 칩 색과 같다.
+/// 시스템 ProgressView 는 칩 색으로 칠할 수 없어 직접 그린다. 도는 잡은 하나뿐이라 매 프레임 그려도 부담이 없다 —
+/// 그래도 RemovalCountdown 처럼 초당 30번으로 묶는다.
+struct ReviewSpinner: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { context in
+            let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9
+            Circle()
+                .trim(from: 0.12, to: 0.82)
+                .stroke(style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+                .rotationEffect(.degrees(turn * 360))
         }
     }
 }
