@@ -35,7 +35,7 @@ struct RepoStrip: View {
                             Text(only.repo.name)
                         }
                     } else {
-                        Text("볼 레포가 없습니다 — ⚙︎ 에서 찾아 체크하세요")
+                        Text("볼 레포가 없습니다 — ⚙︎ 에서 찾아 켜세요")
                     }
                 }
                 .font(.system(size: 12))

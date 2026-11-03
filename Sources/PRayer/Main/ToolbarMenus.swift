@@ -134,7 +134,7 @@ struct ToolbarPopover<Label: View, Content: View>: View {
 
 // MARK: - 레포
 
-/// 레포 관리 — 레포 줄(RepoStrip)의 ⚙︎(탭 바로 뒤, 넘치면 오른쪽 끝). 볼 레포를 찾아 더하고, 켜고 끄고, 전체 리뷰 폴더를 정한다.
+/// 레포 관리 — 레포 줄(RepoStrip)의 ⚙︎(탭 바로 뒤, 넘치면 오른쪽 끝). 볼 레포를 찾아 더하고, 켜고 끈다.
 ///
 /// 예전에는 툴바의 "레포 N개" 메뉴였다. 레포 탭을 툴바 아래 창 너비 줄로 옮기면서 그 줄 끝으로 왔다 —
 /// 볼 레포(탭)와 조회할 레포(이 팝오버)가 한 줄에 모인다(RepoStrip 주석).
@@ -149,12 +149,13 @@ struct RepoManageButton: View {
                 .frame(width: 26, height: 22)
                 .contentShape(Rectangle())
         } content: {
-            // 설정 창 "레포·팀원" 탭과 같은 목록(RepoPickerStep)이다 — 레포를 찾아 고르고, 켜고 끄고,
-            // 전체 리뷰 폴더까지 여기서 정한다. 예전에는 "레포·팀 규칙 설정…"(지금 레포·팀원 탭) 으로 설정 창에 보냈다(사용자 요청).
+            // 설정 창 "레포·팀원" 탭과 같은 목록(RepoPickerStep)이다 — 레포를 찾아 고르고, 켜고 끈다.
+            // 예전에는 "레포·팀 규칙 설정…"(지금 레포·팀원 탭) 으로 설정 창에 보냈다(사용자 요청). 전체 리뷰 폴더(PR 스냅샷)와
+            // Approve 수도 여기 줄마다 적었는데, 켜고 끄려고 여는 곳이라 뺐다 — 설정 창에만 둔다(2026-11-03 사용자 결정).
             // "승인 임계값 다시 읽기" 도 뺐다 — 앱을 켤 때·새로고침(⌘R)·레포를 켤 때 같이 다시 읽는다.
             VStack(alignment: .leading, spacing: 8) {
                 Text("레포").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                RepoPickerStep(showsTitle: false, showsClonePaths: true, compact: true)
+                RepoPickerStep(showsTitle: false, compact: true)
             }
             .frame(width: 420)
             // 검색은 받아 둔 레포 목록 안에서만 돈다. 설정 창은 열 때마다 새로 받지만, 팝오버는 자주 여닫으니
@@ -163,7 +164,7 @@ struct RepoManageButton: View {
         }
         // 툴바 밖이라 기본 버튼 모양(테두리)을 빼고 아이콘만 둔다.
         .buttonStyle(.borderless)
-        .help("레포 관리 — 볼 레포를 찾아 더하고, 켜고 끄고, 전체 리뷰 폴더를 정합니다")
+        .help("레포 관리 — 볼 레포를 찾아 더하고, 켜고 끕니다")
     }
 }
 
