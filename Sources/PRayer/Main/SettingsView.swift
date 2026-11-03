@@ -693,6 +693,27 @@ struct NotificationSettings: View {
         }
     }
 
+    enum NewPRAlert: Hashable {
+        case off, requestedOnly, all
+    }
+
+    /// '새 PR' 메뉴 ↔ 저장하는 두 칸(`newPR`·`newPROnlyWhenReviewRequested`).
+    private var newPRAlert: Binding<NewPRAlert> {
+        Binding(
+            get: {
+                let prefs = model.settings.prChangeNotifications
+                guard prefs.newPR else { return .off }
+                return prefs.newPROnlyWhenReviewRequested ? .requestedOnly : .all
+            },
+            set: { choice in
+                model.settings.prChangeNotifications.newPR = choice != .off
+                if choice != .off {
+                    model.settings.prChangeNotifications.newPROnlyWhenReviewRequested = choice == .requestedOnly
+                }
+            }
+        )
+    }
+
     var body: some View {
         @Bindable var model = model
         Form {
@@ -737,10 +758,13 @@ struct NotificationSettings: View {
             }
 
             Section("📥 리뷰할 PR 알림") {
-                Toggle("새 PR", isOn: $model.settings.prChangeNotifications.newPR)
-                Toggle("나에게 리뷰 요청이 온 것만", isOn: $model.settings.prChangeNotifications.newPROnlyWhenReviewRequested)
-                    .disabled(!model.settings.prChangeNotifications.newPR)
-                    .padding(.leading, 18)
+                // 스위치 둘(새 PR · 들여쓴 '나에게 리뷰 요청이 온 것만')로 상태는 셋뿐이라 메뉴 하나로 합쳤다. 위 스위치를
+                // 끄면 아래 스위치가 흐려진 채 남았다(2026-11-03 사용자 결정). 저장하는 값은 예전 두 칸 그대로다.
+                Picker("새 PR", selection: newPRAlert) {
+                    Text("끔").tag(NewPRAlert.off)
+                    Text("나에게 요청 온 것만").tag(NewPRAlert.requestedOnly)
+                    Text("모든 새 PR").tag(NewPRAlert.all)
+                }
                 Toggle("리뷰어 지정", isOn: $model.settings.prChangeNotifications.reviewRequested)
                     .help("이미 열린 PR 에 나를 리뷰어로 넣었을 때. PR 을 올리면서 넣으면 '새 PR' 로 옵니다.")
                 Toggle("재리뷰 요청", isOn: $model.settings.prChangeNotifications.reReviewRequested)
