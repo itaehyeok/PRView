@@ -718,6 +718,17 @@ struct NotificationSettings: View {
                 }
             }
 
+            // 갱신 주기는 아래 📥 알림 전부가 언제 오는지를 정해서 알림 절들 바로 위에 둔다. 예전에는 "폴링" 절과
+            // '내 PR 알림' 절 밑 안내 줄에 같은 숫자가 두 번 나왔고, 묶음 알림 안내는 리뷰할 PR 알림에도 해당하는데
+            // 내 PR 절 밑에만 붙어 있었다(2026-11-03 사용자 결정).
+            Section("목록 갱신") {
+                Stepper("\(model.settings.pollSeconds)초마다 확인",
+                        value: $model.settings.pollSeconds, in: 30...600, step: 30)
+                Text("한 번에 4건 이상 바뀌면 'PR 소식 N건' 하나로 묶어 알립니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             // 스위치 이름은 알림에 뜨는 말(NotificationText)과 같게, 절 이름 앞에는 그 알림의 갈래 표시를 둔다
             // (사용자 결정, 2026-10-30). '머지 가능'·'충돌' 처럼 누구 PR 인지 안 보이는 것은 "내 PR" 절에 모은다.
             Section("✨ AI 리뷰 알림") {
@@ -744,15 +755,8 @@ struct NotificationSettings: View {
                 Toggle("충돌", isOn: $model.settings.prChangeNotifications.conflict)
                 Toggle("CI 실패", isOn: $model.settings.prChangeNotifications.checksFailed)
                 Toggle("머지 완료", isOn: $model.settings.prChangeNotifications.merged)
-                Text("\(model.settings.pollSeconds)초마다 확인합니다. 한 번에 4건 이상 바뀌면 'PR 소식 N건' 하나로 묶어 알립니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             .task { await model.refreshNotificationStatus() }
-            Section("폴링") {
-                Stepper("\(model.settings.pollSeconds)초마다 갱신",
-                        value: $model.settings.pollSeconds, in: 30...600, step: 30)
-            }
             // "기존 알림 스크립트"(pr-review-notify 끄기 명령) 절은 뺐다 — 한 맥에서만 맞는 안내였다(2026-10-23 사용자 결정).
             Section("데이터") {
                 LabeledContent("초안·설정 위치") {
