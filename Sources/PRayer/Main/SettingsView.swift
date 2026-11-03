@@ -88,11 +88,8 @@ struct ConnectionSettings: View {
                 // 버튼 줄은 Claude 섹션과 같은 자리(맨 아래)에 둔다.
                 GitHubLoginControls()
             }
-
-            Section {
-                Button("온보딩 다시 실행") { model.showOnboarding = true }
-                Button("로그 파일 열기") { model.openLogFile() }
-            }
+            // 맨 아래 이름 없는 절의 "온보딩 다시 실행"·"로그 파일 열기" 는 알림·기타 탭의 "데이터·문제 해결" 로 옮겼다 —
+            // 데이터 폴더와 두 탭에 흩어져 있었다(2026-11-03 사용자 결정).
         }
         .formStyle(.grouped)
     }
@@ -782,11 +779,17 @@ struct NotificationSettings: View {
             }
             .task { await model.refreshNotificationStatus() }
             // "기존 알림 스크립트"(pr-review-notify 끄기 명령) 절은 뺐다 — 한 맥에서만 맞는 안내였다(2026-10-23 사용자 결정).
-            Section("데이터") {
+            // 로그·온보딩 버튼은 연결 탭 맨 아래 이름 없는 절에 따로 있었다. 문제가 생겼을 때 찾는 것들이라 데이터 폴더와
+            // 한 절에 모은다(2026-11-03 사용자 결정).
+            Section("데이터·문제 해결") {
                 LabeledContent("초안·설정 위치") {
                     Text(AppPaths.support.path).font(.caption).lineLimit(1).truncationMode(.middle)
                 }
-                Button("폴더 열기") { NSWorkspace.shared.open(AppPaths.support) }
+                HStack {
+                    Button("폴더 열기") { NSWorkspace.shared.open(AppPaths.support) }
+                    Button("로그 파일 열기") { model.openLogFile() }
+                    Button("온보딩 다시 실행") { model.showOnboarding = true }
+                }
             }
             // 맨 아래에 둔다 — 알림을 고치러 온 사람의 눈길을 먼저 끌 자리가 아니다(2026-11-02 사용자 결정).
             UsageStatsSection()
