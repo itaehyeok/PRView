@@ -1442,7 +1442,9 @@ struct ReviewerStatusRow: View {
 
     private var detail: String? {
         switch state {
-        case .author: return "GitHub 이 자기 PR Approve 를 막습니다"
+        // 못 하는 일(Approve 가 막힘)을 알리면 비활성처럼 읽혀 "내 PR" 이라는 것만 둔다(2026-11-03 사용자 결정).
+        // 막히는 이유는 AI 리뷰 탭 Approve 버튼 도움말에 있다.
+        case .author: return nil
         case .requestedNotReviewed:
             let threshold = model.settings.approvalThreshold(for: pr)
             return "Approve \(pr.approvalCount)/\(threshold)"
@@ -1455,7 +1457,7 @@ struct ReviewerStatusRow: View {
 
     private var symbol: String {
         switch state {
-        case .author: return "person.crop.circle.badge.exclamationmark"
+        case .author: return "person.crop.circle.fill"
         case .requestedNotReviewed: return "person.crop.circle.badge.checkmark"
         case .alreadyReviewed(let reviewState):
             return reviewState == "APPROVED" ? "checkmark.seal.fill" : "bubble.left.fill"
@@ -1465,7 +1467,8 @@ struct ReviewerStatusRow: View {
 
     private var tint: Color {
         switch state {
-        case .author: return .secondary
+        // 회색이면 "아무 일 없음"(.notRequested)과 같아 꺼진 칸처럼 보인다.
+        case .author: return .accentColor
         case .requestedNotReviewed: return .accentColor
         case .alreadyReviewed(let reviewState):
             if reviewState == "APPROVED" { return .green }
@@ -1477,7 +1480,7 @@ struct ReviewerStatusRow: View {
     private var help: String {
         switch state {
         case .author:
-            return "내가 작성자입니다. Approve 버튼은 GitHub 이 거부하므로 비활성됩니다."
+            return "내가 작성자인 PR 입니다."
         case .requestedNotReviewed:
             return "GitHub 이 나를 리뷰어로 요청했고 아직 내 리뷰가 없습니다."
         case .alreadyReviewed:
