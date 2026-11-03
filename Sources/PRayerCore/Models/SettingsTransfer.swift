@@ -409,7 +409,7 @@ public enum SettingsTransfer {
         case ID.reviewModel: return "리뷰 모델"
         case ID.excludedPathPatterns: return "제외 경로"
         case ID.sizeLimits: return "크기 기준"
-        case ID.fiveHourTokenCap: return "5시간 토큰 상한"
+        case ID.fiveHourTokenCap: return "사용량 경고 기준"
         case ID.reviewNotifications: return "AI 리뷰 알림"
         case ID.prChangeNotifications: return "PR 변화 알림"
         case ID.pollSeconds: return "갱신 주기"

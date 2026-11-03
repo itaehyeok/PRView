@@ -458,6 +458,17 @@ struct ReviewSettings: View {
 
             ReviewRulesSection(rules: $model.settings.reviewRules)
 
+            // 예전 이름은 "사용량 방어" 였고 리뷰 대상(옛 대상 제외) 탭에 있었다. 막는 일은 하지 않고 툴바 상태 막대·
+            // 여러 PR 리뷰 창의 숫자만 주황으로 바꿔서, 하는 일대로 이름을 바꾸고 리뷰 탭으로 옮겼다(2026-11-03 사용자 결정).
+            // 최근 5시간 사용량은 툴바 "상태" 메뉴에 있어 여기서는 보이지 않는다(2026-10-23 사용자 결정).
+            Section("사용량 경고") {
+                Stepper("최근 5시간 \(model.settings.fiveHourTokenCap / 1000)k 넘으면 주황으로",
+                        value: $model.settings.fiveHourTokenCap, in: 50_000...2_000_000, step: 50_000)
+                Text("리뷰를 막지는 않습니다. 툴바 상태 메뉴와 여러 PR 리뷰 창에 보입니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             // "전체 리뷰"(기본 모델을 같이 쓴다·PR 스냅샷 위치·동작 방식)와 "코멘트·게시"(상한·게시 방식) 설명 절은
             // 뺐다 — 고칠 칸 없이 설명만 있었다(2026-10-23 사용자 결정). PR 스냅샷은 '레포·팀원' 탭의 각 레포 아래에 있다.
         }
@@ -512,12 +523,6 @@ struct ExclusionSettings: View {
                         .help("이 규칙 지우기 — 걸려 있던 파일이 다시 리뷰에 들어갑니다")
                     }
                 }
-            }
-
-            Section("사용량 방어") {
-                // 최근 5시간 사용량은 툴바 "상태" 메뉴에 있어 여기서는 뺐다(설명 문구도 — 2026-10-23 사용자 결정).
-                Stepper("5시간 토큰 상한 \(model.settings.fiveHourTokenCap / 1000)k",
-                        value: $model.settings.fiveHourTokenCap, in: 50_000...2_000_000, step: 50_000)
             }
         }
         .formStyle(.grouped)

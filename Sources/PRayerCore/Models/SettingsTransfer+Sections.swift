@@ -10,7 +10,7 @@ extension SettingsTransfer {
         static let repos = "어느 레포의 PR 을 볼지와 레포마다 정한 규칙입니다. 설정 → ‘레포·팀원’ 탭의 값입니다."
         static let hiding = "'To review' 목록에서 뺄 PR 의 조건입니다. PR 목록 위 필터 메뉴의 ‘특정 라벨 숨기기’·‘특정 사람의 PR 숨기기’에서 고치는 값입니다."
         static let members = "PR 목록에서 팀원의 GitHub 아이디를 짧게 보여 주는 규칙입니다. ‘레포·팀원’ 탭 아래쪽의 값입니다."
-        static let review = "Claude 로 리뷰를 돌리는 방식과 초안의 모양입니다. ‘리뷰’ 탭의 값입니다."
+        static let review = "리뷰 모델과 사용량 경고 기준입니다. ‘리뷰’ 탭의 값입니다."
         static let scope = "리뷰에서 뺄 파일과 PR 크기 기준입니다. ‘리뷰 대상’ 탭의 값입니다."
         static let notifications = "어떤 일에 알림을 받을지와 PR 목록을 다시 받는 주기입니다. 사람마다 취향이 달라 가져올 때 기본으로는 고르지 않습니다. ‘알림·기타’ 탭의 값입니다."
         static let appearance = "코드·코멘트·화면 글자의 글꼴과 크기입니다. 취향이라 가져올 때 기본으로는 고르지 않습니다."
@@ -27,7 +27,7 @@ extension SettingsTransfer {
         static let reviewModel = "리뷰에 쓰는 Claude 모델과 effort(생각하는 깊이)입니다 — diff 리뷰와 전체 리뷰가 같이 씁니다. effort 가 높을수록 꼼꼼하지만 시간과 토큰을 더 씁니다."
         static let excludedPathPatterns = "리뷰와 크기 계산에서 빼는 자동 생성 파일의 패턴입니다(*.pbxproj 같은). 가져오면 내 목록에 없는 패턴만 더합니다."
         static let sizeLimits = "변경 줄 수가 앞의 값을 넘으면 목록에 ‘큼’ 표시를 붙이고, 뒤의 값을 넘으면 리뷰를 돌리기 전에 한 번 더 묻습니다."
-        static let fiveHourTokenCap = "자동으로 도는 리뷰가 5시간 동안 쓸 수 있는 토큰 상한입니다. 쓰는 요금제에 따라 맞는 값이 달라 가져올 때 기본으로는 고르지 않습니다."
+        static let fiveHourTokenCap = "최근 5시간 동안 쓴 토큰이 이 값을 넘으면 툴바 상태 메뉴와 여러 PR 리뷰 창에 주황으로 보입니다. 리뷰를 막지는 않습니다. 쓰는 요금제에 따라 맞는 값이 달라 가져올 때 기본으로는 고르지 않습니다."
         static let reviewNotifications = "내가 돌린 AI 리뷰가 끝났을 때, 그리고 실패하거나 사용 한도에 걸렸을 때 알림을 띄울지입니다."
         static let prChangeNotifications = "새 PR·리뷰어 지정 같은 리뷰할 PR 의 변화와, 내 PR 의 새 코멘트·머지 가능·충돌·CI 실패 같은 변화 중 무엇을 알릴지입니다."
         static let pollSeconds = "PR 목록을 몇 초마다 다시 받을지입니다."
@@ -186,6 +186,12 @@ extension SettingsTransfer {
                                     current: mine.map { Describe.model($0.model, $0.effort) },
                                     status: status(same: mine == m)))
         }
+        // 사용량 경고는 설정 창 리뷰 탭에 있다(예전에는 대상 제외 탭의 '사용량 방어' 였다).
+        if let cap = p.fiveHourTokenCap {
+            reviewItems.append(item(ID.fiveHourTokenCap, Detail.fiveHourTokenCap, value: Describe.tokens(cap),
+                                    current: current.map { Describe.tokens($0.fiveHourTokenCap) },
+                                    status: status(same: current?.fiveHourTokenCap == cap), importDefault: false))
+        }
         add("review", "리뷰", Summary.review, reviewItems)
 
         // 대상·크기
@@ -201,11 +207,6 @@ extension SettingsTransfer {
             }
             scopeItems.append(item(ID.sizeLimits, Detail.sizeLimits, value: Describe.sizeLimits(l),
                                    current: mine.map(Describe.sizeLimits), status: status(same: mine == l)))
-        }
-        if let cap = p.fiveHourTokenCap {
-            scopeItems.append(item(ID.fiveHourTokenCap, Detail.fiveHourTokenCap, value: Describe.tokens(cap),
-                                   current: current.map { Describe.tokens($0.fiveHourTokenCap) },
-                                   status: status(same: current?.fiveHourTokenCap == cap), importDefault: false))
         }
         add("scope", "대상·크기", Summary.scope, scopeItems)
 
