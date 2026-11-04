@@ -90,6 +90,8 @@ enum DebugLaunch {
     static var onlyLabel: String? { value("PRAYER_DEBUG_ONLY_LABEL") }
     static var scope: PRListScope? { value("PRAYER_DEBUG_SCOPE").flatMap(PRListScope.init(storageValue:)) }
     static var expandAll: Bool { value("PRAYER_DEBUG_EXPAND_ALL") == "1" }
+    /// 고른 PR(PRAYER_DEBUG_SELECT_PR)을 연 뒤 이만큼(초) 있다가 첫 @me 활동을 누른 것처럼 그 글로 간다(AppModel.openMention).
+    static var mentionJumpDelay: Double? { value("PRAYER_DEBUG_MENTION_JUMP").flatMap(Double.init) }
     static var hoverCode: String? { value("PRAYER_DEBUG_HOVER_CODE") }
     static var settingsTab: String? { value("PRAYER_DEBUG_SETTINGS_TAB") }
     static var onboardingStep: OnboardingStep? {
@@ -328,6 +330,12 @@ struct DebugLaunchModifier: ViewModifier {
             if let key = DebugLaunch.selectPR {
                 model.select(prKey: key)
                 model.detailTab = DebugLaunch.detailTab ?? .review
+                if let delay = DebugLaunch.mentionJumpDelay, let pr = model.selectedPR,
+                   let entryID = PRActivityBuilder.build(from: pr, limit: nil, viewer: model.githubAccount?.login)
+                    .first(where: \.mentionsViewer)?.mentionEntryID {
+                    try? await Task.sleep(for: .seconds(delay))
+                    model.openMention(of: pr, entryID: entryID, select: {})
+                }
                 // 확인 창만 띄운다. reviewNow 를 부르면 클론이 있는 레포는 진짜 리뷰가 돈다(토큰을 쓴다).
                 if let confirm = DebugLaunch.snapshotConfirm, let pr = model.selectedPR {
                     model.pendingSnapshotClone = PendingSnapshotClone(pr: pr, missingLinkedPath: confirm == "1" ? nil : confirm)

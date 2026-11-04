@@ -122,7 +122,8 @@ enum DemoData {
             comments: [
                 ReviewThreadComment(author: "alex-acme", body: "키보드가 올라오면 버튼이 가려지지 않나요?", createdAt: iso(250)),
                 ReviewThreadComment(author: "jamie-acme", body: "`safeAreaInset` 으로 옮겨서 따라 올라가게 했어요.", createdAt: iso(65)),
-                ReviewThreadComment(author: "alex-acme", body: "확인했습니다 👍", createdAt: iso(45)),
+                // 나를 부른 글(MyMentions) — 목록 활동 줄 @me · 개요 형광펜. 아래 sam 의 코멘트는 3줄 밖이라 끌어온 줄로 붙는다.
+                ReviewThreadComment(author: "alex-acme", body: "확인했습니다 👍 키보드 쪽은 @you-acme 님도 한 번 봐 주세요.", createdAt: iso(45)),
             ])
         func commit(_ seed: Int, _ headline: String, _ minutes: Double) -> PRCommit {
             PRCommit(oid: sha(seed), abbreviatedOid: String(sha(seed).prefix(7)), messageHeadline: headline,
@@ -158,7 +159,7 @@ enum DemoData {
                base: "develop", head: "feature/login-cleanup", added: 98, deleted: 18, files: 3, updated: 35, created: 320,
                approvals: ["alex-acme"], labels: ["feature"], threads: [loginThread],
                events: [PRReviewEvent(author: "alex-acme", state: "APPROVED", submittedAt: ago(40), body: "")],
-               comments: [PRIssueComment(author: "sam-acme", body: "`LoginButtonLabel` 의 로딩 상태 스크린샷도 붙여 주시면 좋겠어요.", createdAt: ago(200))],
+               comments: [PRIssueComment(author: "sam-acme", body: "`LoginButtonLabel` 의 로딩 상태 스크린샷도 붙여 주시면 좋겠어요. 다크 모드 버튼 색은 예전에 @you-acme 님이 정리하셨던 것 같은데 같이 봐 주실 수 있을까요?", createdAt: ago(200))],
                commits: loginCommits),
             pr(iOS, 131, "설정 화면 다크 모드 색 맞추기", author: "alex-acme",
                body: "다크 모드에서 설정 화면의 셀 배경과 글자 색이 시스템 색과 달라 보이던 것을 색 토큰으로 맞췄습니다.",
