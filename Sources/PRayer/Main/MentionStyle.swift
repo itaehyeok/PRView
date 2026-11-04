@@ -17,6 +17,12 @@ enum MentionStyle {
     static let horizontalPadding: CGFloat = 0.18
     static let verticalPadding: CGFloat = 0.04
     static let cornerRadius: CGFloat = 3
+    /// "@me" 표시의 글자. 활동 줄 글자(caption2, 10pt)와 같은 크기 — 칩이 크다는 지적에 위아래 여백을 걷고 좌우도 좁혔다.
+    /// (11.5pt 로 키워 본 것은 더 컸다.)
+    static let chipFont = Font.system(size: 10, weight: .semibold)
+    static let chipCornerRadius: CGFloat = 3
+    /// 칩 좌우 여백.
+    static let chipHorizontalPadding: CGFloat = 3.5
 
     private static func dynamic(light: NSColor, dark: NSColor) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
@@ -59,11 +65,10 @@ struct MentionAttribute: TextAttribute {}
 struct MentionTag: View {
     var body: some View {
         Text(MentionStyle.label)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
+            .font(MentionStyle.chipFont)
+            .padding(.horizontal, MentionStyle.chipHorizontalPadding)
             .foregroundStyle(MentionStyle.tint)
-            .background(MentionStyle.fill, in: RoundedRectangle(cornerRadius: 4))
+            .background(MentionStyle.fill, in: RoundedRectangle(cornerRadius: MentionStyle.chipCornerRadius))
             .fixedSize()
             .help("나를 멘션한 글입니다")
     }
@@ -87,7 +92,7 @@ struct MentionButton: View {
                         .font(.system(size: 8, weight: .bold))
                 }
             }
-            .font(.caption2.weight(.semibold))
+            .font(MentionStyle.chipFont)
             .lineLimit(1)
         }
         .buttonStyle(MentionButtonStyle(isHovering: isHovering))
@@ -108,12 +113,14 @@ private struct MentionButtonStyle: ButtonStyle {
     let isHovering: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
+        let shape = RoundedRectangle(cornerRadius: MentionStyle.chipCornerRadius)
+        // 위아래 여백을 두지 않는다 — 바탕이 글자 높이에 딱 맞아, @me 가 붙은 활동 줄만 높아져 줄 간격이 들쭉날쭉하던
+        // 것(위아래 1pt 여백을 자리로 잡았을 때 실측)도 같이 사라진다.
+        return configuration.label
+            .padding(.horizontal, MentionStyle.chipHorizontalPadding)
             .foregroundStyle(MentionStyle.tint)
-            .background(MentionStyle.fill, in: RoundedRectangle(cornerRadius: 4))
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(MentionStyle.tint.opacity(isHovering ? 0.6 : 0), lineWidth: 0.8))
+            .background(shape.fill(MentionStyle.fill))
+            .overlay(shape.stroke(MentionStyle.tint.opacity(isHovering ? 0.6 : 0), lineWidth: 0.8))
             .brightness(configuration.isPressed ? -0.06 : 0)
             .scaleEffect(configuration.isPressed ? 0.96 : (isHovering ? 1.08 : 1))
             .animation(.easeOut(duration: 0.12), value: isHovering)
