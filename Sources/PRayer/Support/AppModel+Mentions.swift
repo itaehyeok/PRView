@@ -17,5 +17,6 @@ extension AppModel {
         guard selectedPRID == pr.id else { return }
         detailTab = .overview
         mentionJump = MentionJump(prID: pr.id, entryID: entryID)
+        recordUsage(.mentionJump)
     }
 }

@@ -36,6 +36,10 @@ public struct UsageStats: Codable, Sendable, Equatable {
         case reviewFromRow = "list.rowReview"
         /// 도는·기다리는 리뷰를 취소했다(행 버튼·우클릭·AI 리뷰 탭 어디서든, 한 번 누른 것을 하나로).
         case reviewCancel = "review.cancel"
+        /// 목록 활동 줄의 @me 를 눌러 개요 탭의 그 글로 갔다(나를 멘션한 글).
+        case mentionJump = "list.mentionJump"
+        /// 개요 대화 머리의 "@me N ↓" 으로 다음 멘션으로 갔다.
+        case mentionNext = "overview.mentionNext"
     }
 
     /// 마지막으로 보낸 것. 설정의 "보낸 내용 보기" 가 본문을 글자 그대로 보인다.

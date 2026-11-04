@@ -631,6 +631,7 @@ struct OverviewTab: View {
                     MentionButton(title: "\(MentionStyle.label) \(mentionIDs.count)", systemImage: "arrow.down",
                                   help: "나를 멘션한 글 \(mentionIDs.count)건 — 누를 때마다 다음 글로 갑니다") {
                         focusNextMention(mentionIDs, proxy: proxy)
+                        model.recordUsage(.mentionNext)
                     }
                 }
             }
