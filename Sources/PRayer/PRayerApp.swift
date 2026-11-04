@@ -89,6 +89,13 @@ struct PRayerApp: App {
             CommandGroup(replacing: .appInfo) {
                 Button("About \(AppInfo.displayName)") { AboutPanel.show() }
             }
+            #if DEBUG
+            // 개발 빌드에만 있는 메뉴. 모양 값을 화면 옆에서 바꿔 보는 창들을 연다.
+            CommandMenu("디버그") {
+                Button("@me 모양 조절…") { MentionTunerPanel.show() }
+                    .keyboardShortcut("m", modifiers: [.command, .option, .shift])
+            }
+            #endif
             CommandGroup(after: .newItem) {
                 Button("새로고침") { Task { await model.refreshByUser() } }
                     .keyboardShortcut("r", modifiers: .command)

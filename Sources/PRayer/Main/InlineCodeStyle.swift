@@ -57,6 +57,8 @@ struct InlineCodeBoxes: TextRenderer {
     let look: InlineCodeLook
     /// 누를 수 있는 코드 상자의 자리를 알린다. 글 배치는 그리는 이 자리에서만 알 수 있다.
     var onLayout: (([CodeHotspot]) -> Void)?
+    /// 나를 부른 자리의 형광펜 색(MentionStyle.fill). 그리는 쪽은 메인 액터 밖이라 값으로 받는다.
+    var mentionFill: Color = .clear
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
         let horizontal = size * look.horizontalPadding
@@ -90,7 +92,7 @@ struct InlineCodeBoxes: TextRenderer {
         func fillMention(_ bounds: CGRect) {
             let box = CGRect(x: bounds.minX - mentionHorizontal, y: bounds.minY - mentionVertical,
                              width: bounds.width + mentionHorizontal, height: bounds.height + mentionVertical * 2)
-            context.fill(Path(roundedRect: box, cornerRadius: MentionStyle.cornerRadius), with: .color(MentionStyle.fill))
+            context.fill(Path(roundedRect: box, cornerRadius: MentionStyle.cornerRadius), with: .color(mentionFill))
         }
         for line in layout {
             var pending: CGRect?
@@ -167,7 +169,8 @@ struct InlineCodeText: View {
 
     @available(macOS 15.0, *)
     private var boxes: some View {
-        let renderer = InlineCodeBoxes(size: size, look: InlineCodeStyle.current, onLayout: isLinked ? { report($0) } : nil)
+        let renderer = InlineCodeBoxes(size: size, look: InlineCodeStyle.current, onLayout: isLinked ? { report($0) } : nil,
+                                       mentionFill: MentionStyle.fill)
         return text
             .textSelection(.disabled)
             .textRenderer(renderer)
