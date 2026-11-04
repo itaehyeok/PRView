@@ -448,6 +448,8 @@ final class AppModel {
     var freshReplyIDs: [String: Set<String>] = [:]
     /// 목록의 답글 칩으로 연 PR(`openReplies`). 그 PR 의 개요 탭이 첫 새 답글로 스크롤하고 비운다(OverviewTab).
     var replyJumpPRID: String?
+    /// 목록 활동 줄의 @me 로 연 글(`openMention`). 그 PR 의 개요 탭이 그 대화 줄로 스크롤하고 비운다(OverviewTab).
+    var mentionJump: MentionJump?
     /// 지금 화면에 있는 목록이 아직 이번 조회 결과가 아닌가 — 지난번 캐시이거나, 처음이라 비어 있다
     /// (조회가 끝나면 false). 목록 머리 줄의 "가져오는 중" 과 빈 목록의 빈 행 자리가 본다.
     /// 처음 값이 true 인 것은 앱을 처음 켜 캐시가 없을 때도 첫 결과 전에는 "없습니다" 대신
