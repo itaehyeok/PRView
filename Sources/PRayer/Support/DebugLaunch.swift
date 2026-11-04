@@ -92,6 +92,8 @@ enum DebugLaunch {
     static var expandAll: Bool { value("PRAYER_DEBUG_EXPAND_ALL") == "1" }
     /// 고른 PR(PRAYER_DEBUG_SELECT_PR)을 연 뒤 이만큼(초) 있다가 첫 @me 활동을 누른 것처럼 그 글로 간다(AppModel.openMention).
     static var mentionJumpDelay: Double? { value("PRAYER_DEBUG_MENTION_JUMP").flatMap(Double.init) }
+    /// 켜자마자 "@me 모양 조절" 창(MentionTunerPanel)을 본창 옆에 띄운다.
+    static var mentionTuner: Bool { value("PRAYER_DEBUG_MENTION_TUNER") == "1" }
     static var hoverCode: String? { value("PRAYER_DEBUG_HOVER_CODE") }
     static var settingsTab: String? { value("PRAYER_DEBUG_SETTINGS_TAB") }
     static var onboardingStep: OnboardingStep? {
@@ -285,6 +287,15 @@ struct DebugLaunchModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content.task {
+            #if DEBUG
+            if DebugLaunch.mentionTuner {
+                // 본창 자리가 잡힌 뒤에 옆에 놓는다(창 크기를 맞추는 PRAYER_DEBUG_WINDOW_SIZE 는 1초 뒤에 바꾼다).
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    MentionTunerPanel.show()
+                }
+            }
+            #endif
             guard DebugLaunch.selectPR != nil || DebugLaunch.settingsTab != nil || DebugLaunch.showAbout
                 || DebugLaunch.windowSize != nil || DebugLaunch.appearance != nil
                 || DebugLaunch.slackRequestCount != nil || DebugLaunch.slackMultiCount != nil
