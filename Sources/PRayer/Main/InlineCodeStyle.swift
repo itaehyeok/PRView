@@ -84,6 +84,28 @@ struct InlineCodeBoxes: TextRenderer {
             }
         }
 
+        // 나를 부른 자리(MentionAttribute)의 보라 형광펜. 코드 상자와 겹치지 않는다(코드 안의 멘션은 표시하지 않는다).
+        let mentionHorizontal = size * MentionStyle.horizontalPadding
+        let mentionVertical = size * MentionStyle.verticalPadding
+        func fillMention(_ bounds: CGRect) {
+            let box = CGRect(x: bounds.minX - mentionHorizontal, y: bounds.minY - mentionVertical,
+                             width: bounds.width + mentionHorizontal, height: bounds.height + mentionVertical * 2)
+            context.fill(Path(roundedRect: box, cornerRadius: MentionStyle.cornerRadius), with: .color(MentionStyle.fill))
+        }
+        for line in layout {
+            var pending: CGRect?
+            for run in line {
+                if run[MentionAttribute.self] != nil {
+                    let bounds = run.typographicBounds.rect
+                    pending = pending.map { $0.union(bounds) } ?? bounds
+                } else if let current = pending {
+                    fillMention(current)
+                    pending = nil
+                }
+            }
+            if let current = pending { fillMention(current) }
+        }
+
         for line in layout {
             // 한글이 섞인 코드는 글꼴이 바뀌는 자리마다 줄 조각이 나뉜다. 이어진 코드 조각은 상자 하나로 합친다 —
             // 조각마다 그리면 `맨 앞 코드` 가 상자 셋으로 갈라졌다. 붙어 있어도 다른 코드 조각이면 나눈다.
@@ -118,7 +140,8 @@ struct InlineCodeBoxes: TextRenderer {
     }
 }
 
-/// 줄 안 서식을 입힌 글 한 덩어리. 인라인 코드가 있으면 뒤에 상자 겹을 깐다.
+/// 줄 안 서식을 입힌 글 한 덩어리. 인라인 코드나 나를 부른 자리(형광펜)가 있으면 뒤에 상자 겹을 깐다 — `hasCode` 는 둘 중
+/// 하나라도 있다는 뜻이다(이름은 형광펜이 생기기 전 그대로).
 ///
 /// diff 에서 위치를 찾은 코드(`links`)는 그 상자 자리에 투명한 단추를 얹고 상자 끝에 눈 표식(CodeLinkMark)을 단다 — 잠시
 /// 올려 두면 그 자리 코드가 뜨고, 누르면 diff 로 간다(예전엔 같은 것을 코멘트 아래 칩으로 따로 모았다). 상자 자리는 뒤 겹의

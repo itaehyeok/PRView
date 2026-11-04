@@ -811,7 +811,7 @@ struct PRRow: View {
                         .layoutValue(key: PRRowFactRoleKey.self, value: .labels)
                 }
             }
-            RecentActivityList(pr: pr)
+            RecentActivityList(pr: pr, select: select)
             }
         }
         .padding(.vertical, 3)
@@ -1055,25 +1055,38 @@ struct FilterButton: View {
 struct RecentActivityList: View {
     @Environment(AppModel.self) private var model
     let pr: PullRequestInfo
+    /// 행을 누른 것과 같은 고르기. 활동 줄의 @me 가 PR 을 열 때 쓴다 — 버튼이 누르기를 가져가 행의 누르기가 불리지 않는다.
+    var select: () -> Void = {}
 
     private static let compactLimit = 3
 
     var body: some View {
         // 두 번 만든다. 접힌 목록은 커밋을 접고, 전체 목록은 펴야 해서 결과가 다르다.
         // 둘 다 이미 받아 둔 PR 데이터만 훑으므로 추가 요청은 없다.
-        let compact = PRActivityBuilder.build(from: pr, limit: Self.compactLimit)
+        // 내 로그인을 줘 나를 부른 활동에 @me 를 단다(MyMentions).
+        let viewer = model.githubAccount?.login
+        let compact = PRActivityBuilder.build(from: pr, limit: Self.compactLimit, viewer: viewer)
         let isFull = model.isActivityFull(pr)
         let all = isFull || compact.count >= Self.compactLimit
-            ? PRActivityBuilder.build(from: pr, limit: nil, collapseCommits: false)
+            ? PRActivityBuilder.build(from: pr, limit: nil, collapseCommits: false, viewer: viewer)
             : compact
-        let shown = isFull ? all : compact
+        // 나를 부른 활동이 접힌 3줄 밖으로 밀렸으면 가장 최근 것 하나를 아래에 붙인다 — 멘션은 펼치지 않아도 보이게
+        // (2026-11-04 사용자 결정). 전체를 펼쳤으면 이미 다 있다.
+        let compactIDs = Set(compact.map(\.id))
+        let pinned = isFull ? nil : all.first { $0.mentionsViewer && !compactIDs.contains($0.id) }
+        let shown = isFull ? all : compact + (pinned.map { [$0] } ?? [])
         let canShowMore = all.count > compact.count
 
         if !shown.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(shown) { activity in
                     ActivityRow(activity: activity,
-                                name: activity.actor.isEmpty ? "" : model.settings.displayName(activity.actor))
+                                name: activity.actor.isEmpty ? "" : model.settings.displayName(activity.actor),
+                                onMention: activity.mentionEntryID.map { entryID in
+                                    { model.openMention(of: pr, entryID: entryID, select: select) }
+                                })
+                    // 3줄 밖에서 끌어온 줄 — 사이가 떨어져 있다는 것이 보이게 조금 띄운다.
+                    .padding(.top, activity.id == pinned?.id ? 3 : 0)
                 }
                 // 이 줄은 셀 맨 아래에 둔다. 가운데 있으면 PR 을 고르려다 잘못 눌린다.
                 //
@@ -1111,6 +1124,8 @@ struct RecentActivityList: View {
 struct ActivityRow: View {
     let activity: PRActivity
     let name: String
+    /// 이 활동의 글이 나를 불렀으면 "Commented" 옆에 @me 를 달고, 누르면 이것을 부른다(그 글로 가기). nil 이면 달지 않는다.
+    var onMention: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 5) {
@@ -1128,6 +1143,10 @@ struct ActivityRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            if let onMention {
+                MentionButton(help: "\(name.isEmpty ? activity.actor : name) 님이 나를 멘션했습니다 — 누르면 그 글로 갑니다",
+                              action: onMention)
+            }
             Spacer(minLength: 4)
             RelativeTimeText(date: activity.at)
                 .font(.caption2.monospacedDigit())

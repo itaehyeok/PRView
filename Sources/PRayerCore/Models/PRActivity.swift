@@ -58,6 +58,11 @@ public struct PRActivity: Sendable, Codable, Hashable, Identifiable {
     public var at: Date
     /// 코멘트 본문 일부. 본문이 없는 활동(Approve 등)은 nil.
     public var excerpt: String?
+    /// 이 활동의 글이 나를 @멘션했으면 그 글이 있는 개요 대화 줄(`PRTimelineEntry.id`). 목록 활동 줄의 @me 를 누르면
+    /// 그 줄로 간다. 옵셔널인 것은 디스크에 남은 예전 활동(이 칸이 없던 때)도 그대로 읽으려고다.
+    public var mentionEntryID: String?
+
+    public var mentionsViewer: Bool { mentionEntryID != nil }
 
     /// 본문 일부까지 섞는다. 커밋을 하나하나 낼 때는 같은 사람이 같은 초에 여러 건을
     /// 올릴 수 있어서 종류·사람·시각만으로는 ForEach 가 항목을 구분하지 못한다.
@@ -80,34 +85,49 @@ public enum PRActivityBuilder {
     ///   - limit: 앞에서 몇 건만 남길지. `nil` 이면 전부 — "늘리기" 로 전체 내역을 볼 때 쓴다.
     ///   - collapseCommits: 커밋 푸시를 최근 1건으로 접을지. 목록에서 3줄만 보일 때는 접어야
     ///     한 번의 푸시가 줄을 다 먹지 않는다. 전체 내역을 볼 때는 펴서 커밋을 하나씩 보여준다.
+    ///   - viewer: 내 로그인. 주면 나를 @멘션한 활동에 그 글의 대화 줄(`mentionEntryID`)을 단다(MyMentions).
     public static func build(from pr: PullRequestInfo,
                              limit: Int? = 3,
                              collapseCommits: Bool = true,
+                             viewer: String? = nil,
                              now: Date = Date()) -> [PRActivity] {
         var activities: [PRActivity] = []
+        let me = viewer?.lowercased()
+        /// 남이 쓴 글이 나를 불렀으면 그 글의 대화 줄 id 를, 아니면 nil.
+        func mention(_ author: String, _ body: String, entry: @autoclosure () -> PRTimelineEntry) -> String? {
+            guard let me, author.lowercased() != me, MyMentions.mentions(body, viewer: me) else { return nil }
+            return entry().id
+        }
 
         // 1) 리뷰 제출(Approve / Request changes / Comment / Dismiss).
         for event in pr.reviewEvents {
             guard let kind = PRActivity.Kind(reviewState: event.state) else { continue }
-            activities.append(PRActivity(kind: kind,
-                                         actor: event.author,
-                                         at: event.submittedAt,
-                                         excerpt: excerpt(event.body)))
+            var activity = PRActivity(kind: kind,
+                                      actor: event.author,
+                                      at: event.submittedAt,
+                                      excerpt: excerpt(event.body))
+            activity.mentionEntryID = mention(event.author, event.body, entry: .review(event))
+            activities.append(activity)
         }
 
         // 2) PR 대화 코멘트(인라인이 아닌 코멘트).
         for comment in pr.issueComments {
-            activities.append(PRActivity(kind: .commented,
-                                         actor: comment.author,
-                                         at: comment.createdAt,
-                                         excerpt: excerpt(comment.body)))
+            var activity = PRActivity(kind: .commented,
+                                      actor: comment.author,
+                                      at: comment.createdAt,
+                                      excerpt: excerpt(comment.body))
+            activity.mentionEntryID = mention(comment.author, comment.body, entry: .comment(comment))
+            activities.append(activity)
         }
 
         // 3) 인라인 코멘트. 보통 리뷰 제출 1건에 묶여 오므로 새 항목으로 세지 않고,
         //    본문이 비어 있는 리뷰 항목의 미리보기를 채우는 데 쓴다.
         for thread in pr.threads {
+            let threadAt = thread.comments.first.flatMap { isoDate($0.createdAt) }
             for comment in thread.comments {
                 guard let at = isoDate(comment.createdAt) else { continue }
+                // 스레드는 개요에서 첫 글 시각에 한 줄로 선다(PRTimelineBuilder) — 답글이 불러도 그 줄로 간다.
+                let mentionID = threadAt.flatMap { mention(comment.author, comment.body, entry: .thread(thread, at: $0)) }
                 if let index = activities.firstIndex(where: {
                     $0.actor == comment.author
                         && ($0.kind == .commented || $0.kind == .changesRequested)
@@ -116,11 +136,17 @@ public enum PRActivityBuilder {
                     if activities[index].excerpt == nil {
                         activities[index].excerpt = excerpt(comment.body)
                     }
+                    // 리뷰 한 번에 묶인 코드 코멘트가 불렀다. 리뷰 본문이 먼저 불렀으면 그쪽을 둔다.
+                    if activities[index].mentionEntryID == nil {
+                        activities[index].mentionEntryID = mentionID
+                    }
                 } else {
-                    activities.append(PRActivity(kind: .commented,
-                                                 actor: comment.author,
-                                                 at: at,
-                                                 excerpt: excerpt(comment.body)))
+                    var activity = PRActivity(kind: .commented,
+                                              actor: comment.author,
+                                              at: at,
+                                              excerpt: excerpt(comment.body))
+                    activity.mentionEntryID = mentionID
+                    activities.append(activity)
                 }
             }
         }

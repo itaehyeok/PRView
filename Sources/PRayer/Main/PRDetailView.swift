@@ -325,6 +325,14 @@ struct OverviewTab: View {
 
     static let bodyKey = "body"
 
+    /// 나를 부른 글로 옮겨 온 줄(`PRTimelineEntry.id`) — 잠깐 보라 테두리를 두른다(focusMention).
+    @State private var mentionFocusID: String?
+    /// 그 줄 상자를 형광펜 색으로 깜빡이는 중인가(켜고 끄기를 두 번).
+    @State private var mentionLit = false
+    @State private var mentionFocusTask: Task<Void, Never>?
+    /// 대화 머리의 "@me N" 을 누를 때마다 다음 멘션으로 — 지금 몇 번째에 있나.
+    @State private var mentionCursor = -1
+
     var body: some View {
         let entries = PRTimelineBuilder.build(from: pr)
         let keys = collapsibleKeys(entries)
@@ -334,11 +342,12 @@ struct OverviewTab: View {
                     if !keys.isEmpty { expandControls(keys) }
                     factsCard
                     bodyCard
-                    timelineCard(entries)
+                    timelineCard(entries, proxy: proxy)
                 }
                 .padding(16)
             }
             .task(id: pr.id) {
+                mentionCursor = -1
                 if DebugLaunch.expandAll { expanded = keys }
             }
             // 목록의 답글 칩으로 열었다(AppModel.openReplies).
@@ -347,7 +356,58 @@ struct OverviewTab: View {
                 model.replyJumpPRID = nil
                 scrollToFirstFreshReply(entries, proxy: proxy)
             }
+            // 목록 활동 줄의 @me 로 열었다(AppModel.openMention).
+            .onChange(of: model.mentionJump, initial: true) { _, jump in
+                guard let jump, jump.prID == pr.id else { return }
+                model.mentionJump = nil
+                if let index = mentionEntryIDs(entries).firstIndex(of: jump.entryID) { mentionCursor = index }
+                focusMention(jump.entryID, proxy: proxy)
+            }
         }
+    }
+
+    /// 나를 부른 대화 줄들, 대화 순서대로.
+    private func mentionEntryIDs(_ entries: [PRTimelineEntry]) -> [String] {
+        let viewer = model.githubAccount?.login
+        return entries.filter { MyMentions.firstMentioningBody(in: $0, viewer: viewer) != nil }.map(\.id)
+    }
+
+    /// 나를 부른 글로 간다 — 펼치고, 화면 위쪽 3할 쯤에 오게 밀고(답글 이동과 같은 자리), 어느 상자인지 보이게 보라 테두리를
+    /// 두르고 상자를 두 번 깜빡인다. 테두리는 조금 뒤 걷고 글 안의 형광펜만 남긴다(2026-11-04 시안대로).
+    private func focusMention(_ entryID: String, proxy: ScrollViewProxy) {
+        mentionFocusTask?.cancel()
+        mentionLit = false
+        mentionFocusID = nil
+        // 접힌 상자는 미리보기 한 줄뿐이라 펼쳐야 형광펜이 보인다. 펼치는 애니메이션은 걸지 않는다 — 높이가 느는 동안
+        // 밀면 갈 자리가 움직여 엉뚱한 데 선다.
+        expanded.insert(entryID)
+        mentionFocusTask = Task {
+            // 막 펼쳐 자리를 잡는 참이다. 한 박자 기다렸다 민다 — 미끄러지는 것이 보여야 어디로 왔는지 안다.
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            withAnimation(.smooth(duration: 0.35)) {
+                proxy.scrollTo(entryID, anchor: UnitPoint(x: 0.5, y: 0.3))
+            }
+            try? await Task.sleep(for: .milliseconds(380))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.15)) { mentionFocusID = entryID }
+            for _ in 0..<4 {
+                withAnimation(.easeInOut(duration: 0.22)) { mentionLit.toggle() }
+                try? await Task.sleep(for: .milliseconds(240))
+                guard !Task.isCancelled else { return }
+            }
+            mentionLit = false
+            try? await Task.sleep(for: .milliseconds(1_200))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.4)) { mentionFocusID = nil }
+        }
+    }
+
+    /// 대화 머리의 "@me N" — 누를 때마다 다음 멘션으로, 끝에서는 처음으로 돈다.
+    private func focusNextMention(_ ids: [String], proxy: ScrollViewProxy) {
+        guard !ids.isEmpty else { return }
+        mentionCursor = (mentionCursor + 1) % ids.count
+        focusMention(ids[mentionCursor], proxy: proxy)
     }
 
     /// 새 답글이 온 내 스레드 가운데 대화에서 먼저 나오는 것의 "새 답글" 줄로 간다. 화면 위쪽 3할 쯤에 둬 그 위의 내
@@ -518,7 +578,7 @@ struct OverviewTab: View {
                                 MarkdownText(text: pr.bodyText)
                                 CollapseFooter { toggle(Self.bodyKey) }
                             } else {
-                                CollapsedPreview(text: MarkdownPreview.text(pr.bodyText), lines: 2)
+                                CollapsedPreview(text: bodyPreview, lines: 2, viewer: model.githubAccount?.login)
                             }
                         }
                         .padding(Self.bodyCardPadding)
@@ -541,19 +601,38 @@ struct OverviewTab: View {
         Text("\(pr.bodyText.count.formatted())자")
             .font(.caption)
             .foregroundStyle(.secondary)
+        if bodyMentionsMe { MentionTag() }
+    }
+
+    private var bodyMentionsMe: Bool { MyMentions.bodyMentions(pr, viewer: model.githubAccount?.login) }
+
+    /// 본문이 나를 불렀으면 첫머리 대신 그 자리부터(대화 상자와 같은 규칙).
+    private var bodyPreview: String {
+        let viewer = model.githubAccount?.login
+        if bodyMentionsMe, let preview = MyMentions.preview(of: pr.bodyText, viewer: viewer) { return preview }
+        return MarkdownPreview.text(pr.bodyText)
     }
 
     // MARK: 대화 (사람 리뷰 · 봇 코멘트 · 커밋을 시간순으로)
 
     /// 카드로 감싸지 않는다 — 코멘트가 저마다 상자라(TimelineRow) 바깥 카드까지 두면 상자 안 상자가 된다.
-    private func timelineCard(_ entries: [PRTimelineEntry]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func timelineCard(_ entries: [PRTimelineEntry], proxy: ScrollViewProxy) -> some View {
+        let mentionIDs = mentionEntryIDs(entries)
+        return VStack(alignment: .leading, spacing: 8) {
             // 접어 두면 어디가 남았는지 안 보이므로 미해결 수를 머리에 같이 둔다.
             HStack(spacing: 6) {
                 Text("대화 \(entries.count)건")
                     .font(model.fonts.ui(weight: .medium))
                 if pr.unresolvedThreadCount > 0 {
                     Tag(text: "미해결 \(pr.unresolvedThreadCount)", color: .orange)
+                }
+                // 나를 부른 글 수. 누를 때마다 다음 글로 간다 — 대화가 길면 어디서 불렸는지 찾기 어렵다.
+                if !mentionIDs.isEmpty {
+                    MentionButton(title: "\(MentionStyle.label) \(mentionIDs.count)", systemImage: "arrow.down",
+                                  help: "나를 멘션한 글 \(mentionIDs.count)건 — 누를 때마다 다음 글로 갑니다") {
+                        focusNextMention(mentionIDs, proxy: proxy)
+                        model.recordUsage(.mentionNext)
+                    }
                 }
             }
             if entries.isEmpty {
@@ -566,7 +645,11 @@ struct OverviewTab: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(entries) { entry in
                         TimelineRow(entry: entry, isHead: isHead(entry), pr: pr, onJumpToDiff: onJumpToDiff,
-                                    isExpanded: expandedBinding(entry.id))
+                                    isExpanded: expandedBinding(entry.id),
+                                    isMentionFocused: mentionFocusID == entry.id,
+                                    isMentionLit: mentionFocusID == entry.id && mentionLit)
+                            // 나를 부른 글로 갈 때 이 id 로 민다(focusMention).
+                            .id(entry.id)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -594,6 +677,9 @@ struct TimelineRow: View {
     let onJumpToDiff: (String) -> Void
     /// 접고 펼 수 있는 줄의 펼침 상태. 커밋·본문 없는 승인은 원래 한 줄이라 쓰지 않는다.
     @Binding var isExpanded: Bool
+    /// 나를 부른 글로 막 옮겨 왔다(OverviewTab.focusMention) — 테두리를 보라로, `isMentionLit` 동안 상자를 형광펜 색으로 깜빡인다.
+    var isMentionFocused = false
+    var isMentionLit = false
     @State private var isRailHovering = false
     @State private var isBoxHovering = false
 
@@ -713,7 +799,7 @@ struct TimelineRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 boxHeader
                 if !isExpanded {
-                    CollapsedPreview(text: previewText, lines: 1)
+                    CollapsedPreview(text: previewText, lines: 1, viewer: model.githubAccount?.login)
                 }
             }
             .padding(.horizontal, 10)
@@ -735,13 +821,15 @@ struct TimelineRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.overviewCardFill)
         .overlay(Color.primary.opacity(isBoxHovering && !isExpanded ? 0.03 : 0))
+        .overlay(MentionStyle.fill.opacity(isMentionLit ? 1 : 0))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(boxBorder, lineWidth: 0.8))
-        .opacity(isSettled ? 0.72 : 1)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(boxBorder, lineWidth: isMentionFocused ? 2 : 0.8))
+        .opacity(isSettled && !isMentionFocused ? 0.72 : 1)
     }
 
     /// 손이 가야 하는 글(미해결 코드 코멘트·변경 요청)만 테두리에 색을 준다. 새 답글이 온 내 스레드는 그보다 먼저 파랑.
     private var boxBorder: Color {
+        if isMentionFocused { return MentionStyle.tint }
         if !freshKeys.isEmpty { return Color.accentColor.opacity(0.8) }
         switch entry {
         case .thread(let thread, _) where !thread.isResolved && !thread.isOutdated:
@@ -814,10 +902,18 @@ struct TimelineRow: View {
             CollapseHeader(isOpen: isExpanded, toggle: isExpanded ? { isExpanded = false } : nil) {
                 headerContent
             }
+            if mentionBody != nil {
+                MentionTag()
+            }
             if case .thread(let thread, _) = entry, let reply = thread.latestReply {
                 replySummary(reply, count: thread.comments.count - 1, fresh: freshKeys.count)
             }
         }
+    }
+
+    /// 이 줄에서 나를 부른 첫 글(MyMentions). 스레드는 답글까지 본다.
+    private var mentionBody: String? {
+        MyMentions.firstMentioningBody(in: entry, viewer: model.githubAccount?.login)
     }
 
     @ViewBuilder
@@ -836,7 +932,11 @@ struct TimelineRow: View {
         }
     }
 
+    /// 나를 부른 글이면 첫머리 대신 그 자리부터 보인다 — 접힌 상자는 한 줄뿐이라 멘션이 뒤에 있으면 안 보였다.
     private var previewText: String {
+        if let body = mentionBody, let preview = MyMentions.preview(of: body, viewer: model.githubAccount?.login) {
+            return preview
+        }
         switch entry {
         case .thread(let thread, _): return MarkdownPreview.text(thread.comments.first?.body ?? "")
         case .review(let review): return MarkdownPreview.text(review.body)
@@ -992,10 +1092,12 @@ struct CollapseHeader<Label: View>: View {
 struct CollapsedPreview: View {
     let text: String
     let lines: Int
+    /// 주면 글 안의 @내 아이디에 형광펜을 칠한다(MentionStyle).
+    var viewer: String?
 
     var body: some View {
         if !text.isEmpty {
-            Text(text)
+            Text(MentionStyle.highlighted(text, viewer: viewer))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(lines)

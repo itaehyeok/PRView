@@ -109,8 +109,8 @@ public enum MyCommentReplies {
         return found
     }
 
-    /// 앞이 글자·숫자면 메일 주소(`a@b.com`)의 일부다. 뒤에 `/` 가 오면 팀 멘션이다.
-    private static let mentionPattern = try? NSRegularExpression(
+    /// 앞이 글자·숫자면 메일 주소(`a@b.com`)의 일부다. 뒤에 `/` 가 오면 팀 멘션이다. 내 멘션 표시(MyMentions)도 같은 규칙을 쓴다.
+    static let mentionPattern = try? NSRegularExpression(
         pattern: #"(?<![A-Za-z0-9_./-])@([A-Za-z0-9][A-Za-z0-9-]*)(?![A-Za-z0-9_/-])"#)
 
     /// 코드 블록(```…```)과 인라인 코드(`…`).
@@ -133,7 +133,7 @@ public enum MyCommentReplies {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    private static func withoutCode(_ body: String) -> String {
+    static func withoutCode(_ body: String) -> String {
         guard let codePattern else { return body }
         return codePattern.stringByReplacingMatches(in: body, range: NSRange(body.startIndex..., in: body),
                                                     withTemplate: " ")

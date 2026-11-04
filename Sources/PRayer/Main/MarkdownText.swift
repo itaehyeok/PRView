@@ -241,7 +241,9 @@ struct MarkdownText: View {
             failurePolicy: .returnPartiallyParsedIfPossible)
         var text = (try? AttributedString(markdown: source, options: options)) ?? AttributedString(source)
         let codeRanges = text.runs.filter { $0.inlinePresentationIntent?.contains(.code) == true }.map(\.range)
-        guard !codeRanges.isEmpty else {
+        // 나를 부른 자리(@내 아이디)는 보라 형광펜(MentionStyle). 인라인 코드 안의 것은 부른 것이 아니라 뺀다.
+        let mentionRanges = MentionStyle.ranges(in: text, viewer: model.githubAccount?.login, excluding: codeRanges)
+        guard !codeRanges.isEmpty || !mentionRanges.isEmpty else {
             return InlineCodeText(text: Text(text), hasCode: false, size: size)
         }
         let look = InlineCodeStyle.current
@@ -288,14 +290,40 @@ struct MarkdownText: View {
             let last = characters.index(before: range.upperBound)
             text[last..<range.upperBound].swiftUI.kern = trailing
         }
-        // 코드 조각마다 표시를 붙이려고 조각별 Text 로 나눠 다시 잇는다.
+        let mentionPadding = size * MentionStyle.horizontalPadding
+        for range in mentionRanges {
+            // 굵기는 글꼴을 박지 않고 "강조" 로 준다 — 제목 안의 멘션도 제목 크기 그대로 굵어진다.
+            var intent = text[range].inlinePresentationIntent ?? []
+            intent.insert(.stronglyEmphasized)
+            text[range].inlinePresentationIntent = intent
+            if #unavailable(macOS 15.0) {
+                text[range].swiftUI.backgroundColor = MentionStyle.fill
+            }
+            // 상자 앞뒤 여백은 코드처럼 글자 간격으로 띄운다.
+            let characters = text.characters
+            if range.lowerBound > characters.startIndex {
+                let before = characters.index(before: range.lowerBound)
+                text[before..<range.lowerBound].swiftUI.kern = mentionPadding
+            }
+            let last = characters.index(before: range.upperBound)
+            text[last..<range.upperBound].swiftUI.kern = mentionPadding
+        }
+        // 코드 조각·멘션마다 표시를 붙이려고 조각별 Text 로 나눠 다시 잇는다.
+        enum Mark { case code(Int?), mention }
+        let marks = (zip(codeRanges, linkNumbers).map { (range: $0, mark: Mark.code($1)) }
+                     + mentionRanges.map { (range: $0, mark: Mark.mention) })
+            .sorted { $0.range.lowerBound < $1.range.lowerBound }
         var pieces: [Text] = []
         var cursor = text.startIndex
-        for (range, link) in zip(codeRanges, linkNumbers) {
+        for (range, mark) in marks {
             if cursor < range.lowerBound {
                 pieces.append(Text(AttributedString(text[cursor..<range.lowerBound])))
             }
-            pieces.append(Text(AttributedString(text[range])).customAttribute(InlineCodeAttribute(link: link)))
+            let piece = Text(AttributedString(text[range]))
+            switch mark {
+            case .code(let link): pieces.append(piece.customAttribute(InlineCodeAttribute(link: link)))
+            case .mention: pieces.append(piece.customAttribute(MentionAttribute()))
+            }
             cursor = range.upperBound
         }
         if cursor < text.endIndex {
