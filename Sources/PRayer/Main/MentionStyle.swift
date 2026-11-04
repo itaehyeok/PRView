@@ -8,13 +8,13 @@ import PRayerCore
 /// 색은 바탕색 하나만 고르고 글자색·다크 모드 색은 거기서 끌어낸다. 고를 값이 줄어 창에서 바꿔 보기 쉽다.
 struct MentionLook: Equatable, Sendable {
     /// 바탕색(sRGB 0~1). 형광펜 바탕·칩 바탕·글자색이 모두 이 색에서 나온다.
-    var red = 0x7F / 255.0
-    var green = 0x77 / 255.0
-    var blue = 0xDD / 255.0
+    var red = 0x53 / 255.0
+    var green = 0x4A / 255.0
+    var blue = 0xB7 / 255.0
     /// 라이트 모드 바탕 진하기. 다크 모드는 어두운 바탕에서 묻혀 1.65배로 칠한다.
     var fillOpacity = 0.22
-    var chipFontSize: CGFloat = 10
-    var chipWeight = ChipWeight.semibold
+    var chipFontSize: CGFloat = 9
+    var chipWeight = ChipWeight.bold
     var chipHorizontalPadding: CGFloat = 3.5
     /// 칩 바탕을 글자 위아래로 이만큼 더 칠한다. 자리는 잡지 않는다 — 자리를 잡으면 @me 가 붙은 활동 줄만 높아져
     /// 줄 간격이 들쭉날쭉했다(실측).
@@ -23,9 +23,9 @@ struct MentionLook: Equatable, Sendable {
     /// 끄면 칩 글자를 바탕색에서 끌어낸 색 대신 보통 글자색으로 쓴다.
     var tintedText = true
 
-    /// 보라 형광펜(2026-11-04 사용자 결정: 시안 A 형광펜 + 보라, 표기 "@me"). 노랑은 찾아간 줄 깜빡임·따라가기 강조에
-    /// 이미 쓰고, 파랑은 목록에서 고른 행 바탕과 겹쳐 그 행의 @me 가 묻혀서 고르지 않았다. 칩은 처음(10pt·위아래 1pt
-    /// 여백)보다 작게 — 키워 본 11.5pt 는 컸고, 처음 것도 크다는 지적에 위아래 여백을 걷고 좌우를 좁혔다.
+    /// 남색 형광펜, 칩은 9pt 굵게 — 사용자가 조절 창에서 고른 값(2026-11-04). 시안에서는 보라(#7F77DD)로 정했다가 조절
+    /// 창에서 한 단계 짙은 남색으로 바꿨다. 노랑은 찾아간 줄 깜빡임·따라가기 강조에 이미 쓰고, 파랑은 목록에서 고른 행
+    /// 바탕과 겹쳐 그 행의 @me 가 묻혀서 고르지 않았다. 칩은 처음(10pt·위아래 1pt 여백)이 크다고 해 줄였다.
     static let standard = MentionLook()
 
     enum ChipWeight: String, CaseIterable, Sendable {
@@ -134,7 +134,7 @@ enum MentionStyle {
     }
 }
 
-/// 인라인 형광펜 표시. 상자 겹의 TextRenderer(InlineCodeBoxes)가 이 표시가 붙은 줄 조각 뒤에 보라 상자를 그린다.
+/// 인라인 형광펜 표시. 상자 겹의 TextRenderer(InlineCodeBoxes)가 이 표시가 붙은 줄 조각 뒤에 형광펜 상자를 그린다.
 struct MentionAttribute: TextAttribute {}
 
 /// 개요 대화 상자 머리·본문 카드 머리의 "@me" — 이 글이 나를 불렀다.

@@ -325,7 +325,7 @@ struct OverviewTab: View {
 
     static let bodyKey = "body"
 
-    /// 나를 부른 글로 옮겨 온 줄(`PRTimelineEntry.id`) — 잠깐 보라 테두리를 두른다(focusMention).
+    /// 나를 부른 글로 옮겨 온 줄(`PRTimelineEntry.id`) — 잠깐 @me 색 테두리를 두른다(focusMention).
     @State private var mentionFocusID: String?
     /// 그 줄 상자를 형광펜 색으로 깜빡이는 중인가(켜고 끄기를 두 번).
     @State private var mentionLit = false
@@ -372,7 +372,7 @@ struct OverviewTab: View {
         return entries.filter { MyMentions.firstMentioningBody(in: $0, viewer: viewer) != nil }.map(\.id)
     }
 
-    /// 나를 부른 글로 간다 — 펼치고, 화면 위쪽 3할 쯤에 오게 밀고(답글 이동과 같은 자리), 어느 상자인지 보이게 보라 테두리를
+    /// 나를 부른 글로 간다 — 펼치고, 화면 위쪽 3할 쯤에 오게 밀고(답글 이동과 같은 자리), 어느 상자인지 보이게 @me 색 테두리를
     /// 두르고 상자를 두 번 깜빡인다. 테두리는 조금 뒤 걷고 글 안의 형광펜만 남긴다(2026-11-04 시안대로).
     private func focusMention(_ entryID: String, proxy: ScrollViewProxy) {
         mentionFocusTask?.cancel()
@@ -677,7 +677,7 @@ struct TimelineRow: View {
     let onJumpToDiff: (String) -> Void
     /// 접고 펼 수 있는 줄의 펼침 상태. 커밋·본문 없는 승인은 원래 한 줄이라 쓰지 않는다.
     @Binding var isExpanded: Bool
-    /// 나를 부른 글로 막 옮겨 왔다(OverviewTab.focusMention) — 테두리를 보라로, `isMentionLit` 동안 상자를 형광펜 색으로 깜빡인다.
+    /// 나를 부른 글로 막 옮겨 왔다(OverviewTab.focusMention) — 테두리를 @me 색으로, `isMentionLit` 동안 상자를 형광펜 색으로 깜빡인다.
     var isMentionFocused = false
     var isMentionLit = false
     @State private var isRailHovering = false
