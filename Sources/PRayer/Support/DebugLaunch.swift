@@ -83,7 +83,7 @@ import PRayerCore
 /// - `PRAYER_DEBUG_ONLY_LABEL=라벨` — 행의 그 라벨을 누른 것처럼 그 라벨이 붙은 PR 만 보인다(목록 위 띠·고른 라벨 모양 확인).
 ///   `PRAYER_DEBUG_SCOPE` 를 같이 주면 그 탭에서.
 ///
-/// `open --env PRAYER_DEBUG_SELECT_PR=o/r#1 <앱>`. 툴바 팝오버는 `PRAYER_DEBUG_OPEN_POPOVER`(ToolbarPopover).
+/// `open --env PRAYER_DEBUG_SELECT_PR=o/r#1 <앱>`. 툴바 팝오버는 `PRAYER_DEBUG_OPEN_POPOVER`(ToolbarPopover), 목록 필터 창은 그 값을 `filter` 로(FilterButton, 켜고 6초 뒤).
 enum DebugLaunch {
     static var selectPR: String? { value("PRAYER_DEBUG_SELECT_PR") }
     static var search: String? { value("PRAYER_DEBUG_SEARCH") }

@@ -1041,6 +1041,14 @@ struct FilterButton: View {
             // 라벨 칩이 줄을 넘겨 흐르려면 폭이 정해져 있어야 한다.
             .frame(width: 300)
         }
+        #if DEBUG
+        // 버튼을 누를 수 없는 확인(화면만 찍는 실측)에서 창을 띄워 보려고 — `PRAYER_DEBUG_OPEN_POPOVER=filter`(ToolbarPopover 와 같다).
+        .task {
+            guard ProcessInfo.processInfo.environment["PRAYER_DEBUG_OPEN_POPOVER"] == "filter" else { return }
+            try? await Task.sleep(for: .seconds(6))
+            isPresented = true
+        }
+        #endif
         .sheet(isPresented: $isEditingAuthors) { IgnoredAuthorsEditor() }
         .sheet(isPresented: $isEditingLabels) { HiddenLabelsEditor() }
     }
