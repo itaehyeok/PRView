@@ -272,11 +272,8 @@ struct RepoListStatus: View {
         if reason.byFilter[.hideIgnoredAuthors] != nil || reason.byFilter[.hideLabels] != nil {
             lines.append("숨길 사람·라벨은 목록 위 ‘필터’ 에서 끄거나 고칩니다.")
         }
-        if reason.byFilter[.onlyLabel] != nil {
-            lines.append("라벨만 보기는 목록 위 띠의 라벨 칩(✕)이나 라벨 단추의 ‘모두 풀기’ 로 풉니다.")
-        }
-        if reason.byFilter[.who] != nil {
-            lines.append("@me·답글만 보기는 목록 위 ‘전체’ 를 누르면 풀립니다.")
+        if reason.byFilter[.onlyLabel] != nil || reason.byFilter[.who] != nil {
+            lines.append("@me·Replies·라벨로 좁힌 것은 목록 위 띠의 칩(✕)이나 ‘필터’ 의 ‘모두 끄기’ 로 풉니다.")
         }
         return lines.joined(separator: "\n")
     }
@@ -288,7 +285,7 @@ struct RepoListStatus: View {
         case .hideIgnoredAuthors: names = reason.authors
         case .hideLabels: names = reason.labels
         case .onlyLabel: names = Set(model.filter.onlyLabels)
-        case .who: names = model.filter.who == .all ? [] : [ListFilterBar.whoName(model.filter.who)]
+        case .who: names = model.filter.who == .all ? [] : [model.filter.who.listName]
         default: return ""
         }
         return names.isEmpty ? "" : "(\(names.sorted().joined(separator: ", ")))"

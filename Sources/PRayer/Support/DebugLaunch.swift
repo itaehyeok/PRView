@@ -83,13 +83,13 @@ import PRayerCore
 /// - `PRAYER_DEBUG_ONLY_LABEL=라벨` — 행의 그 라벨을 누른 것처럼 그 라벨이 붙은 PR 만 보인다(목록 위 띠·고른 라벨 모양 확인).
 ///   `PRAYER_DEBUG_SCOPE` 를 같이 주면 그 탭에서.
 ///
-/// `open --env PRAYER_DEBUG_SELECT_PR=o/r#1 <앱>`. 툴바 팝오버는 `PRAYER_DEBUG_OPEN_POPOVER`(ToolbarPopover).
+/// `open --env PRAYER_DEBUG_SELECT_PR=o/r#1 <앱>`. 툴바 팝오버는 `PRAYER_DEBUG_OPEN_POPOVER`(ToolbarPopover), 목록 필터 창은 그 값을 `filter` 로(FilterButton, 켜고 6초 뒤).
 enum DebugLaunch {
     static var selectPR: String? { value("PRAYER_DEBUG_SELECT_PR") }
     static var search: String? { value("PRAYER_DEBUG_SEARCH") }
     /// `PRAYER_DEBUG_ONLY_LABEL=feature,bug` — 라벨만 보기(쉼표로 여럿).
     static var onlyLabels: [String]? { value("PRAYER_DEBUG_ONLY_LABEL").map { $0.split(separator: ",").map(String.init) } }
-    /// `PRAYER_DEBUG_WHO=mentions|replies` — 목록 머리 줄의 @me·답글만 보기.
+    /// `PRAYER_DEBUG_WHO=mentions|replies` — 필터 창의 @me·Replies 만 보기.
     static var who: PRWhoFilter? { value("PRAYER_DEBUG_WHO").flatMap(PRWhoFilter.init(rawValue:)) }
     static var scope: PRListScope? { value("PRAYER_DEBUG_SCOPE").flatMap(PRListScope.init(storageValue:)) }
     static var expandAll: Bool { value("PRAYER_DEBUG_EXPAND_ALL") == "1" }

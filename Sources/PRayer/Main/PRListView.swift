@@ -17,15 +17,15 @@ struct PRListView: View {
             Divider()
             searchField
             Divider()
-            // 전체·@me·답글과 라벨 단추, 그 아래 건수·갱신 시각·새로고침. 받을 레포가 없으면 셀 것도 받을 것도 없다.
+            // 건수·갱신 시각·새로고침. 받을 레포가 없으면 셀 것도 받을 것도 없다.
+            // All·@me·Replies 와 라벨 고르기는 검색줄의 필터 창 안에 있다(2026-11-05 사용자 결정 — 늘 펼쳐 둔 줄이 자리를 먹었다).
             if !model.settings.enabledRepos.isEmpty {
-                ListFilterBar()
-                Divider()
                 ListHeader()
             }
-            // 라벨로 좁혔다는 사실은 목록 위가 늘 말한다 — 안 그러면 "PR 이 왜 이것뿐이지" 가 된다.
-            if !model.filter.onlyLabels.isEmpty {
-                onlyLabelBar(model.filter.onlyLabels)
+            // @me·Replies 나 라벨로 좁혔다는 사실은 목록 위가 늘 말한다 — 안 그러면 "PR 이 왜 이것뿐이지" 가 된다.
+            // 켜진 것만 칩으로 나오고, 아무것도 안 켜졌으면 띠가 없다.
+            if model.filter.who != .all || !model.filter.onlyLabels.isEmpty {
+                activeFilterBar
                 Divider()
             }
             // 여럿 고른 것은 우클릭해야 쓸 수 있다 — 메뉴는 눈에 안 보이니 고른 사실과 할 일을 목록 위가 말한다.
@@ -180,20 +180,25 @@ struct PRListView: View {
         .background(Color.accentColor.opacity(0.08))
     }
 
-    /// "라벨만 보기" 가 켜져 있다는 띠. 고른 라벨을 행에서 고른 라벨과 같은 모양(강조색 바탕)의 칩으로 보여 줘 무엇으로
-    /// 거르는지 이어 읽히게 하고, 칩을 누르면 그 라벨을 뺀다(칩 안 ✕ — 사용자 선택 시안 A). 여럿이면 줄을 넘겨 잇는다.
-    /// 같이 고르기 띠와 같은 자리·같은 바탕이다.
-    private func onlyLabelBar(_ labels: [String]) -> some View {
+    /// 켜진 필터만 보여 주는 띠 — @me·Replies 와 고른 라벨이 행에서 고른 라벨과 같은 모양(강조색 바탕)의 칩으로 나온다.
+    /// 칩을 누르면 그것 하나를 푼다(칩 안 ✕ — 사용자 선택 시안 A). 여럿이면 줄을 넘겨 잇는다. 숨길 사람·라벨은 늘 켜 두는
+    /// 설정이라 여기 나오지 않는다(필터 창에만). 같이 고르기 띠와 같은 자리·같은 바탕이다.
+    private var activeFilterBar: some View {
         HStack(spacing: 0) {
             FlowRow(spacing: 6, lineSpacing: 4) {
-                ForEach(labels, id: \.self) { label in
-                    OnlyLabelChip(label: label) { model.togglePickedLabel(label) }
+                if model.filter.who != .all {
+                    let who = model.filter.who
+                    ActiveFilterChip(icon: who.listIcon, text: who.listName,
+                                     help: "누르면 ‘\(who.listName)’ 만 보기를 풀고 모든 PR 을 봅니다") {
+                        model.setWho(.all)
+                    }
                 }
-                Text("라벨만 보는 중")
-                    .foregroundStyle(Color.accentColor)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.vertical, 2)
+                ForEach(model.filter.onlyLabels, id: \.self) { label in
+                    ActiveFilterChip(icon: "tag.fill", text: label,
+                                     help: "누르면 ‘\(label)’ 라벨로 좁힌 것을 풉니다") {
+                        model.togglePickedLabel(label)
+                    }
+                }
             }
             Spacer(minLength: 0)
         }
@@ -592,7 +597,7 @@ struct PRListView: View {
         if kind == .onlyLabel, !model.filter.onlyLabels.isEmpty {
             return model.filter.onlyLabels.map { "‘\($0)’" }.joined(separator: ", ") + " 라벨만 보기"
         }
-        if kind == .who, model.filter.who != .all { return "‘\(ListFilterBar.whoName(model.filter.who))’ 만 보기" }
+        if kind == .who, model.filter.who != .all { return "‘\(model.filter.who.listName)’ 만 보기" }
         return kind.label
     }
 
@@ -945,23 +950,20 @@ struct PRRow: View {
     }
 }
 
-/// 필터는 목록에만 영향을 주므로 툴바가 아니라 목록 헤더에 둔다.
-/// 켜진 개수를 숫자로 달아, 무언가 걸러지고 있다는 사실이 항상 보이게 한다
-/// (레포를 새로 넣었는데 필터에 다 걸려 빈 화면이 되는 일이 있었다).
+/// 필터는 목록에만 영향을 주므로 툴바가 아니라 목록 검색줄 끝에 둔다.
+/// 창 안: 보기(All · @me · Replies) · 라벨(칩으로 여럿) · 숨기기(숨길 라벨·사람). 앞의 둘은 예전엔 검색줄 아래 늘 펼친
+/// 줄이었는데 안 쓸 때도 자리를 먹어 이리로 옮겼다(2026-11-05 사용자 결정, 창 모양은 시안 3). 켜진 것은 목록 위 띠가 칩으로
+/// 보여 주고, 단추의 숫자는 그 칩 수다 — 무언가로 좁혀 보고 있다는 사실이 늘 보인다.
 struct FilterButton: View {
     @Environment(AppModel.self) private var model
     @State private var isPresented = false
     @State private var isEditingAuthors = false
     @State private var isEditingLabels = false
 
+    /// 목록 위 띠에 나오는 칩 수 — @me·Replies 하나와 고른 라벨들. 숨길 사람·라벨은 늘 켜 두는 설정이라 세지 않는다
+    /// (세면 평소에도 숫자가 떠서 "지금 좁혀 보는 중" 이라는 뜻이 흐려진다). 레포도 세지 않는다 — 위쪽 레포 탭이 늘 보여 준다.
     private var activeCount: Int {
-        var count = 0
-        // 목록이 비어 있으면 아무것도 안 거르므로 세지 않는다(PRFilterState.active 와 같은 규칙).
-        if model.filter.hideIgnoredAuthors, !model.settings.ignoredAuthors.isEmpty { count += 1 }
-        if model.filter.hideLabels, !model.settings.hiddenLabels.isEmpty { count += 1 }
-        // 레포는 세지 않는다 — 위쪽 레포 탭이 고른 상태를 늘 보여 주고, 이 팝오버에는 레포 칸이 없다.
-        // 세면 "필터 1" 인데 열어 보면 켜진 것이 없는 상태가 된다.
-        return count
+        (model.filter.who == .all ? 0 : 1) + model.filter.onlyLabels.count
     }
 
     var body: some View {
@@ -984,21 +986,29 @@ struct FilterButton: View {
             .font(.caption)
         }
         .buttonStyle(.borderless)
-        .help(activeCount > 0 ? "필터 \(activeCount)개가 켜져 있습니다" : "필터")
+        .help(activeCount > 0 ? "필터 \(activeCount)개가 켜져 있습니다 — 목록 위 띠의 칩으로도 풀 수 있습니다" : "필터")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("필터").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     Spacer()
+                    // 보기·라벨만 푼다. 숨기기는 늘 켜 두는 설정이라 바로 아래 체크로 따로 끈다.
                     Button("모두 끄기") {
-                        model.filter.hideIgnoredAuthors = false
-                        model.filter.hideLabels = false
+                        model.setWho(.all)
+                        model.filter.onlyLabels = []
                     }
                     .buttonStyle(.link)
                     .font(.caption)
                     .disabled(activeCount == 0)
                 }
 
+                sectionTitle("보기")
+                WhoFilterPicker()
+
+                sectionTitle("라벨")
+                LabelChipPicker()
+
+                sectionTitle("숨기기")
                 VStack(alignment: .leading, spacing: 6) {
                     // 목록이 비면 켜 봐야 아무 일도 없다. 무엇이 들어 있는지와 고치는 길을
                     // 토글 **오른쪽**에 붙인다 — 아래 줄로 내리면 다음 토글과 붙어 보여서
@@ -1018,19 +1028,37 @@ struct FilterButton: View {
 
                 if model.listScope.kind == .open {
                     Divider()
+                        .padding(.top, 2)
                     // 끌 수 있는 선택지가 아니라 이 탭의 정의다. 말해 주지 않으면 "왜 안 보이지" 가 된다.
                     Text("'To review' 에는 닫힘·머지, 내가 Approve 한 PR, 초안이 나오지 않습니다 — 'All PRs'·'Approved' 와 맨 위 '내가 올린 PR' 에서 보세요.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
             }
+            .font(.caption)
             .padding(14)
-            .frame(minWidth: 280)
+            // 라벨 칩이 줄을 넘겨 흐르려면 폭이 정해져 있어야 한다.
+            .frame(width: 300)
         }
+        #if DEBUG
+        // 버튼을 누를 수 없는 확인(화면만 찍는 실측)에서 창을 띄워 보려고 — `PRAYER_DEBUG_OPEN_POPOVER=filter`(ToolbarPopover 와 같다).
+        .task {
+            guard ProcessInfo.processInfo.environment["PRAYER_DEBUG_OPEN_POPOVER"] == "filter" else { return }
+            try? await Task.sleep(for: .seconds(6))
+            isPresented = true
+        }
+        #endif
         .sheet(isPresented: $isEditingAuthors) { IgnoredAuthorsEditor() }
         .sheet(isPresented: $isEditingLabels) { HiddenLabelsEditor() }
+    }
+
+    /// 창 안 칸 이름(보기·라벨·숨기기) — 칸 사이를 조금 띄우고 흐리게.
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .padding(.top, 4)
     }
 
     /// 목록을 거르는 토글 한 줄: [토글] … 들어 있는 것 [편집…].
@@ -1567,148 +1595,138 @@ struct Tag: View {
 }
 
 
-/// 목록 머리 줄 — 왼쪽 "All · @me · Replies" 로 나에게 온 것만 보고(하나만 고른다), 오른쪽 라벨 단추로 라벨을 여럿 골라
-/// 본다(시안 F, 2026-11-05 사용자 결정). 숫자는 그것을 고르면 목록에 나올 PR 수다. 둘 다 모든 탭에 걸리고, 검색어처럼
-/// 저장하지 않는다. 예전엔 라벨로 좁히려면 행의 라벨을 눌러야 했고 한 번에 하나뿐이었다.
-struct ListFilterBar: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Picker("보기", selection: Binding(get: { model.filter.who }, set: { model.setWho($0) })) {
-                ForEach(PRWhoFilter.allCases, id: \.self) { who in
-                    Text(verbatim: "\(Self.whoName(who)) \(model.whoCount(who))").tag(who)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .fixedSize()
-            .help("All · 나를 멘션한 PR · 내 코드 코멘트에 답글이 온 PR")
-            Spacer(minLength: 4)
-            LabelPickButton()
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-    }
-
-    static func whoName(_ who: PRWhoFilter) -> String {
-        switch who {
+extension PRWhoFilter {
+    /// 필터 창의 "보기" 세그먼트와 목록 위 띠 칩에 쓰는 이름. 목록의 짧은 라벨은 영어다(뱃지·탭과 맞춘다).
+    var listName: String {
+        switch self {
         case .all: return "All"
         case .mentions: return MentionStyle.label
         case .replies: return "Replies"
         }
     }
-}
 
-/// 머리 줄의 라벨 단추. 누르면 지금 목록의 라벨을 PR 수와 함께 늘어놓고 여럿 고른다(`AppModel.labelChoices`). 고르면
-/// 강조색으로 차고 고른 라벨(여럿이면 수)이 적힌다 — 무엇을 골랐는지는 목록 위 띠가 칩으로 다 보인다.
-private struct LabelPickButton: View {
-    @Environment(AppModel.self) private var model
-    @State private var isPresented = false
-    @State private var query = ""
-    @State private var isHovering = false
-
-    var body: some View {
-        let picked = model.filter.onlyLabels
-        Button {
-            isPresented.toggle()
-        } label: {
-            HStack(spacing: 3) {
-                Image(systemName: picked.isEmpty ? "tag" : "tag.fill")
-                Text(verbatim: picked.isEmpty ? "Labels" : picked.count == 1 ? picked[0] : "Labels \(picked.count)")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 7, weight: .bold))
-            }
-            .font(.caption)
-            .foregroundStyle(picked.isEmpty ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.accentColor))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(Color.accentColor.opacity(picked.isEmpty ? (isHovering ? 0.06 : 0) : (isHovering ? 0.24 : 0.16)),
-                        in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(picked.isEmpty ? 0.2 : 0), lineWidth: 0.5))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: 150, alignment: .trailing)
-        .onHover { isHovering = $0 }
-        .help(picked.isEmpty ? "라벨로 거르기" : "고른 라벨: \(picked.joined(separator: ", "))")
-        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-            LabelPickList(query: $query)
+    /// 목록 위 띠 칩의 아이콘. @me 는 이름에 @ 가 있어 따로 달지 않고, Replies 는 행의 답글 칩과 같은 화살표다.
+    var listIcon: String? {
+        switch self {
+        case .all, .mentions: return nil
+        case .replies: return "arrowshape.turn.up.left.fill"
         }
     }
 }
 
-/// 라벨 단추의 팝오버 — 찾기 칸, 라벨마다 체크와 PR 수, 모두 풀기.
-private struct LabelPickList: View {
+/// 필터 창의 "보기" — All · @me · Replies 중 하나만 고른다(예전 머리 줄 세그먼트를 그대로 옮겼다). 숫자는 그것을 고르면
+/// 목록에 나올 PR 수다(`AppModel.whoCount`).
+private struct WhoFilterPicker: View {
     @Environment(AppModel.self) private var model
-    @Binding var query: String
 
-    /// 이보다 많으면 목록에 스크롤을 단다.
-    private static let scrollAfter = 12
+    var body: some View {
+        Picker("보기", selection: Binding(get: { model.filter.who }, set: { model.setWho($0) })) {
+            ForEach(PRWhoFilter.allCases, id: \.self) { who in
+                Text(verbatim: "\(who.listName) \(model.whoCount(who))").tag(who)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .fixedSize()
+        .help("All · 나를 멘션한 PR · 내 코드 코멘트에 답글이 온 PR")
+    }
+}
+
+/// 필터 창의 "라벨" — 지금 목록의 라벨을 PR 수와 함께 칩으로 늘어놓고 눌러서 여럿 고른다(시안 3, 2026-11-05 사용자 결정).
+/// 켜진 칩은 목록 위 띠의 칩과 같은 강조색이라 고른 것이 띠로 이어 읽힌다. 라벨이 많으면 찾기 칸이 붙고, 더 많으면 칩 칸이
+/// 스크롤된다(`AppModel.labelChoices` — 고른 라벨은 0건이어도 남아 풀 수 있다).
+private struct LabelChipPicker: View {
+    @Environment(AppModel.self) private var model
+    @State private var query = ""
+
+    /// 이보다 많으면 찾기 칸을 단다.
+    private static let searchAfter = 12
+    /// 이보다 많으면 칩 칸에 스크롤을 단다 — 한 줄에 서너 개라 여덟 줄쯤이다.
+    private static let scrollAfter = 30
 
     var body: some View {
         let all = model.labelChoices
         let needle = query.trimmingCharacters(in: .whitespaces)
         let choices = needle.isEmpty ? all : all.filter { $0.label.localizedCaseInsensitiveContains(needle) }
-        VStack(alignment: .leading, spacing: 8) {
-            TextField("라벨 찾기", text: $query)
-                .textFieldStyle(.roundedBorder)
-                .controlSize(.small)
+        VStack(alignment: .leading, spacing: 6) {
+            if all.count > Self.searchAfter {
+                TextField("라벨 찾기", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
+            }
             if choices.isEmpty {
                 Text(all.isEmpty ? "이 목록의 PR 에는 라벨이 없습니다" : "맞는 라벨이 없습니다")
                     .foregroundStyle(.secondary)
             } else if choices.count > Self.scrollAfter {
-                ScrollView { rows(choices) }
-                    .frame(height: 280)
+                ScrollView { chips(choices) }
+                    .frame(height: 180)
             } else {
-                rows(choices)
+                chips(choices)
             }
-            Divider()
-            Button("모두 풀기") { model.filter.onlyLabels = [] }
-                .buttonStyle(.link)
-                .disabled(model.filter.onlyLabels.isEmpty)
         }
-        .font(.caption)
-        .padding(12)
-        .frame(width: 230)
     }
 
-    private func rows(_ choices: [(label: String, count: Int)]) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+    private func chips(_ choices: [(label: String, count: Int)]) -> some View {
+        FlowRow(spacing: 5, lineSpacing: 5) {
             ForEach(choices, id: \.label) { choice in
-                Toggle(isOn: Binding(get: { model.isOnlyLabel(choice.label) },
-                                     set: { _ in model.togglePickedLabel(choice.label) })) {
-                    HStack(spacing: 8) {
-                        Text(verbatim: choice.label)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer(minLength: 8)
-                        Text("\(choice.count)")
-                            .monospacedDigit()
-                            .foregroundStyle(.tertiary)
-                    }
+                LabelPickChip(label: choice.label, count: choice.count, isOn: model.isOnlyLabel(choice.label)) {
+                    model.togglePickedLabel(choice.label)
                 }
-                .toggleStyle(.checkbox)
             }
         }
     }
 }
 
-/// 목록 위 띠의 라벨 칩 `[🏷 라벨 ✕]`. 칩 전체가 푸는 버튼이다 — ✕ 만 누르게 하면 자리가 너무 작다.
-/// 마우스를 올리면 바탕이 한 단계 짙어지고 손 모양 커서가 된다(행의 라벨과 같은 규칙).
-private struct OnlyLabelChip: View {
+/// 필터 창의 라벨 칩 `[feature 5]`. 켜지면 강조색 바탕(목록 위 띠 칩과 같다), 꺼지면 테두리만.
+private struct LabelPickChip: View {
     let label: String
+    let count: Int
+    let isOn: Bool
+    let toggle: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: 4) {
+                Text(verbatim: label)
+                    .fontWeight(isOn ? .semibold : .regular)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text("\(count)")
+                    .monospacedDigit()
+                    .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor.opacity(0.7)) : AnyShapeStyle(.tertiary))
+            }
+            .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Color.accentColor.opacity(isOn ? (isHovering ? 0.26 : 0.16) : (isHovering ? 0.06 : 0)),
+                        in: RoundedRectangle(cornerRadius: 4))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(isOn ? 0 : 0.2), lineWidth: 0.5))
+            .contentShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
+        // 긴 라벨 하나가 칩 칸을 다 먹지 않게 — 잘린 이름은 툴팁으로 본다.
+        .frame(maxWidth: 200, alignment: .leading)
+        .onHover { isHovering = $0 }
+        .help(isOn ? "누르면 ‘\(label)’ 을 뺍니다" : "‘\(label)’ 라벨이 붙은 PR 만 봅니다 — \(count)건")
+    }
+}
+
+/// 목록 위 띠의 켜진 필터 칩 `[@me ✕]` `[🏷 라벨 ✕]`. 칩 전체가 푸는 버튼이다 — ✕ 만 누르게 하면 자리가 너무 작다.
+/// 마우스를 올리면 바탕이 한 단계 짙어지고 손 모양 커서가 된다(행의 라벨과 같은 규칙).
+private struct ActiveFilterChip: View {
+    let icon: String?
+    let text: String
+    let help: String
     let clear: () -> Void
     @State private var isHovering = false
 
     var body: some View {
         Button(action: clear) {
             HStack(spacing: 3) {
-                Image(systemName: "tag.fill")
-                Text(verbatim: label)
+                if let icon { Image(systemName: icon) }
+                Text(verbatim: text)
                     .fontWeight(.semibold)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -1727,11 +1745,11 @@ private struct OnlyLabelChip: View {
             isHovering = inside
             if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
-        // 누르면 띠가 내려가 칩이 사라진다 — 나갔다는 알림이 없어 손 모양 커서가 남는다(ReplyChip 과 같다).
+        // 누르면 칩(마지막이면 띠째)이 사라진다 — 나갔다는 알림이 없어 손 모양 커서가 남는다(ReplyChip 과 같다).
         .onDisappear {
             if isHovering { NSCursor.pop() }
         }
-        .help("누르면 ‘\(label)’ 라벨로 좁힌 것을 풀고 모든 PR 을 봅니다")
+        .help(help)
     }
 }
 

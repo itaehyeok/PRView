@@ -28,7 +28,7 @@ public enum PRFilterKind: String, Sendable, CaseIterable, Identifiable {
     }
 }
 
-/// 목록 머리 줄의 "All · @me · Replies" — 나에게 온 것만 골라 본다. 하나만 고른다(2026-11-05 사용자 결정, 시안 F):
+/// 목록 필터 창의 "All · @me · Replies" — 나에게 온 것만 골라 본다. 하나만 고른다(2026-11-05 사용자 결정, 시안 F):
 /// 둘을 같이 켜는 경우를 두면 "둘 다인지 둘 중 하나인지" 를 따로 알려야 했다.
 public enum PRWhoFilter: String, Sendable, CaseIterable {
     case all
@@ -63,7 +63,7 @@ public struct PRFilterState: Sendable, Equatable {
     /// 아니라 지금 무엇을 보느냐를 좁히는 것이라 검색어와 성격이 같다 — 승인 탭에서도 그 레포만 봐야 한다.
     public var hiddenRepos: Set<String>
     /// 고른 라벨 — 이 가운데 하나라도 붙은 PR 만 보인다. 비어 있으면 거르지 않는다. 목록 행의 라벨을 누르면 그 하나로,
-    /// 머리 줄의 라벨 단추로는 여럿을 고른다.
+    /// 필터 창의 라벨 칩으로는 여럿을 고른다.
     ///
     /// 레포 고르기·검색어처럼 **모든 탭**에 건다. 무엇을 보느냐를 좁히는 것이라 리뷰 대기만의 조건이 아니다.
     public var onlyLabels: [String]

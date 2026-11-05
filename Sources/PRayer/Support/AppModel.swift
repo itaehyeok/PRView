@@ -108,9 +108,9 @@ struct PRFilter: Codable, Equatable {
     /// 검색어는 저장하지 않는다. 다시 켰을 때 목록이 비어 있으면 원인을 찾기 어렵다.
     var search = ""
     /// 고른 라벨 — 이 가운데 하나라도 붙은 PR 만 보인다(`PRFilterState.onlyLabels`). 목록 행의 라벨을 누르면 그 하나로,
-    /// 머리 줄의 라벨 단추로는 여럿을 고른다. 검색어처럼 저장하지 않는다.
+    /// 필터 창의 라벨 칩으로는 여럿을 고른다. 검색어처럼 저장하지 않는다.
     var onlyLabels: [String] = []
-    /// 머리 줄의 "All · @me · Replies"(`PRWhoFilter`). 검색어처럼 저장하지 않는다 — 다시 켰을 때 목록이 좁아져 있으면 원인을 찾기 어렵다.
+    /// 필터 창의 "All · @me · Replies"(`PRWhoFilter`). 검색어처럼 저장하지 않는다 — 다시 켰을 때 목록이 좁아져 있으면 원인을 찾기 어렵다.
     var who = PRWhoFilter.all
 
     private static let storageKey = "prFilter"
@@ -673,7 +673,7 @@ final class AppModel {
     /// 하나만 보려는데 다른 레포의 내 PR 이 맨 위에 남으면 좁힌 보람이 없다.
     var myOpenPRs: [PullRequestInfo] { myOpenPRs(who: filter.who, labels: filter.onlyLabels) }
 
-    /// `myOpenPRs` 를 @me·답글·라벨 조건만 바꿔 본다 — 머리 줄의 숫자·라벨 고를거리가 "그것을 고르면 나올 것" 을 센다.
+    /// `myOpenPRs` 를 @me·답글·라벨 조건만 바꿔 본다 — 필터 창의 숫자·라벨 고를거리가 "그것을 고르면 나올 것" 을 센다.
     private func myOpenPRs(who: PRWhoFilter, labels: [String]) -> [PullRequestInfo] {
         guard listScope.kind == .open else { return [] }
         let needle = filter.search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -692,7 +692,7 @@ final class AppModel {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
-    /// 머리 줄 "All · @me · Replies" 의 숫자 — 그것을 고르면 목록에 나올 PR 수. 맨 위 내가 올린 PR 묶음은 세지 않는다 —
+    /// 필터 창 "All · @me · Replies" 의 숫자 — 그것을 고르면 목록에 나올 PR 수. 맨 위 내가 올린 PR 묶음은 세지 않는다 —
     /// 바로 아래 "To review N건" 과 같은 잣대여야 "All" 의 숫자가 그 건수와 맞는다(묶음은 제 머리에 건수가 있다).
     func whoCount(_ who: PRWhoFilter) -> Int {
         var state = filterState
@@ -1012,7 +1012,7 @@ final class AppModel {
     }
 
     /// 목록 행의 라벨을 누르면 그 라벨이 붙은 PR 만 보인다(여럿 골라 둔 것도 그 하나로 바꾼다). 그 하나만 골라 둔 라벨을
-    /// 다시 누르면 푼다. 여럿을 더해 고르는 것은 머리 줄의 라벨 단추가 맡는다(`togglePickedLabel`).
+    /// 다시 누르면 푼다. 여럿을 더해 고르는 것은 필터 창의 라벨 칩이 맡는다(`togglePickedLabel`).
     func toggleOnlyLabel(_ label: String) {
         if filter.onlyLabels.count == 1, isOnlyLabel(label) {
             filter.onlyLabels = []
@@ -1022,7 +1022,7 @@ final class AppModel {
         }
     }
 
-    /// 머리 줄 라벨 단추에서 라벨 하나를 더하거나 뺀다.
+    /// 필터 창의 라벨 칩·목록 위 띠의 칩에서 라벨 하나를 더하거나 뺀다.
     func togglePickedLabel(_ label: String) {
         if isOnlyLabel(label) {
             filter.onlyLabels.removeAll { $0.caseInsensitiveCompare(label) == .orderedSame }
@@ -1032,7 +1032,7 @@ final class AppModel {
         }
     }
 
-    /// 머리 줄 "All · @me · Replies" 를 골랐다.
+    /// 필터 창 "All · @me · Replies" 를 골랐다(띠의 칩을 눌러 풀 때도 여기로 온다).
     func setWho(_ who: PRWhoFilter) {
         guard filter.who != who else { return }
         filter.who = who
