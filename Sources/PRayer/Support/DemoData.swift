@@ -64,7 +64,14 @@ enum DemoData {
             model.records[pr.id] = record
             model.recordHistory[pr.id] = [record]
             if pr.number == 128, let sessionID = record.sessionID {
-                model.chats[sessionID] = loginChat(sessionID: sessionID)
+                var chat = loginChat(sessionID: sessionID)
+                if let choice = DebugLaunch.chatModel, let last = chat.messages.indices.last {
+                    chat.model = choice.model
+                    chat.effort = choice.effort
+                    chat.messages[last].model = choice.model.map { model.modelOption(id: $0)?.apiID ?? $0 } ?? record.model
+                    chat.messages[last].effort = choice.effort
+                }
+                model.chats[sessionID] = chat
             }
         }
         Log.info("데모 데이터로 켬 — GitHub·Claude 에 묻지 않는다", "app")

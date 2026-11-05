@@ -50,6 +50,35 @@ final class ReviewChatTests: XCTestCase {
         XCTAssertEqual(arguments[arguments.firstIndex(of: "-m")! + 1], "gpt-6.1-sol")
     }
 
+    // 대화창에서 Effort 를 고르지 않았으면 플래그를 붙이지 않는다 — 그 모델의 CLI 기본값으로 답한다.
+    func testEffortOnlyWhenChosen() {
+        XCTAssertFalse(ReviewChatRunner.claudeArguments(sessionID: sessionID, model: "sonnet").contains("--effort"))
+        let claude = ReviewChatRunner.claudeArguments(sessionID: sessionID, model: "sonnet", effort: "low")
+        XCTAssertEqual(claude[claude.firstIndex(of: "--effort")! + 1], "low")
+        XCTAssertEqual(claude[claude.firstIndex(of: "--model")! + 1], "sonnet")
+
+        let plain = ReviewChatRunner.codexArguments(sessionID: sessionID, model: "gpt-6.1-terra", knownFeatures: [])
+        XCTAssertFalse(plain.contains { $0.hasPrefix("model_reasoning_effort") })
+        let codex = ReviewChatRunner.codexArguments(sessionID: sessionID, model: "gpt-6.1-terra", effort: "medium",
+                                                    knownFeatures: [])
+        XCTAssertTrue(codex.contains("model_reasoning_effort=\"medium\""))
+        // 대화 ID 와 표준 입력 표시는 늘 맨 끝이다(`exec resume <ID> -`).
+        XCTAssertEqual(Array(codex.suffix(2)), [sessionID, "-"])
+    }
+
+    // 모델·Effort 칸이 생기기 전에 저장한 대화 파일도 그대로 읽힌다(고른 것 없음 = 리뷰한 설정).
+    func testChatSavedBeforeModelChoiceStillDecodes() throws {
+        let old = """
+        [{"sessionID":"\(sessionID)","engine":"claude","updatedAt":0,
+          "messages":[{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","role":"assistant","text":"네","date":0,"failed":false}]}]
+        """
+        let chats = try JSONDecoder().decode([ReviewChat].self, from: Data(old.utf8))
+        XCTAssertNil(chats[0].model)
+        XCTAssertNil(chats[0].effort)
+        XCTAssertFalse(chats[0].hasCustomModel)
+        XCTAssertNil(chats[0].messages[0].model)
+    }
+
     func testPreambleOnlyOnFirstQuestion() {
         var turn = ChatTurn(engine: .codex, executablePath: "/x/codex", sessionID: sessionID, model: nil,
                             question: "세 번째 지적은 꼭 고쳐야 해?", isFirst: true)
