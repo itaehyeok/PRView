@@ -59,6 +59,15 @@ struct InlineCodeBoxes: TextRenderer {
     var onLayout: (([CodeHotspot]) -> Void)?
     /// 나를 부른 자리의 형광펜 색(MentionStyle.fill). 그리는 쪽은 메인 액터 밖이라 값으로 받는다.
     var mentionFill: Color = .clear
+    /// 찾아온 멘션이 깜빡일 때 덧칠할 색(MentionStyle.flash)과 그 진하기(`mentionPulse`, 0~1).
+    var mentionFlash: Color = .clear
+    var mentionPulse: Double = 0
+
+    /// 진하기를 애니메이션으로 옮긴다 — 켜고 끌 때 형광펜이 툭 바뀌지 않고 차오르고 빠진다.
+    var animatableData: Double {
+        get { mentionPulse }
+        set { mentionPulse = newValue }
+    }
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
         let horizontal = size * look.horizontalPadding
@@ -92,7 +101,11 @@ struct InlineCodeBoxes: TextRenderer {
         func fillMention(_ bounds: CGRect) {
             let box = CGRect(x: bounds.minX - mentionHorizontal, y: bounds.minY - mentionVertical,
                              width: bounds.width + mentionHorizontal, height: bounds.height + mentionVertical * 2)
-            context.fill(Path(roundedRect: box, cornerRadius: MentionStyle.cornerRadius), with: .color(mentionFill))
+            let shape = Path(roundedRect: box, cornerRadius: MentionStyle.cornerRadius)
+            context.fill(shape, with: .color(mentionFill))
+            if mentionPulse > 0 {
+                context.fill(shape, with: .color(mentionFlash.opacity(mentionPulse)))
+            }
         }
         for line in layout {
             var pending: CGRect?
@@ -155,6 +168,7 @@ struct InlineCodeText: View {
     let size: CGFloat
     var links: [CodeReference] = []
     var context: CodeLinkContext?
+    @Environment(\.mentionPulse) private var mentionPulse
     @State private var hotspots: [CodeHotspot] = []
 
     var body: some View {
@@ -170,7 +184,8 @@ struct InlineCodeText: View {
     @available(macOS 15.0, *)
     private var boxes: some View {
         let renderer = InlineCodeBoxes(size: size, look: InlineCodeStyle.current, onLayout: isLinked ? { report($0) } : nil,
-                                       mentionFill: MentionStyle.fill)
+                                       mentionFill: MentionStyle.fill, mentionFlash: MentionStyle.flash,
+                                       mentionPulse: mentionPulse)
         return text
             .textSelection(.disabled)
             .textRenderer(renderer)

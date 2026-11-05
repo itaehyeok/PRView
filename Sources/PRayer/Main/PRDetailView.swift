@@ -325,9 +325,9 @@ struct OverviewTab: View {
 
     static let bodyKey = "body"
 
-    /// 나를 부른 글로 옮겨 온 줄(`PRTimelineEntry.id`) — 잠깐 @me 색 테두리를 두른다(focusMention).
+    /// 나를 부른 글로 옮겨 온 줄(`PRTimelineEntry.id`) — 그 줄의 멘션 형광펜이 깜빡인다(focusMention).
     @State private var mentionFocusID: String?
-    /// 그 줄 상자를 형광펜 색으로 깜빡이는 중인가(켜고 끄기를 두 번).
+    /// 그 줄의 멘션 형광펜을 짙게 칠하는 중인가(켜고 끄기를 두 번).
     @State private var mentionLit = false
     @State private var mentionFocusTask: Task<Void, Never>?
     /// 대화 머리의 "@me N" 을 누를 때마다 다음 멘션으로 — 지금 몇 번째에 있나.
@@ -378,8 +378,9 @@ struct OverviewTab: View {
         return entries.filter { MyMentions.firstMentioningBody(in: $0, viewer: viewer) != nil }.map(\.id)
     }
 
-    /// 나를 부른 글로 간다 — 펼치고, 화면 위쪽 3할 쯤에 오게 밀고(답글 이동과 같은 자리), 어느 상자인지 보이게 @me 색 테두리를
-    /// 두르고 상자를 두 번 깜빡인다. 테두리는 조금 뒤 걷고 글 안의 형광펜만 남긴다(2026-11-04 시안대로).
+    /// 나를 부른 글로 간다 — 펼치고, 화면 위쪽 3할 쯤에 오게 밀고(답글 이동과 같은 자리), 글 안의 멘션 형광펜만 두 번 짙게
+    /// 깜빡인 뒤 평소 형광펜으로 둔다. 예전엔 상자에 @me 색 테두리를 두르고 상자 전체를 깜빡였는데, 글 전체가 칠해져 어디가
+    /// 나를 부른 자리인지 오히려 묻혔다(2026-11-05 사용자 결정 — 멘션만).
     private func focusMention(_ entryID: String, proxy: ScrollViewProxy) {
         mentionFocusTask?.cancel()
         mentionLit = false
@@ -396,16 +397,14 @@ struct OverviewTab: View {
             }
             try? await Task.sleep(for: .milliseconds(380))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.15)) { mentionFocusID = entryID }
+            mentionFocusID = entryID
             for _ in 0..<4 {
                 withAnimation(.easeInOut(duration: 0.22)) { mentionLit.toggle() }
                 try? await Task.sleep(for: .milliseconds(240))
                 guard !Task.isCancelled else { return }
             }
             mentionLit = false
-            try? await Task.sleep(for: .milliseconds(1_200))
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.4)) { mentionFocusID = nil }
+            mentionFocusID = nil
         }
     }
 
@@ -672,11 +671,10 @@ struct OverviewTab: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(entries) { entry in
                         TimelineRow(entry: entry, isHead: isHead(entry), pr: pr, onJumpToDiff: onJumpToDiff,
-                                    isExpanded: expandedBinding(entry.id),
-                                    isMentionFocused: mentionFocusID == entry.id,
-                                    isMentionLit: mentionFocusID == entry.id && mentionLit)
-                            // 나를 부른 글로 갈 때 이 id 로 민다(focusMention).
+                                    isExpanded: expandedBinding(entry.id))
+                            // 나를 부른 글로 갈 때 이 id 로 민다(focusMention). 그 줄의 멘션 형광펜만 깜빡인다.
                             .id(entry.id)
+                            .environment(\.mentionPulse, mentionFocusID == entry.id && mentionLit ? 1 : 0)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -704,9 +702,6 @@ struct TimelineRow: View {
     let onJumpToDiff: (String) -> Void
     /// 접고 펼 수 있는 줄의 펼침 상태. 커밋·본문 없는 승인은 원래 한 줄이라 쓰지 않는다.
     @Binding var isExpanded: Bool
-    /// 나를 부른 글로 막 옮겨 왔다(OverviewTab.focusMention) — 테두리를 @me 색으로, `isMentionLit` 동안 상자를 형광펜 색으로 깜빡인다.
-    var isMentionFocused = false
-    var isMentionLit = false
     @State private var isRailHovering = false
     @State private var isBoxHovering = false
 
@@ -848,15 +843,13 @@ struct TimelineRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.overviewCardFill)
         .overlay(Color.primary.opacity(isBoxHovering && !isExpanded ? 0.03 : 0))
-        .overlay(MentionStyle.fill.opacity(isMentionLit ? 1 : 0))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(boxBorder, lineWidth: isMentionFocused ? 2 : 0.8))
-        .opacity(isSettled && !isMentionFocused ? 0.72 : 1)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(boxBorder, lineWidth: 0.8))
+        .opacity(isSettled ? 0.72 : 1)
     }
 
     /// 손이 가야 하는 글(미해결 코드 코멘트·변경 요청)만 테두리에 색을 준다. 새 답글이 온 내 스레드는 그보다 먼저 파랑.
     private var boxBorder: Color {
-        if isMentionFocused { return MentionStyle.tint }
         if !freshKeys.isEmpty { return Color.accentColor.opacity(0.8) }
         switch entry {
         case .thread(let thread, _) where !thread.isResolved && !thread.isOutdated:
