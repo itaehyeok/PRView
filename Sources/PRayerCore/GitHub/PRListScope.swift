@@ -119,6 +119,15 @@ public struct PRListScope: Sendable, Equatable, Hashable, Identifiable {
     public var includesClosed: Bool { kind != .open }
     public var requiresMyApproval: Bool { kind == .myApprovals }
 
+    /// `old` 에서 같은 종류의 기간만 넓혔나 — 24h → 7d·30d, 7d → 30d.
+    ///
+    /// 그러면 `old` 로 받은 것이 이 탭의 결과에 다 든다. 기간 탭의 서버 조건은 `updated:>=` 이고(Approved 는
+    /// `reviewed-by:` 를 더 건다) 넓히면 그 시각만 앞으로 당겨지기 때문이다(`GitHubClient.pullRequestSlice`).
+    public func widens(from old: PRListScope) -> Bool {
+        guard kind == old.kind, let hours = windowHours, let oldHours = old.windowHours else { return false }
+        return hours > oldHours
+    }
+
     /// 받아 둘 최대 건수.
     ///
     /// 열린 PR 은 전량 확보한다 — 닫힌 PR 이 최근 갱신 순 자리를 차지해 열린 PR 을 밀어내면 안 된다.

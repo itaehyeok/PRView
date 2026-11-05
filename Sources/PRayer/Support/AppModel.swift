@@ -276,6 +276,14 @@ final class AppModel {
             // 앞 탭 목록을 그대로 두면 이 탭의 조건으로 걸러진 엉뚱한 일부가 보인다(사용자 피드백).
             listCache[oldValue.storageValue] = prs
             var next = listCache[listScope.storageValue] ?? []
+            // 기간만 넓혔으면(24h → 7d 등) 보던 목록이 이 탭 결과에 다 든다 — 비우지 않고 그대로 둔 채 더 받는다(사용자
+            // 피드백 2026-11-05). 이 탭의 지난 목록으로 넣어 두어야 받은 것 중 여기 없던 것만 새 행으로 펼쳐진다
+            // (performRefresh 의 baseline — 지난 목록이 없는 탭은 처음 채우는 것으로 보고 통째로 바꾼다).
+            if listScope.widens(from: oldValue) {
+                next = ListCacheSeeding.widened(prs, into: next)
+                listCache[listScope.storageValue] = next
+                Log.info("기간을 넓혀 보던 \(prs.count)건을 두고 더 받는다(\(oldValue.storageValue) → \(listScope.storageValue), \(next.count)건)", "app")
+            }
             // 보고 있던 PR 은 남겨 둔다 — 빠지면 받는 동안 오른쪽이 비어 버린다.
             if let selected = prs.first(where: { $0.id == selectedPRID }), !next.contains(where: { $0.id == selected.id }) {
                 next.append(selected)

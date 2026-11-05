@@ -23,8 +23,27 @@ public enum ListCacheSeeding {
             changed = true
         }
         guard changed else { return nil }
-        // 목록은 늘 올린 시각순이다(AppModel.performRefresh). 같은 시각이면 키로 순서를 고정한다.
-        return byID.values.sorted { ($0.createdAt, $0.id) > ($1.createdAt, $1.id) }
+        return sortedForList(byID.values)
+    }
+
+    /// 기간을 넓힐 때(`PRListScope.widens(from:)`) 넓힌 탭에 먼저 보일 목록 — 그 탭의 지난 목록에 좁은 탭에서 보던
+    /// 목록을 **전부** 얹는다. 좁은 탭 결과는 넓힌 탭 결과에 다 들어서, 비우고 다시 받으면 보던 행이 사라졌다가 그대로
+    /// 돌아올 뿐이다(사용자 피드백 2026-11-05). 받으면 여기 없던 것만 새 행으로 펼쳐진다(`AppModel.applyFetched`).
+    ///
+    /// `merge` 와 달리 `belongs` 로 거르지 않는다 — Approved 에는 오래전에 Approve 했어도 그 뒤에 일이 생겨 보이는 PR
+    /// 이 있는데(`AppModel.approvedInWindow`), Approve 한 시각으로 거르면 그것만 빠졌다 받은 뒤 다시 들어온다.
+    /// 같은 PR 은 더 새로 받은 쪽을 남긴다.
+    public static func widened(_ shown: [PullRequestInfo], into cached: [PullRequestInfo]) -> [PullRequestInfo] {
+        var byID = Dictionary(cached.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for pr in shown where byID[pr.id].map({ pr.updatedAt >= $0.updatedAt }) ?? true {
+            byID[pr.id] = pr
+        }
+        return sortedForList(byID.values)
+    }
+
+    /// 목록은 늘 올린 시각순이다(AppModel.performRefresh). 같은 시각이면 키로 순서를 고정한다.
+    private static func sortedForList(_ prs: some Sequence<PullRequestInfo>) -> [PullRequestInfo] {
+        prs.sorted { ($0.createdAt, $0.id) > ($1.createdAt, $1.id) }
     }
 
     /// 그 탭의 검색(`GitHubClient.pullRequestSlice`)에 걸릴 PR 인가.
