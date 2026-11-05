@@ -334,7 +334,7 @@ final class AppModel {
     private func loadRememberedWindows() {
         guard let raw = UserDefaults.standard.dictionary(forKey: "prListScopeWindows") as? [String: Int] else { return }
         for (key, hours) in raw {
-            guard let kind = PRListScopeKind(rawValue: key), let window = PRListWindow(rawValue: hours) else { continue }
+            guard let kind = PRListScopeKind(rawValue: key), let window = PRListWindow(storedHours: hours) else { continue }
             rememberedWindows[kind] = window
         }
     }
@@ -1220,6 +1220,12 @@ final class AppModel {
         // 탭이 다른 목록은 쓰지 않는다 — 엉뚱한 목록을 보여 주는 것보다 비어 있는 게 낫다.
         // 다른 탭의 지난 목록도 들고 있다가 그 탭으로 옮길 때 먼저 보인다(listScope didSet).
         for cached in await store.loadLists() {
+            // 없어진 기간(30일, 2026-11-05 뺌)의 목록은 열 탭이 없다. 들고 있으면 그 PR 들을 잊지 못하고(`pruneKnownPRs`)
+            // 수 MB 파일도 계속 남으니 파일째 지운다. 다른 기간으로 옮겨 쓰지 않는다 — 7일 밖 PR 이 섞인다.
+            guard PRListScope(storageValue: cached.scope)?.storageValue == cached.scope else {
+                await store.removeLists(scopes: [cached.scope])
+                continue
+            }
             listCache[cached.scope] = cached.prs
             listFetchedAt[cached.scope] = cached.savedAt
         }
@@ -2188,7 +2194,7 @@ final class AppModel {
         }
         do {
             // 가볍게 훑고 바뀐 PR 만 자세히 받는다(`fetchScope`). 처음 채울 때처럼 자세히 받을 것이 많으면 받은 데까지
-            // **먼저 그린다** — 30일 탭은 전부 받는 데 40초가 넘게 걸려서(실측) 다 받고 나서 그리면 그동안 빈 화면을 본다.
+            // **먼저 그린다** — 200건 남짓이면 전부 받는 데 40초가 넘게 걸려서(실측) 다 받고 나서 그리면 그동안 빈 화면을 본다.
             // 늘어놓는 순서는 서버 정렬(sort:created-desc)과 같은 올린 시각이라 뒤에 받은 것이 앞 것 위로 끼어들지 않는다.
             let scopeAtStart = listScope
             // 받기 전에 이 탭에 그려 둔 목록(지난 목록·앞 조회). 여기 없던 PR 만 "새로 온 것" 으로 보고 펼쳐 넣는다

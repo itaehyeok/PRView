@@ -399,7 +399,7 @@ struct PRListView: View {
             let older = model.listScope.kind == .recentAll
             SearchSectionHeader(systemImage: older ? "clock.arrow.circlepath" : "globe",
                                 text: count > 0 ? "\(name) 에서 \(count)건 더" : "\(name) 에는 없음") {
-                // All PRs 는 이름("30일 이전 PR")이 범위를 말한다.
+                // All PRs 는 이름("7일 이전 PR")이 범위를 말한다.
                 if !older {
                     Text("기간 제한 없음")
                         .foregroundStyle(.tertiary)

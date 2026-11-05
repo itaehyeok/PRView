@@ -172,7 +172,7 @@ public actor Store {
     ///
     /// 예전에는 지금 탭 하나만 남겨서, 앱을 다시 켜면 다른 탭으로 갔을 때 지난 목록 없이 빈 화면에서 다 받을 때까지
     /// 기다렸다(실측 2026-10-28: 베타를 깔며 하루 27번 다시 켜졌고, 남은 목록은 매번 리뷰 대기 탭뿐이었다). 탭마다
-    /// 파일을 따로 둔다 — 한 파일에 모으면 지금 탭을 2분마다 저장할 때 다른 탭(30일 탭은 수 MB)까지 매번 다시 쓴다.
+    /// 파일을 따로 둔다 — 한 파일에 모으면 지금 탭을 2분마다 저장할 때 다른 탭(건수가 많은 탭은 수 MB)까지 매번 다시 쓴다.
     public func loadLists() -> [CachedList] {
         migrateLegacyList()
         let files = (try? FileManager.default.contentsOfDirectory(at: AppPaths.listCacheDirectory,

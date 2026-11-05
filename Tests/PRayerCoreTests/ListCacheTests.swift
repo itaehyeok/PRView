@@ -5,9 +5,9 @@ import XCTest
 final class ListCacheTests: XCTestCase {
     /// 탭마다 파일이 하나씩이고, 기간이 다르면 다른 파일이다(같은 종류를 24h·7일로 볼 수 있다).
     func testEachScopeHasItsOwnFile() {
-        let names = [PRListScope.open, .myApprovals(.day), .myApprovals(.week), .recentAll(.month)]
+        let names = [PRListScope.open, .myApprovals(.day), .myApprovals(.week), .recentAll(.week)]
             .map { AppPaths.listCacheFile(scope: $0.storageValue).lastPathComponent }
-        XCTAssertEqual(names, ["open-0.json", "myApprovals-24.json", "myApprovals-168.json", "recentAll-720.json"])
+        XCTAssertEqual(names, ["open-0.json", "myApprovals-24.json", "myApprovals-168.json", "recentAll-168.json"])
     }
 
     // MARK: 받은 지 얼마 안 된 탭

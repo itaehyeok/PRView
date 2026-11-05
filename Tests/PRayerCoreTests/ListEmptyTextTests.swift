@@ -16,7 +16,7 @@ final class ListEmptyTextTests: XCTestCase {
         XCTAssertEqual(PRListScope.open.label, "To review")
         XCTAssertEqual(PRListScope.recentAll(.day).label, "All PRs 24h")
         XCTAssertEqual(PRListScope.myApprovals(.week).label, "Approved 7d")
-        XCTAssertEqual(PRListScope.recentAll(.month).label, "All PRs 30d")
+        XCTAssertEqual(PRListScope.recentAll(.week).label, "All PRs 7d")
     }
 
     /// 탭 조건에 걸린 것을 "필터에 걸렸다" 고 하면 필터를 꺼도 안 나와 헛걸음한다.
@@ -37,20 +37,20 @@ final class ListEmptyTextTests: XCTestCase {
 
     /// 기간 탭은 못 받았을 때와 받았지만 맞는 게 없을 때 같은 말을 한다(예전에는 두 문장으로 갈렸다).
     func testWindowTabsSaySameThingEitherWay() {
-        for scope in [PRListScope.recentAll(.day), .myApprovals(.week)] {
+        for scope in [PRListScope.recentAll(.day), .myApprovals(.day), .myApprovals(.week)] {
             XCTAssertEqual(scope.emptyDescription(receivedAny: false), scope.emptyDescription(receivedAny: true))
         }
         XCTAssertEqual(PRListScope.recentAll(.day).emptyDescription(receivedAny: true),
                        "최근 24h 안에 활동이 있었던 PR 이 없습니다. 기간을 늘려 보세요.")
-        XCTAssertEqual(PRListScope.myApprovals(.week).emptyDescription(receivedAny: true),
-                       "최근 7일 안에 내가 Approve 한 PR 이 없습니다. 기간을 늘려 보세요.")
+        XCTAssertEqual(PRListScope.myApprovals(.day).emptyDescription(receivedAny: true),
+                       "최근 24h 안에 내가 Approve 한 PR 이 없습니다. 기간을 늘려 보세요.")
     }
 
     /// 가장 긴 기간이면 늘릴 데가 없다 — 누를 버튼도 없는 권유를 하지 않는다.
     func testLongestWindowDoesNotSuggestWidening() {
-        XCTAssertEqual(PRListScope.myApprovals(.month).emptyDescription(receivedAny: true),
-                       "최근 30일 안에 내가 Approve 한 PR 이 없습니다.")
-        XCTAssertEqual(PRListScope.recentAll(.month).emptyDescription(receivedAny: true),
-                       "최근 30일 안에 활동이 있었던 PR 이 없습니다.")
+        XCTAssertEqual(PRListScope.myApprovals(.week).emptyDescription(receivedAny: true),
+                       "최근 7일 안에 내가 Approve 한 PR 이 없습니다.")
+        XCTAssertEqual(PRListScope.recentAll(.week).emptyDescription(receivedAny: true),
+                       "최근 7일 안에 활동이 있었던 PR 이 없습니다.")
     }
 }

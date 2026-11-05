@@ -87,7 +87,7 @@ public struct PRSearchPlan: Equatable, Sendable {
         return now.addingTimeInterval(-Double(hours) * 3600)
     }
 
-    /// 아래 구역 이름 — "전체 PR" 또는 "30일 이전 PR". All PRs 탭 이름이 이미 '전체' 라 거기서 '전체 PR' 을 또 쓰면
+    /// 아래 구역 이름 — "전체 PR" 또는 "7일 이전 PR". All PRs 탭 이름이 이미 '전체' 라 거기서 '전체 PR' 을 또 쓰면
     /// 같은 말이 두 번 나온다(사용자 지적).
     public static func extraName(scope: PRListScope) -> String {
         guard scope.kind == .recentAll, let hours = scope.windowHours else { return "전체 PR" }
@@ -126,7 +126,7 @@ public struct PRSearchPlan: Equatable, Sendable {
             .filter { pr in
                 guard seen.insert(pr.id).inserted else { return false }
                 if hiddenRepoKeys.contains(PRFilterState.repoKey(pr.repo)) { return false }
-                // 받아 둔 목록에서 온 것도 "30일 이전" 구역에 30일 안의 PR 이 끼지 않게 같은 기준으로 거른다.
+                // 받아 둔 목록에서 온 것도 "7일 이전" 구역에 7일 안의 PR 이 끼지 않게 같은 기준으로 거른다.
                 if let olderThan, pr.updatedAt >= olderThan { return false }
                 return true
             }

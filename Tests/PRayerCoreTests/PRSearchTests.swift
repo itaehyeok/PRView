@@ -57,8 +57,8 @@ final class PRSearchTests: XCTestCase {
 
     func testAllPRsTabSearchesOnlyOlderThanItsWindow() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        let cutoff = try XCTUnwrap(PRSearchPlan.olderThan(scope: .recentAll(.month), now: now))
-        XCTAssertEqual(cutoff, now.addingTimeInterval(-720 * 3600))
+        let cutoff = try XCTUnwrap(PRSearchPlan.olderThan(scope: .recentAll(.week), now: now))
+        XCTAssertEqual(cutoff, now.addingTimeInterval(-168 * 3600))
         // 탭 쿼리의 `updated:>=` 를 뒤집은 것이라 위 구역과 겹치지 않는다.
         let query = try XCTUnwrap(PRSearchPlan(search: "alex")).authorQuery(repos: [ios], olderThan: cutoff)
         XCTAssertEqual(query, "repo:acme/sample-ios is:pr author:alex updated:<\(cutoff.ISO8601Format()) sort:created-desc")
@@ -70,7 +70,6 @@ final class PRSearchTests: XCTestCase {
     func testExtraSectionName() {
         XCTAssertEqual(PRSearchPlan.extraName(scope: .open), "전체 PR")
         XCTAssertEqual(PRSearchPlan.extraName(scope: .myApprovals(.week)), "전체 PR")
-        XCTAssertEqual(PRSearchPlan.extraName(scope: .recentAll(.month)), "30일 이전 PR")
         XCTAssertEqual(PRSearchPlan.extraName(scope: .recentAll(.week)), "7일 이전 PR")
         XCTAssertEqual(PRSearchPlan.extraName(scope: .recentAll(.day)), "24시간 이전 PR")
     }
@@ -79,7 +78,7 @@ final class PRSearchTests: XCTestCase {
         // 둘 다 기간 없이 찾으니 같은 결과를 다시 받지 않는다. All PRs 는 범위가 달라 따로다.
         let open = PRSearchPlan.cacheKey(search: "다크", scope: .open, repos: [ios])
         XCTAssertEqual(open, PRSearchPlan.cacheKey(search: " 다크 ", scope: .myApprovals(.day), repos: [ios]))
-        XCTAssertNotEqual(open, PRSearchPlan.cacheKey(search: "다크", scope: .recentAll(.month), repos: [ios]))
+        XCTAssertNotEqual(open, PRSearchPlan.cacheKey(search: "다크", scope: .recentAll(.week), repos: [ios]))
         XCTAssertNotEqual(open, PRSearchPlan.cacheKey(search: "다크", scope: .open, repos: [ios, sdk]))
     }
 
@@ -107,7 +106,7 @@ final class PRSearchTests: XCTestCase {
         old.updatedAt = Date(timeIntervalSince1970: 500)
         let rows = PRSearchPlan.extra(candidates: [recent, old], excluding: [], hiddenRepoKeys: [],
                                       olderThan: Date(timeIntervalSince1970: 1_000))
-        // 받아 둔 목록에서 온 기간 안 PR 이 "30일 이전" 구역에 끼지 않는다.
+        // 받아 둔 목록에서 온 기간 안 PR 이 "7일 이전" 구역에 끼지 않는다.
         XCTAssertEqual(rows.map(\.number), [2])
     }
 
