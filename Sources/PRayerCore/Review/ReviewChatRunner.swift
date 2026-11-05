@@ -5,19 +5,24 @@ public struct ChatTurn: Sendable {
     public var engine: ReviewEngineKind
     public var executablePath: String
     public var sessionID: String
-    /// 리뷰를 돌린 모델(`ReviewRecord.model`) — 별칭이 아니라 실제 모델 ID 라 그때와 같은 모델이 답한다.
+    /// 답할 모델. 대화창에서 고르지 않았으면 리뷰를 돌린 모델(`ReviewRecord.model`) — 별칭이 아니라 실제 모델 ID 라
+    /// 그때와 같은 모델이 답한다. 골랐으면 그 모델(Claude 는 별칭 그대로, Codex 는 `-m` 에 넘길 이름으로 푼 것).
     public var model: String?
+    /// `--effort`(Claude)·`model_reasoning_effort`(Codex) 값. nil 이면 붙이지 않는다(그 모델의 CLI 기본값).
+    /// 부르는 쪽이 그 엔진이 받는 단계인지 거른 값을 준다(`EffortLevel.argument`·`CodexModels.effortArgument`).
+    public var effort: String?
     public var question: String
     /// 이 대화창에서 처음 묻는 것인가. 처음에만 형식 안내를 붙인다(`ReviewChatRunner.prompt(for:)`).
     public var isFirst: Bool
     public var timeout: TimeInterval
 
     public init(engine: ReviewEngineKind, executablePath: String, sessionID: String, model: String?,
-                question: String, isFirst: Bool, timeout: TimeInterval = 600) {
+                effort: String? = nil, question: String, isFirst: Bool, timeout: TimeInterval = 600) {
         self.engine = engine
         self.executablePath = executablePath
         self.sessionID = sessionID
         self.model = model
+        self.effort = effort
         self.question = question
         self.isFirst = isFirst
         self.timeout = timeout
@@ -54,6 +59,12 @@ public struct ChatTurnResult: Sendable {
 /// - Codex 는 리뷰 때 `--output-schema` 로 답하게 한 대화라, 그냥 물으면 **이어 묻는 답도 리뷰 JSON 꼴로 낸다**.
 ///   첫 질문 앞에 형식 안내 한 줄(`preamble`)을 붙이면 글로 답한다. Claude 에도 같이 붙인다 — 리뷰 지침이 출력 형식을 정해 둔 대화다.
 /// - Claude 는 `stream-json` + `--include-partial-messages` 로 글자 조각이 오고, Codex `exec --json` 은 다 쓴 답이 한 번에 온다.
+///
+/// 실측(2026-11-05, 같은 CLI 버전) — 대화창에서 모델·Effort 를 바꿔 물을 때:
+/// - 둘 다 리뷰와 다른 모델·Effort 로 이어 물어도 같은 ID 에 덧붙고 앞 내용을 기억한다. Codex 는 대화 파일에
+///   차례마다 바뀐 모델·Effort 가 남는다.
+/// - Claude 는 모델을 바꾼 첫 질문이 대화 전체를 캐시에 새로 쓴다(그 자리에서 캐시 쓰기 5,177 · 읽기 0, 다음 질문부터 읽기).
+///   Effort 만 바꾸면 캐시가 그대로 이어진다(읽기 5,177 → 5,195). 그래서 토큰 안내는 모델 칸에만 붙인다.
 public struct ReviewChatRunner: Sendable {
     private let runner = ProcessRunner()
     private let codex: CodexRunner
@@ -70,7 +81,7 @@ public struct ReviewChatRunner: Sendable {
     }
 
     /// 리뷰처럼 도구를 주지 않는다 — PR 내용은 믿을 수 없는 입력이다. 대화는 남긴다(리뷰한 그 대화에 덧붙인다).
-    static func claudeArguments(sessionID: String, model: String?) -> [String] {
+    static func claudeArguments(sessionID: String, model: String?, effort: String? = nil) -> [String] {
         var result = [
             "-p",
             "--resume", sessionID,
@@ -82,12 +93,16 @@ public struct ReviewChatRunner: Sendable {
         if let model, !model.isEmpty {
             result += ["--model", model]
         }
+        if let effort, !effort.isEmpty {
+            result += ["--effort", effort]
+        }
         result += ["--output-format", "stream-json", "--verbose", "--include-partial-messages"]
         return result
     }
 
     /// `exec resume` 에는 `-s`·`-C` 가 없다 — 샌드박스는 설정 값으로 준다. 셸은 리뷰의 보조 호출처럼 끈다.
-    static func codexArguments(sessionID: String, model: String?, knownFeatures: [String]) -> [String] {
+    static func codexArguments(sessionID: String, model: String?, effort: String? = nil,
+                               knownFeatures: [String]) -> [String] {
         var result = [
             "exec", "resume", "--json",
             "--skip-git-repo-check",
@@ -101,6 +116,10 @@ public struct ReviewChatRunner: Sendable {
         result += ["-c", "web_search=\"disabled\""]
         if let model, !model.isEmpty {
             result += ["-m", model]
+        }
+        // 리뷰(`CodexRunner.arguments`)와 같은 꼴이다. 값은 부르는 쪽이 그 모델이 받는 단계로 거른 것이라 따옴표가 없다.
+        if let effort, !effort.isEmpty {
+            result += ["-c", "model_reasoning_effort=\"\(effort)\""]
         }
         result += [sessionID, "-"]
         return result
@@ -121,11 +140,12 @@ public struct ReviewChatRunner: Sendable {
         let environment: [String: String]
         switch turn.engine {
         case .claude:
-            arguments = Self.claudeArguments(sessionID: sessionID, model: turn.model)
+            arguments = Self.claudeArguments(sessionID: sessionID, model: turn.model, effort: turn.effort)
             environment = ProcessEnvironment.base()
         case .codex:
             let known = await codex.features(path: turn.executablePath)
-            arguments = Self.codexArguments(sessionID: sessionID, model: turn.model, knownFeatures: known)
+            arguments = Self.codexArguments(sessionID: sessionID, model: turn.model, effort: turn.effort,
+                                            knownFeatures: known)
             environment = CodexRunner.environment(codexPath: turn.executablePath)
         }
         let spec = ProcessSpec(executable: turn.executablePath,
