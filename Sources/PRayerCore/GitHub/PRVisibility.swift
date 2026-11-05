@@ -20,7 +20,7 @@ public enum PRFilterKind: String, Sendable, CaseIterable, Identifiable {
         case .hideIgnoredAuthors: return "특정 사람의 PR 숨기기"
         case .hideLabels: return "특정 라벨 숨기기"
         case .repos: return "일부 레포만 보기"
-        case .onlyLabel: return "라벨 하나만 보기"
+        case .onlyLabel: return "라벨만 보기"
         case .search: return "검색어"
         }
     }
@@ -42,10 +42,11 @@ public struct PRFilterState: Sendable, Equatable {
     /// 라벨·사람 필터와 달리 **모든 탭**에 건다. "이 레포만 보고 싶다" 는 리뷰 대기만의 조건이
     /// 아니라 지금 무엇을 보느냐를 좁히는 것이라 검색어와 성격이 같다 — 승인 탭에서도 그 레포만 봐야 한다.
     public var hiddenRepos: Set<String>
-    /// 목록 행의 라벨을 눌러 고른 라벨 — 이 라벨이 붙은 PR 만 보인다. nil 이면 거르지 않는다.
+    /// 고른 라벨 — 이 가운데 하나라도 붙은 PR 만 보인다. 비어 있으면 거르지 않는다. 목록 행의 라벨을 누르면 그 하나로,
+    /// 머리 줄의 라벨 단추로는 여럿을 고른다.
     ///
     /// 레포 고르기·검색어처럼 **모든 탭**에 건다. 무엇을 보느냐를 좁히는 것이라 리뷰 대기만의 조건이 아니다.
-    public var onlyLabel: String?
+    public var onlyLabels: [String]
 
     public init(hideIgnoredAuthors: Bool = false,
                 hideLabels: Bool = false,
@@ -53,21 +54,21 @@ public struct PRFilterState: Sendable, Equatable {
                 hasIgnoredAuthors: Bool = false,
                 hasHiddenLabels: Bool = true,
                 hiddenRepos: Set<String> = [],
-                onlyLabel: String? = nil) {
+                onlyLabels: [String] = []) {
         self.hideIgnoredAuthors = hideIgnoredAuthors
         self.hideLabels = hideLabels
         self.search = search
         self.hasIgnoredAuthors = hasIgnoredAuthors
         self.hasHiddenLabels = hasHiddenLabels
         self.hiddenRepos = hiddenRepos
-        self.onlyLabel = onlyLabel
+        self.onlyLabels = onlyLabels
     }
 
-    /// 이 PR 이 `onlyLabel` 을 통과하는가. 고른 라벨이 없으면 늘 통과한다.
+    /// 이 PR 이 `onlyLabels` 를 통과하는가 — 고른 라벨 가운데 하나라도 붙었나. 고른 라벨이 없으면 늘 통과한다.
     /// 라벨 이름의 대소문자는 가리지 않는다 — 숨길 라벨(`hiddenLabels`)과 같은 규칙이다.
-    public static func hasLabel(_ labels: [String], _ label: String?) -> Bool {
-        guard let label else { return true }
-        return labels.contains { $0.caseInsensitiveCompare(label) == .orderedSame }
+    public static func hasLabel(_ labels: [String], _ picked: [String]) -> Bool {
+        guard !picked.isEmpty else { return true }
+        return labels.contains { label in picked.contains { $0.caseInsensitiveCompare(label) == .orderedSame } }
     }
 
     /// `hiddenRepos` 에 넣는 꼴. GitHub 은 레포 이름의 대소문자를 가리지 않는데, 설정에 직접 친 이름과
@@ -84,7 +85,7 @@ public struct PRFilterState: Sendable, Equatable {
             if hideLabels, hasHiddenLabels { result.append(.hideLabels) }
         }
         if !hiddenRepos.isEmpty { result.append(.repos) }
-        if onlyLabel != nil { result.append(.onlyLabel) }
+        if !onlyLabels.isEmpty { result.append(.onlyLabel) }
         if !search.trimmingCharacters(in: .whitespaces).isEmpty { result.append(.search) }
         return result
     }
@@ -149,7 +150,7 @@ public enum PRVisibility {
             }
         }
         if state.hiddenRepos.contains(PRFilterState.repoKey(pr.repo)) { reasons.insert(.repos) }
-        if !PRFilterState.hasLabel(pr.labels, state.onlyLabel) { reasons.insert(.onlyLabel) }
+        if !PRFilterState.hasLabel(pr.labels, state.onlyLabels) { reasons.insert(.onlyLabel) }
         // 아래 구역(전체 PR 검색)이 받아 둔 목록을 거를 때도 같은 규칙을 쓴다 — 위아래 구역의 기준이 갈리지 않게.
         if !PRSearchPlan.matchesLocally(pr, needle: state.search) { reasons.insert(.search) }
         return reasons

@@ -40,6 +40,8 @@ public struct UsageStats: Codable, Sendable, Equatable {
         case mentionJump = "list.mentionJump"
         /// 개요 대화 머리의 "@me N ↓" 으로 다음 멘션으로 갔다.
         case mentionNext = "overview.mentionNext"
+        /// 목록 머리 줄의 라벨 단추에서 라벨을 더했다(행의 라벨을 누른 것은 `onlyLabel`).
+        case labelPick = "list.labelPick"
     }
 
     /// 마지막으로 보낸 것. 설정의 "보낸 내용 보기" 가 본문을 글자 그대로 보인다.
