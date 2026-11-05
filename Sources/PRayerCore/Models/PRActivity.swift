@@ -5,6 +5,8 @@ import Foundation
 /// 여기서는 사람의 리뷰 활동을 먼저 보여주는 것이 목적이다.
 public struct PRActivity: Sendable, Codable, Hashable, Identifiable {
     public enum Kind: String, Sendable, Codable, CaseIterable {
+        /// PR 을 올렸다. 본문이 나를 불렀을 때만 넣는다(PRActivityBuilder).
+        case opened
         case commented
         case approved
         case changesRequested
@@ -17,6 +19,7 @@ public struct PRActivity: Sendable, Codable, Hashable, Identifiable {
         /// 목록에 그대로 찍히는 영문 라벨. 폭이 좁아 길게 쓰지 않는다.
         public var label: String {
             switch self {
+            case .opened: return "Opened"
             case .commented: return "Commented"
             case .approved: return "Approved"
             case .changesRequested: return "Requested changes"
@@ -30,6 +33,7 @@ public struct PRActivity: Sendable, Codable, Hashable, Identifiable {
 
         public var symbolName: String {
             switch self {
+            case .opened: return "arrow.triangle.pull"
             case .commented: return "text.bubble"
             case .approved: return "checkmark.circle.fill"
             case .changesRequested: return "exclamationmark.triangle.fill"
@@ -64,6 +68,9 @@ public struct PRActivity: Sendable, Codable, Hashable, Identifiable {
 
     public var mentionsViewer: Bool { mentionEntryID != nil }
 
+    /// PR 본문이 나를 불렀을 때 `mentionEntryID` — 대화 줄이 아니라 개요 탭의 본문 카드(OverviewTab.bodyKey)로 간다.
+    public static let bodyEntryID = "body"
+
     /// 본문 일부까지 섞는다. 커밋을 하나하나 낼 때는 같은 사람이 같은 초에 여러 건을
     /// 올릴 수 있어서 종류·사람·시각만으로는 ForEach 가 항목을 구분하지 못한다.
     public var id: String {
@@ -97,6 +104,14 @@ public enum PRActivityBuilder {
         func mention(_ author: String, _ body: String, entry: @autoclosure () -> PRTimelineEntry) -> String? {
             guard let me, author.lowercased() != me, MyMentions.mentions(body, viewer: me) else { return nil }
             return entry().id
+        }
+
+        // 0) PR 본문이 나를 불렀다 — 올린 일을 한 줄로 넣고 @me 를 단다(MyMentions.bodyMentions). 본문 멘션이 없는 PR 에는
+        //    넣지 않는다 — 올린 일은 목록 행 맨 위 "Created … ago" 가 이미 말해서, 모든 PR 에 넣으면 같은 말을 두 번 한다.
+        if let me, MyMentions.bodyMentions(pr, viewer: me) {
+            var activity = PRActivity(kind: .opened, actor: pr.author, at: pr.createdAt, excerpt: excerpt(pr.bodyText))
+            activity.mentionEntryID = PRActivity.bodyEntryID
+            activities.append(activity)
         }
 
         // 1) 리뷰 제출(Approve / Request changes / Comment / Dismiss).

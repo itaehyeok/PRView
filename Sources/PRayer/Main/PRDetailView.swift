@@ -323,7 +323,8 @@ struct OverviewTab: View {
     /// 코멘트 안의 코드 참조를 눌렀을 때 diff 로 이동시킨다.
     var onJumpToDiff: (String) -> Void = { _ in }
 
-    static let bodyKey = "body"
+    /// 목록 활동 줄의 본문 @me("Opened")도 이 키로 본문 카드에 온다(PRActivity.bodyEntryID).
+    static let bodyKey = PRActivity.bodyEntryID
 
     /// 나를 부른 글로 옮겨 온 줄(`PRTimelineEntry.id`) — 그 줄의 멘션 형광펜이 깜빡인다(focusMention).
     @State private var mentionFocusID: String?
@@ -616,6 +617,9 @@ struct OverviewTab: View {
             .clipped()
         }
         .overviewCard(padding: 0)
+        // 목록 활동 줄의 본문 @me 로 올 때 이 id 로 밀고(focusMention), 본문 안의 멘션 형광펜만 깜빡인다.
+        .id(Self.bodyKey)
+        .environment(\.mentionPulse, mentionFocusID == Self.bodyKey && mentionLit ? 1 : 0)
     }
 
     /// 본문 카드의 여백. 다른 카드(`overviewCard` 기본값)와 같다 — 칸 안쪽으로 옮겼을 뿐이다.
