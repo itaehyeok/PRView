@@ -34,7 +34,7 @@ final class MyReplyReadStateTests: XCTestCase {
         XCTAssertEqual(state.unread(in: later, viewer: me).map(\.comment.body), ["하나 더"])
     }
 
-    /// 목록 칩은 다 본 뒤에도 전부를 센다 — 안 본 것만 세면 새 답글 하나에 "답글 2" 가 "답글 1" 로 줄었다.
+    /// 목록 칩은 다 본 뒤에도 전부를 센다 — 안 본 것만 세면 새 답글 하나에 "Replies 2" 가 "Replies 1" 로 줄었다.
     func testCountsKeepTotalAfterRead() {
         let reply = pr([[comment(me, "질문", minute: 0), comment(author, "답", minute: 5), comment(author, "덧붙임", minute: 6)]])
         var state = MyReplyReadState(since: .distantPast)

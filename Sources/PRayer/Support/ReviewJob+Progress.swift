@@ -48,7 +48,7 @@ extension ReviewJob {
         return number + unit
     }
 
-    /// 처음 클론하는 잡의 전체 진행(0…1) — 목록 배지 "클론 45%". 단계 길이는 실측 비율로 나눴다
+    /// 처음 클론하는 잡의 전체 진행(0…1) — 목록 배지 "Cloning 45%". 단계 길이는 실측 비율로 나눴다
     /// (큰 레포: 커밋 기록 12초 · 파일 14초 · 풀기 2초). 클론이 끝나 리뷰가 시작되면 nil.
     var cloneFraction: Double? {
         guard clonedSnapshot, state == .running else { return nil }
