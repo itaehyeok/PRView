@@ -6,10 +6,10 @@ import PRayerCore
 /// 읽음은 PR 을 열 때 적는다. 열어 둔 PR 은 새로고침으로 답글이 들어와도 바로 읽은 것으로 친다 — 화면에 떠 있으니까.
 /// 알림은 이것과 따로 PR 변화 감지(`PRChange.repliesToMyComments`)가 맡는다.
 extension AppModel {
-    /// 이 PR 에서 아직 안 본, 나에게 온 답글 수.
-    func unreadReplyCount(for pr: PullRequestInfo) -> Int {
-        guard let myReplyRead else { return 0 }
-        return myReplyRead.unread(in: pr, viewer: githubAccount?.login).count
+    /// 이 PR 에서 나에게 온 답글 수와 그중 아직 안 본 것(`MyReplyReadState.counts`).
+    func replyCounts(for pr: PullRequestInfo) -> (total: Int, unread: Int) {
+        guard let myReplyRead else { return (0, 0) }
+        return myReplyRead.counts(in: pr, viewer: githubAccount?.login)
     }
 
     /// 이 스레드에서 "새 답글" 로 보일 글의 키(`MyCommentReplies.key`). 이 PR 을 열 때 안 봤던 답글이다.
