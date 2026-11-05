@@ -128,4 +128,45 @@ final class ListCacheSeedingTests: XCTestCase {
         let approved = ListCacheSeeding.approved(before, by: me, at: now)
         XCTAssertNil(merge([before], into: [approved], .myApprovals(.day)))
     }
+
+    // MARK: 기간 넓히기
+
+    /// 같은 종류에서 기간을 늘릴 때만 넓힌 것이다. 줄이거나, 종류가 바뀌거나, 리뷰 대기가 끼면 아니다.
+    func testWidensOnlyWhenSameKindLongerWindow() {
+        XCTAssertTrue(PRListScope.recentAll(.week).widens(from: .recentAll(.day)))
+        XCTAssertTrue(PRListScope.recentAll(.month).widens(from: .recentAll(.day)))
+        XCTAssertTrue(PRListScope.myApprovals(.month).widens(from: .myApprovals(.week)))
+        XCTAssertFalse(PRListScope.recentAll(.day).widens(from: .recentAll(.week)))
+        XCTAssertFalse(PRListScope.recentAll(.week).widens(from: .recentAll(.week)))
+        XCTAssertFalse(PRListScope.recentAll(.month).widens(from: .myApprovals(.day)))
+        XCTAssertFalse(PRListScope.recentAll(.week).widens(from: .open))
+        XCTAssertFalse(PRListScope.open.widens(from: .recentAll(.day)))
+    }
+
+    /// 넓힌 탭을 처음 열면 보던 목록이 그대로 그 탭의 목록이 된다 — 비지 않는다.
+    func testWidenedKeepsShownListWhenNoCache() {
+        let shown = [pr(2, createdHoursAgo: 5), pr(1, createdHoursAgo: 30)]
+        XCTAssertEqual(ListCacheSeeding.widened(shown, into: []).map(\.number), [2, 1])
+    }
+
+    /// 넓힌 탭의 지난 목록이 있으면 둘을 합쳐 올린 시각순으로 놓는다. 같은 PR 은 더 새로 받은 쪽이 남는다.
+    func testWidenedMergesWithCachedAndKeepsNewer() {
+        let cached = [pr(3, updatedHoursAgo: 100, createdHoursAgo: 120), pr(1, updatedHoursAgo: 20, title: "옛 제목")]
+        let shown = [pr(1, updatedHoursAgo: 2, title: "새 제목"), pr(2, createdHoursAgo: 10)]
+        let widened = ListCacheSeeding.widened(shown, into: cached)
+        XCTAssertEqual(widened.map(\.number), [2, 1, 3])
+        XCTAssertEqual(widened.first { $0.number == 1 }?.title, "새 제목")
+        // 지난 목록 쪽이 더 새것이면 그대로 둔다.
+        let older = [pr(3, updatedHoursAgo: 150, createdHoursAgo: 120, title: "더 옛 제목")]
+        XCTAssertEqual(ListCacheSeeding.widened(older, into: cached).first { $0.number == 3 }?.title, "제목")
+    }
+
+    /// Approved 에서 오래전에 Approve 했어도 그 뒤에 일이 생겨 보이던 PR 은 넓혀도 빠지지 않는다 — Approve 한 시각으로
+    /// 거르는 `merge` 와 다르다(거르면 받기 전까지 사라졌다 돌아온다).
+    func testWidenedKeepsApprovedLongAgoWithNews() {
+        var old = pr(1, updatedHoursAgo: 2)
+        old.reviewEvents = [PRReviewEvent(author: me, state: "APPROVED", submittedAt: now.addingTimeInterval(-40 * 86_400), body: "")]
+        XCTAssertNil(merge([old], into: [], .myApprovals(.month)))
+        XCTAssertEqual(ListCacheSeeding.widened([old], into: []).map(\.number), [1])
+    }
 }
