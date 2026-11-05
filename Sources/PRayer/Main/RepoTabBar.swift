@@ -138,7 +138,7 @@ struct RepoTabBar: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
-                    tab(title: "전체",
+                    tab(title: "All",
                         count: model.visibleCount(showing: nil),
                         isSelected: allShown,
                         dot: nil,

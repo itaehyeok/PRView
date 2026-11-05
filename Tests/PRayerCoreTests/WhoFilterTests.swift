@@ -1,7 +1,7 @@
 import XCTest
 @testable import PRayerCore
 
-/// 목록 머리 줄의 "전체 · @me · 답글"(PRWhoFilter) — 나에게 온 것만 골라 본다.
+/// 목록 머리 줄의 "All · @me · Replies"(PRWhoFilter) — 나에게 온 것만 골라 본다.
 final class WhoFilterTests: XCTestCase {
     private let me = "sam-lee"
     private let other = "jamie-acme"

@@ -1,6 +1,6 @@
 import Foundation
 
-/// 내 코멘트 답글을 어디까지 봤나. 목록의 "답글 N" 칩과 개요 탭의 "새 답글" 줄이 이것을 본다.
+/// 내 코멘트 답글을 어디까지 봤나. 목록의 "Replies N" 칩과 개요 탭의 "새 답글" 줄이 이것을 본다.
 ///
 /// 알림 기억(`PRSnapshot`)과 따로 둔다 — 그쪽은 새로고침마다 덮여서, 그걸로 칩을 그리면 PR 을 열어 보지 않았는데도
 /// 다음 새로고침에 칩이 사라진다.
@@ -28,7 +28,7 @@ public struct MyReplyReadState: Codable, Sendable, Equatable {
 
     /// 목록 답글 칩의 수 — 나에게 온 답글 전부와 그중 안 본 것. 칩은 전부를 적고, 안 본 것이 있을 때만 꽉 채운다
     /// (다 보면 테두리만 남는다). 전부를 적어야 다 본 뒤에도 숫자가 줄지 않는다 — 안 본 것만 세면 새 답글이
-    /// 하나 오는 순간 "답글 3" 이 "답글 1" 로 줄었다.
+    /// 하나 오는 순간 "Replies 3" 이 "Replies 1" 로 줄었다.
     public func counts(in pr: PullRequestInfo, viewer: String?) -> (total: Int, unread: Int) {
         let replies = MyCommentReplies.replies(in: pr, viewer: viewer)
         return (replies.count, replies.filter(isUnread).count)

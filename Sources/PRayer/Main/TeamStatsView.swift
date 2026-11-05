@@ -5,7 +5,7 @@ import PRayerCore
 ///
 /// 처음엔 별도 창으로 만들었다가 메인 창 안으로 옮겼다(사용자 선택, 2026-10-28 — 상세 칸 · 목록+상세 전체 ·
 /// 레포 줄 전환 중 상세 칸). 목록이 그대로 남아 통계를 보다가 PR 을 누르면 바로 그 PR 로 돌아간다(AppModel+TeamStats).
-/// 레포는 레포 줄을 따른다 — 탭 하나를 고르면 그 레포, "전체" 면 머리의 고르기 메뉴로 고른다.
+/// 레포는 레포 줄을 따른다 — 탭 하나를 고르면 그 레포, "All" 이면 머리의 고르기 메뉴로 고른다.
 struct TeamStatsView: View {
     @Environment(AppModel.self) private var model
 

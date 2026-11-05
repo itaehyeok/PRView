@@ -28,7 +28,7 @@ public enum PRFilterKind: String, Sendable, CaseIterable, Identifiable {
     }
 }
 
-/// 목록 머리 줄의 "전체 · @me · 답글" — 나에게 온 것만 골라 본다. 하나만 고른다(2026-11-05 사용자 결정, 시안 F):
+/// 목록 머리 줄의 "All · @me · Replies" — 나에게 온 것만 골라 본다. 하나만 고른다(2026-11-05 사용자 결정, 시안 F):
 /// 둘을 같이 켜는 경우를 두면 "둘 다인지 둘 중 하나인지" 를 따로 알려야 했다.
 public enum PRWhoFilter: String, Sendable, CaseIterable {
     case all

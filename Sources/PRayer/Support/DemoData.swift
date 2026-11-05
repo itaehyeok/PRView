@@ -141,7 +141,7 @@ enum DemoData {
             PRCommit(oid: sha(124), abbreviatedOid: String(sha(124).prefix(7)), messageHeadline: "금액을 원 단위로 읽기",
                      committedDate: ago(2_550), author: "jamie-acme"),
         ]
-        // 내 코멘트 답글(AppModel+Replies) — 내가 연 스레드에 작성자가 답했다. 데모는 읽음 기록이 없어 목록에 "답글 1" 이 뜬다.
+        // 내 코멘트 답글(AppModel+Replies) — 내가 연 스레드에 작성자가 답했다. 데모는 읽음 기록이 없어 목록에 "Replies 1" 이 뜬다.
         let concurrencyThread = PRReviewThread(
             id: "T_demo_3", path: "Sources/SampleSDK/ImageLoader.swift", line: 18, isResolved: false, isOutdated: false,
             comments: [

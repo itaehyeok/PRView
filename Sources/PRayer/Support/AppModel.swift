@@ -110,7 +110,7 @@ struct PRFilter: Codable, Equatable {
     /// 고른 라벨 — 이 가운데 하나라도 붙은 PR 만 보인다(`PRFilterState.onlyLabels`). 목록 행의 라벨을 누르면 그 하나로,
     /// 머리 줄의 라벨 단추로는 여럿을 고른다. 검색어처럼 저장하지 않는다.
     var onlyLabels: [String] = []
-    /// 머리 줄의 "전체 · @me · 답글"(`PRWhoFilter`). 검색어처럼 저장하지 않는다 — 다시 켰을 때 목록이 좁아져 있으면 원인을 찾기 어렵다.
+    /// 머리 줄의 "All · @me · Replies"(`PRWhoFilter`). 검색어처럼 저장하지 않는다 — 다시 켰을 때 목록이 좁아져 있으면 원인을 찾기 어렵다.
     var who = PRWhoFilter.all
 
     private static let storageKey = "prFilter"
@@ -684,8 +684,8 @@ final class AppModel {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
-    /// 머리 줄 "전체 · @me · 답글" 의 숫자 — 그것을 고르면 목록에 나올 PR 수. 맨 위 내가 올린 PR 묶음은 세지 않는다 —
-    /// 바로 아래 "To review N건" 과 같은 잣대여야 "전체" 의 숫자가 그 건수와 맞는다(묶음은 제 머리에 건수가 있다).
+    /// 머리 줄 "All · @me · Replies" 의 숫자 — 그것을 고르면 목록에 나올 PR 수. 맨 위 내가 올린 PR 묶음은 세지 않는다 —
+    /// 바로 아래 "To review N건" 과 같은 잣대여야 "All" 의 숫자가 그 건수와 맞는다(묶음은 제 머리에 건수가 있다).
     func whoCount(_ who: PRWhoFilter) -> Int {
         var state = filterState
         state.who = who
@@ -1024,7 +1024,7 @@ final class AppModel {
         }
     }
 
-    /// 머리 줄 "전체 · @me · 답글" 을 골랐다.
+    /// 머리 줄 "All · @me · Replies" 를 골랐다.
     func setWho(_ who: PRWhoFilter) {
         guard filter.who != who else { return }
         filter.who = who

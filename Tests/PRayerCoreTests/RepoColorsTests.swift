@@ -99,7 +99,7 @@ final class RepoColorsTests: XCTestCase {
         XCTAssertFalse(RepoColors.reddish.contains(assigned["sample-kit"]!))
     }
 
-    /// 첫 레포는 파랑 계열을 받지 않는다 — 바로 옆 "전체" 탭이 강조색(기본 파랑)이라 같은 색 탭 둘이 붙는다.
+    /// 첫 레포는 파랑 계열을 받지 않는다 — 바로 옆 "All" 탭이 강조색(기본 파랑)이라 같은 색 탭 둘이 붙는다.
     /// "sample-web" 은 예전 자리가 파랑(0)이다.
     func testFirstRepoNeverGetsBluish() {
         XCTAssertEqual(RepoColors.legacyIndex(for: "sample-web"), 0, "이 테스트의 전제")

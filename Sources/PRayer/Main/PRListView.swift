@@ -729,7 +729,7 @@ struct PRRow: View {
             // 칩 줄과 제목을 한 덩어리로 묶어, 그 가운데를 아바타 정렬 기준(prTitleLine)으로 내보낸다.
             VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
-                // PR 스냅샷을 처음 받는 동안은 Reviewing 대신 "클론 45%" — 왜 오래 걸리는지 목록에서도 보이게.
+                // PR 스냅샷을 처음 받는 동안은 Reviewing 대신 "Cloning 45%" — 왜 오래 걸리는지 목록에서도 보이게.
                 if let fraction = model.job(for: pr)?.cloneFraction {
                     CloneProgressChip(fraction: fraction)
                 } else {
@@ -1191,7 +1191,7 @@ struct ActivityRow: View {
     }
 }
 
-/// 목록 행의 "클론 45%". 뱃지와 같은 모양으로 그 자리에 대신 선다.
+/// 목록 행의 "Cloning 45%". 뱃지와 같은 모양으로 그 자리에 대신 선다.
 struct CloneProgressChip: View {
     let fraction: Double
 
@@ -1199,7 +1199,7 @@ struct CloneProgressChip: View {
         HStack(spacing: 3) {
             Image(systemName: "arrow.down.circle")
                 .font(.caption2)
-            Text("클론 \(Int((fraction * 100).rounded()))%")
+            Text("Cloning \(Int((fraction * 100).rounded()))%")
                 .font(.caption2.weight(.medium).monospacedDigit())
                 .lineLimit(1)
         }
@@ -1498,7 +1498,7 @@ struct ReplyChip: View {
             HStack(spacing: 3) {
                 Image(systemName: isRead ? "arrowshape.turn.up.left" : "arrowshape.turn.up.left.fill")
                     .font(.system(size: 8, weight: .bold))
-                Text("답글 \(count)")
+                Text("Replies \(count)")
                     .font(.caption2.weight(.semibold))
             }
             .lineLimit(1)
@@ -1567,7 +1567,7 @@ struct Tag: View {
 }
 
 
-/// 목록 머리 줄 — 왼쪽 "전체 · @me · 답글" 로 나에게 온 것만 보고(하나만 고른다), 오른쪽 라벨 단추로 라벨을 여럿 골라
+/// 목록 머리 줄 — 왼쪽 "All · @me · Replies" 로 나에게 온 것만 보고(하나만 고른다), 오른쪽 라벨 단추로 라벨을 여럿 골라
 /// 본다(시안 F, 2026-11-05 사용자 결정). 숫자는 그것을 고르면 목록에 나올 PR 수다. 둘 다 모든 탭에 걸리고, 검색어처럼
 /// 저장하지 않는다. 예전엔 라벨로 좁히려면 행의 라벨을 눌러야 했고 한 번에 하나뿐이었다.
 struct ListFilterBar: View {
@@ -1584,7 +1584,7 @@ struct ListFilterBar: View {
             .labelsHidden()
             .controlSize(.small)
             .fixedSize()
-            .help("전체 · 나를 멘션한 PR · 내 코드 코멘트에 답글이 온 PR")
+            .help("All · 나를 멘션한 PR · 내 코드 코멘트에 답글이 온 PR")
             Spacer(minLength: 4)
             LabelPickButton()
         }
@@ -1594,9 +1594,9 @@ struct ListFilterBar: View {
 
     static func whoName(_ who: PRWhoFilter) -> String {
         switch who {
-        case .all: return "전체"
+        case .all: return "All"
         case .mentions: return MentionStyle.label
-        case .replies: return "답글"
+        case .replies: return "Replies"
         }
     }
 }
@@ -1616,7 +1616,7 @@ private struct LabelPickButton: View {
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: picked.isEmpty ? "tag" : "tag.fill")
-                Text(verbatim: picked.isEmpty ? "라벨" : picked.count == 1 ? picked[0] : "라벨 \(picked.count)")
+                Text(verbatim: picked.isEmpty ? "Labels" : picked.count == 1 ? picked[0] : "Labels \(picked.count)")
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Image(systemName: "chevron.down")

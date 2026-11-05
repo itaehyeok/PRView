@@ -1,7 +1,7 @@
 import Foundation
 import PRayerCore
 
-/// 내 코멘트 답글(MyCommentReplies) — 목록 행의 "답글 N" 칩과 개요 탭의 "새 답글" 줄.
+/// 내 코멘트 답글(MyCommentReplies) — 목록 행의 "Replies N" 칩과 개요 탭의 "새 답글" 줄.
 ///
 /// 읽음은 PR 을 열 때 적는다. 열어 둔 PR 은 새로고침으로 답글이 들어와도 바로 읽은 것으로 친다 — 화면에 떠 있으니까.
 /// 알림은 이것과 따로 PR 변화 감지(`PRChange.repliesToMyComments`)가 맡는다.
