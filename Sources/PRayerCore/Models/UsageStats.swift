@@ -44,6 +44,10 @@ public struct UsageStats: Codable, Sendable, Equatable {
         case whoFilter = "list.who"
         /// 목록 필터 창의 라벨 칩에서 라벨을 더했다 — 2026-11-05 전엔 머리 줄의 라벨 단추(행의 라벨을 누른 것은 `onlyLabel`).
         case labelPick = "list.labelPick"
+        /// 대화창 입력 줄의 모델 칸에서 답할 모델을 바꿨다(리뷰한 모델로 돌아온 것도).
+        case chatModel = "chat.model"
+        /// 대화창 입력 줄의 Effort 칸에서 단계를 골랐다.
+        case chatEffort = "chat.effort"
     }
 
     /// 마지막으로 보낸 것. 설정의 "보낸 내용 보기" 가 본문을 글자 그대로 보인다.

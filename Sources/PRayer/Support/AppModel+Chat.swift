@@ -139,6 +139,7 @@ extension AppModel {
     /// 리뷰한 모델을 고르면 고른 것을 지운다(nil = 리뷰한 모델 그대로). 그 모델이 받지 않는 Effort 가 남으면
     /// 함께 지운다 — Codex 는 모델마다 단계가 다르다.
     func chooseChatModel(_ modelID: String, for record: ReviewRecord) {
+        recordUsage(.chatModel)
         let reviewed = reviewedModelChoiceID(record)
         updateChatChoice(record) { chat in
             chat.model = modelID == reviewed ? nil : modelID
@@ -149,6 +150,7 @@ extension AppModel {
     }
 
     func chooseChatEffort(_ level: String, for record: ReviewRecord) {
+        recordUsage(.chatEffort)
         updateChatChoice(record) { $0.effort = level }
     }
 
