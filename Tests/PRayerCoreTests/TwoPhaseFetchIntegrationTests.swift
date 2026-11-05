@@ -20,7 +20,7 @@ final class TwoPhaseFetchIntegrationTests: XCTestCase {
     }
 
     /// 앱이 쓰는 탭 전부.
-    private let scopes: [PRListScope] = [.open, .myApprovals(.day), .myApprovals(.week), .myApprovals(.month),
+    private let scopes: [PRListScope] = [.open, .myApprovals(.day), .myApprovals(.week),
                                          .recentAll(.day), .recentAll(.week)]
 
     private func probes(_ scope: PRListScope, login: String) async throws -> (probes: [PRProbe], cost: Int) {

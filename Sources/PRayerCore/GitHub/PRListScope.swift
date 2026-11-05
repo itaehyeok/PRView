@@ -1,6 +1,6 @@
 import Foundation
 
-/// 목록 탭의 종류. 기간은 따로 들고 다닌다 — 같은 종류를 24h·7일·30일로 볼 수 있어야 한다.
+/// 목록 탭의 종류. 기간은 따로 들고 다닌다 — 같은 종류를 24h·7일로 볼 수 있어야 한다.
 /// 탭 순서는 **좁은 것에서 넓은 것으로** 간다 — 내가 할 일 → 내가 한 일 → 그 밖의 전부.
 /// `allCases` 순서가 곧 화면의 탭 순서이자 ⌘1/2/3 순서다(선언 순서를 바꾸면 둘 다 바뀐다).
 /// rawValue 는 저장 값이라 순서를 바꿔도 예전에 고른 탭이 그대로 복원된다.
@@ -30,20 +30,32 @@ public enum PRListScopeKind: String, Sendable, Codable, CaseIterable, Identifiab
 ///
 /// 기간 없이 닫힘까지 긁으면 2,667건이 나와 GitHub 이 502 를 낸다(실측). 그래서 "제한 없음" 은 없다.
 /// 90일도 넣지 않는다 — 597건 = 6페이지로, 목록으로 훑을 크기가 아니고 실패 확률만 올라간다.
+/// 30일도 뺐다(2026-11-05 사용자 결정). 200건 남짓이라 역시 훑을 크기가 아니고, 처음 열면 전부 받는 데 1분 가까이
+/// 걸렸다(실측 203건 ≈65초). 7일보다 오래된 PR 은 검색 아래 구역("7일 이전 PR", `PRSearchPlan.olderThan`)이 찾는다.
 public enum PRListWindow: Int, Sendable, Codable, CaseIterable, Identifiable {
     case day = 24
     case week = 168
-    case month = 720
 
     public var id: Int { rawValue }
     public var hours: Int { rawValue }
+
+    /// 저장해 둔 시간으로 기간을 찾는다. 없어진 기간(30일 = 720)은 남은 것 중 가장 긴 7일로 옮긴다 —
+    /// `init(rawValue:)` 를 그대로 쓰면 nil 이 돼 기본값(24h)으로 소리 없이 줄어든다.
+    public init?(storedHours: Int) {
+        if let window = PRListWindow(rawValue: storedHours) {
+            self = window
+        } else if storedHours > PRListWindow.week.hours {
+            self = .week
+        } else {
+            return nil
+        }
+    }
 
     /// 문장 속에 쓰는 이름 — "최근 7일 안에 …".
     public var label: String {
         switch self {
         case .day: return "24h"
         case .week: return "7일"
-        case .month: return "30일"
         }
     }
 
@@ -52,7 +64,6 @@ public enum PRListWindow: Int, Sendable, Codable, CaseIterable, Identifiable {
         switch self {
         case .day: return "24h"
         case .week: return "7d"
-        case .month: return "30d"
         }
     }
 
@@ -60,19 +71,17 @@ public enum PRListWindow: Int, Sendable, Codable, CaseIterable, Identifiable {
     public var longer: PRListWindow? {
         switch self {
         case .day: return .week
-        case .week: return .month
-        case .month: return nil
+        case .week: return nil
         }
     }
 
-    /// 이 기간에서 받아 둘 최대 건수. 실측 결과 건수(24h 31 / 7일 71 / 30일 188)에
+    /// 이 기간에서 받아 둘 최대 건수. 실측 결과 건수(24h 31 / 7일 71)에
     /// 여유를 얹은 값이다. 페이지 수가 아니라 건수로 잡아야, 요청이 예산을 넘겨
     /// 페이지 크기가 줄어들 때도 목록이 잘리지 않는다.
     public var maxResults: Int {
         switch self {
         case .day: return 200
         case .week: return 300
-        case .month: return 600
         }
     }
 }
@@ -80,7 +89,7 @@ public enum PRListWindow: Int, Sendable, Codable, CaseIterable, Identifiable {
 /// 목록을 무엇으로 채울지 = 종류 + 기간.
 ///
 /// 두 값은 만든 뒤에 바꿀 수 없다. `init` 이 "열린 PR 탭에는 기간이 없고, 기간을 쓰는 탭에는
-/// 반드시 기간이 있다" 를 보장하는데, 바깥에서 `scope.window = .month` 로 고칠 수 있으면
+/// 반드시 기간이 있다" 를 보장하는데, 바깥에서 `scope.window = .week` 로 고칠 수 있으면
 /// 그 보장이 깨진다 — 열린 PR 탭에 기간이 붙고, `== .open` 비교가 전부 어긋나 헤더 필터가
 /// 통째로 꺼진다. 저장은 Codable 이 아니라 `storageValue` 로만 한다(형식이 둘로 갈리면
 /// 마이그레이션이 한쪽만 돈다).
@@ -119,7 +128,7 @@ public struct PRListScope: Sendable, Equatable, Hashable, Identifiable {
     public var includesClosed: Bool { kind != .open }
     public var requiresMyApproval: Bool { kind == .myApprovals }
 
-    /// `old` 에서 같은 종류의 기간만 넓혔나 — 24h → 7d·30d, 7d → 30d.
+    /// `old` 에서 같은 종류의 기간만 넓혔나 — 24h → 7d.
     ///
     /// 그러면 `old` 로 받은 것이 이 탭의 결과에 다 든다. 기간 탭의 서버 조건은 `updated:>=` 이고(Approved 는
     /// `reviewed-by:` 를 더 건다) 넓히면 그 시각만 앞으로 당겨지기 때문이다(`GitHubClient.pullRequestSlice`).
@@ -205,16 +214,17 @@ public struct PRListScope: Sendable, Equatable, Hashable, Identifiable {
     public var storageValue: String { "\(kind.rawValue):\(window?.hours ?? 0)" }
 
     /// 저장된 값을 읽는다. 옛 형식(`myApprovals24h` 등)도 받아 새 형식으로 옮긴다 —
-    /// 그렇게 안 하면 업데이트한 사람의 탭 선택이 조용히 초기화된다.
+    /// 그렇게 안 하면 업데이트한 사람의 탭 선택이 조용히 초기화된다. 없어진 30일(`recentAll:720`)은 7일로 옮긴다.
     public init?(storageValue: String) {
         let parts = storageValue.split(separator: ":", maxSplits: 1).map(String.init)
         if parts.count == 2, let kind = PRListScopeKind(rawValue: parts[0]) {
-            self.init(kind: kind, window: PRListWindow(rawValue: Int(parts[1]) ?? 0))
+            self.init(kind: kind, window: PRListWindow(storedHours: Int(parts[1]) ?? 0))
             return
         }
         switch storageValue {
         case "open": self = .open
-        case "recentAll": self = .recentAll(.month)
+        // 옛 All PRs 는 30일 고정이었다 — 지금 고를 수 있는 가장 긴 기간으로.
+        case "recentAll": self = .recentAll(.week)
         case "myApprovals24h": self = .myApprovals(.day)
         case "myApprovals7d": self = .myApprovals(.week)
         default: return nil

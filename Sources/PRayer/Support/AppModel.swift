@@ -334,7 +334,7 @@ final class AppModel {
     private func loadRememberedWindows() {
         guard let raw = UserDefaults.standard.dictionary(forKey: "prListScopeWindows") as? [String: Int] else { return }
         for (key, hours) in raw {
-            guard let kind = PRListScopeKind(rawValue: key), let window = PRListWindow(rawValue: hours) else { continue }
+            guard let kind = PRListScopeKind(rawValue: key), let window = PRListWindow(storedHours: hours) else { continue }
             rememberedWindows[kind] = window
         }
     }
@@ -2188,7 +2188,7 @@ final class AppModel {
         }
         do {
             // 가볍게 훑고 바뀐 PR 만 자세히 받는다(`fetchScope`). 처음 채울 때처럼 자세히 받을 것이 많으면 받은 데까지
-            // **먼저 그린다** — 30일 탭은 전부 받는 데 40초가 넘게 걸려서(실측) 다 받고 나서 그리면 그동안 빈 화면을 본다.
+            // **먼저 그린다** — 200건 남짓이면 전부 받는 데 40초가 넘게 걸려서(실측) 다 받고 나서 그리면 그동안 빈 화면을 본다.
             // 늘어놓는 순서는 서버 정렬(sort:created-desc)과 같은 올린 시각이라 뒤에 받은 것이 앞 것 위로 끼어들지 않는다.
             let scopeAtStart = listScope
             // 받기 전에 이 탭에 그려 둔 목록(지난 목록·앞 조회). 여기 없던 PR 만 "새로 온 것" 으로 보고 펼쳐 넣는다
