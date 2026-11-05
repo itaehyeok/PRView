@@ -98,6 +98,14 @@ enum DebugLaunch {
     /// 켜자마자 "@me 모양 조절" 창(MentionTunerPanel)을 본창 옆에 띄운다.
     static var mentionTuner: Bool { value("PRAYER_DEBUG_MENTION_TUNER") == "1" }
     static var hoverCode: String? { value("PRAYER_DEBUG_HOVER_CODE") }
+    /// 데모 #128 대화창에 모델·Effort 를 골라 둔 모양 — `sonnet,medium`, Effort 만이면 `,high`. 마지막 답에 그 표시를 단다.
+    static var chatModel: (model: String?, effort: String?)? {
+        guard let raw = value("PRAYER_DEBUG_CHAT_MODEL") else { return nil }
+        let parts = raw.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+        let model = parts.first.flatMap { $0.isEmpty ? nil : $0 }
+        let effort = parts.count > 1 && !parts[1].isEmpty ? parts[1] : nil
+        return (model, effort)
+    }
     static var settingsTab: String? { value("PRAYER_DEBUG_SETTINGS_TAB") }
     static var onboardingStep: OnboardingStep? {
         value("PRAYER_DEBUG_ONBOARDING_STEP").flatMap { name in OnboardingStep.allCases.first { "\($0)" == name } }
