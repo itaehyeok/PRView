@@ -40,9 +40,9 @@ public struct UsageStats: Codable, Sendable, Equatable {
         case mentionJump = "list.mentionJump"
         /// 개요 대화 머리의 "@me N ↓" 으로 다음 멘션으로 갔다.
         case mentionNext = "overview.mentionNext"
-        /// 목록 머리 줄의 "All · @me · Replies" 에서 @me 나 Replies 를 골랐다.
+        /// 목록 필터 창의 "All · @me · Replies" 에서 @me 나 Replies 를 골랐다(2026-11-05 전엔 검색줄 아래 머리 줄).
         case whoFilter = "list.who"
-        /// 목록 머리 줄의 라벨 단추에서 라벨을 더했다(행의 라벨을 누른 것은 `onlyLabel`).
+        /// 목록 필터 창의 라벨 칩에서 라벨을 더했다 — 2026-11-05 전엔 머리 줄의 라벨 단추(행의 라벨을 누른 것은 `onlyLabel`).
         case labelPick = "list.labelPick"
     }
 

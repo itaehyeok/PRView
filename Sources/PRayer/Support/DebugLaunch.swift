@@ -89,7 +89,7 @@ enum DebugLaunch {
     static var search: String? { value("PRAYER_DEBUG_SEARCH") }
     /// `PRAYER_DEBUG_ONLY_LABEL=feature,bug` — 라벨만 보기(쉼표로 여럿).
     static var onlyLabels: [String]? { value("PRAYER_DEBUG_ONLY_LABEL").map { $0.split(separator: ",").map(String.init) } }
-    /// `PRAYER_DEBUG_WHO=mentions|replies` — 목록 머리 줄의 @me·답글만 보기.
+    /// `PRAYER_DEBUG_WHO=mentions|replies` — 필터 창의 @me·Replies 만 보기.
     static var who: PRWhoFilter? { value("PRAYER_DEBUG_WHO").flatMap(PRWhoFilter.init(rawValue:)) }
     static var scope: PRListScope? { value("PRAYER_DEBUG_SCOPE").flatMap(PRListScope.init(storageValue:)) }
     static var expandAll: Bool { value("PRAYER_DEBUG_EXPAND_ALL") == "1" }
