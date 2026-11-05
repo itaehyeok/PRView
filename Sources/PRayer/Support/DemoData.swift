@@ -176,7 +176,9 @@ enum DemoData {
                    PRCommit(oid: sha(131), abbreviatedOid: String(sha(131).prefix(7)), messageHeadline: "구분선 색 다크 모드 대응",
                             committedDate: ago(25), author: "alex-acme"),
                ]),
+            // 본문이 나를 불렀다 — 목록 활동 줄에 "Opened @me" 가 선다(PRActivityBuilder).
             pr(iOS, 126, "네트워크 재시도 정책 정리", author: "sam-acme",
+               body: "재시도 횟수와 간격을 한곳에서 정하도록 모았습니다.\n\n바뀐 것\n- 실패하면 1·2·4초 간격으로 세 번까지 다시 시도\n- 타임아웃은 재시도하지 않음\n\n예전에 재시도 규칙을 정하셨던 @you-acme 님이 간격 값을 한 번 봐 주시면 좋겠습니다.",
                base: "develop", head: "refactor/retry", added: 212, deleted: 160, files: 9, updated: 180, created: 2_900),
             pr(iOS, 129, "알림 권한 안내 문구 수정", author: viewer,
                base: "develop", head: "fix/notification-copy", added: 12, deleted: 8, files: 2, updated: 90, created: 400,

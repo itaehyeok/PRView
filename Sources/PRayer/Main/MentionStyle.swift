@@ -51,13 +51,19 @@ struct MentionLook: Equatable, Sendable {
                      dark: Self.shifted(base, saturation: 0.91, brightness: 1.05).withAlphaComponent(min(1, fillOpacity * 1.65)))
     }
 
-    /// "@me" 글자·포커스 테두리 — 바탕색을 라이트에서는 짙고 진하게, 다크에서는 밝고 옅게.
+    /// "@me" 글자 — 바탕색을 라이트에서는 짙고 진하게, 다크에서는 밝고 옅게.
     var tint: Color {
         Self.dynamic(light: Self.shifted(base, saturation: 1.28, brightness: 0.9),
                      dark: Self.shifted(base, saturation: 0.6, brightness: 1.1))
     }
 
     var chipText: Color { tintedText ? tint : .primary }
+
+    /// 목록의 @me 로 찾아온 글에서 형광펜이 깜빡일 때의 바탕 — 평소(`fill`)보다 두 배 반 짙게.
+    var flash: Color {
+        Self.dynamic(light: base.withAlphaComponent(min(1, fillOpacity * 2.5)),
+                     dark: Self.shifted(base, saturation: 0.91, brightness: 1.05).withAlphaComponent(min(1, fillOpacity * 1.65 * 2)))
+    }
 
     /// 조절 창의 "값 복사" — 정한 값을 그대로 말로 옮길 수 있게.
     var summary: String {
@@ -97,8 +103,8 @@ enum MentionStyle {
     @MainActor static var look: MentionLook { MentionTuner.shared.look }
     /// 형광펜 바탕.
     @MainActor static var fill: Color { look.fill }
-    /// "@me" 글자·포커스 테두리.
-    @MainActor static var tint: Color { look.tint }
+    /// 찾아온 멘션이 깜빡일 때의 형광펜 바탕.
+    @MainActor static var flash: Color { look.flash }
     static let label = "@me"
     /// 형광펜 상자의 좌우 여백·위아래 키움(글자 크기 대비). 인라인 코드 상자(0.3)보다 좁다 — 이름 하나에 붙는 표시라서.
     static let horizontalPadding: CGFloat = 0.18
@@ -136,6 +142,19 @@ enum MentionStyle {
 
 /// 인라인 형광펜 표시. 상자 겹의 TextRenderer(InlineCodeBoxes)가 이 표시가 붙은 줄 조각 뒤에 형광펜 상자를 그린다.
 struct MentionAttribute: TextAttribute {}
+
+private struct MentionPulseKey: EnvironmentKey {
+    static var defaultValue: Double { 0 }
+}
+
+extension EnvironmentValues {
+    /// 목록의 @me 로 찾아온 글의 형광펜을 얼마나 짙게 칠하나(0 = 평소, 1 = `MentionStyle.flash`). 개요 탭이 그 대화 줄에만
+    /// 내려 주고(OverviewTab.focusMention), 형광펜을 그리는 InlineCodeBoxes 가 본다 — 글 상자 전체가 아니라 멘션만 깜빡인다.
+    var mentionPulse: Double {
+        get { self[MentionPulseKey.self] }
+        set { self[MentionPulseKey.self] = newValue }
+    }
+}
 
 /// 개요 대화 상자 머리·본문 카드 머리의 "@me" — 이 글이 나를 불렀다.
 struct MentionTag: View {

@@ -139,6 +139,31 @@ final class MyMentionsTests: XCTestCase {
         XCTAssertEqual(activities.first?.mentionEntryID, "thread:T9")
     }
 
+    /// PR 본문이 부르면 올린 일이 "Opened" 한 줄로 서고 본문 카드를 가리킨다. 부르지 않았으면 그 줄은 없다 —
+    /// 올린 일은 목록 행 머리의 "Created … ago" 가 이미 말한다.
+    func testBodyMentionAddsOpenedActivity() throws {
+        var pr = Fixtures.pr()
+        pr.createdAt = at(0)
+        pr.bodyText = "로그인 화면 정리입니다. @sam-lee 님 키보드 쪽 봐 주세요"
+        pr.issueComments = [PRIssueComment(author: other, body: "멘션 없음", createdAt: at(10))]
+        pr.reviewEvents = []
+        pr.threads = []
+        pr.commits = []
+        let activities = PRActivityBuilder.build(from: pr, limit: nil, viewer: me, now: at(60))
+        let opened = try XCTUnwrap(activities.first { $0.kind == .opened })
+        XCTAssertEqual(opened.actor, pr.author)
+        XCTAssertEqual(opened.at, at(0))
+        XCTAssertEqual(opened.mentionEntryID, PRActivity.bodyEntryID)
+        XCTAssertEqual(activities.last?.kind, .opened, "가장 오래된 일이라 맨 아래")
+
+        pr.bodyText = "멘션 없는 본문"
+        XCTAssertFalse(PRActivityBuilder.build(from: pr, limit: nil, viewer: me, now: at(60)).contains { $0.kind == .opened })
+        pr.bodyText = "@sam-lee 메모"
+        pr.author = me
+        XCTAssertFalse(PRActivityBuilder.build(from: pr, limit: nil, viewer: me, now: at(60)).contains { $0.kind == .opened },
+                       "내 PR 본문은 보지 않는다")
+    }
+
     /// 내 로그인을 주지 않으면 아무 활동도 멘션으로 치지 않는다(예전 호출 그대로).
     func testNoViewerMeansNoMentions() {
         var pr = Fixtures.pr()

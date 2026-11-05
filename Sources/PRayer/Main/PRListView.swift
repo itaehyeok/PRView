@@ -1144,7 +1144,8 @@ struct ActivityRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             if let onMention {
-                MentionButton(help: "\(name.isEmpty ? activity.actor : name) 님이 나를 멘션했습니다 — 누르면 그 글로 갑니다",
+                MentionButton(help: "\(name.isEmpty ? activity.actor : name) 님이 \(activity.kind == .opened ? "PR 본문에서 " : "")"
+                                  + "나를 멘션했습니다 — 누르면 그 글로 갑니다",
                               action: onMention)
             }
             Spacer(minLength: 4)
@@ -1162,7 +1163,7 @@ struct ActivityRow: View {
         case .dismissed: return .orange
         case .merged: return .purple
         case .closed: return .red
-        case .commented, .pushed, .reopened: return .secondary
+        case .opened, .commented, .pushed, .reopened: return .secondary
         }
     }
 
