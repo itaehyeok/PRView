@@ -1468,7 +1468,7 @@ struct ApprovalPill: View {
 /// 내 코멘트에 온 답글 수(AppModel+Replies). 안 본 것이 있으면 꽉 채우고, PR 을 열어 다 보면 테두리만 남는다
 /// (B안, 2026-11-05 사용자 결정 — 예전엔 열면 칩이 사라져 답글이 있었다는 것도 목록에서 지워졌다).
 /// 꽉 찬 칩은 다른 칩(옅은 바탕)보다 무겁다 — "확인할 것" 이라 훑을 때 먼저 걸려야 한다.
-/// 누르면 그 PR 을 열고 개요 탭의 첫 새 답글로 간다(AppModel.openReplies). 다 본 칩은 그 PR 의 개요 탭만 연다.
+/// 누르면 그 PR 을 열고 개요 탭의 첫 새 답글로, 다 봤으면 가장 최근 답글로 간다(AppModel.openReplies).
 /// 올리면 밝아지며 살짝 떠올라 누를 수 있는 것을 알린다.
 struct ReplyChip: View {
     /// 나에게 온 답글 전부(본 것 포함).
@@ -1501,7 +1501,7 @@ struct ReplyChip: View {
         .onDisappear {
             if isHovering { NSCursor.pop() }
         }
-        .help(isRead ? "내 코멘트에 온 답글 \(count)건, 다 봤습니다 — 누르면 그 PR 을 엽니다"
+        .help(isRead ? "내 코멘트에 온 답글 \(count)건, 다 봤습니다 — 누르면 가장 최근 답글로 갑니다"
                      : "내 코멘트에 새 답글 \(unread)건(전체 \(count)건) — 누르면 그 답글로 갑니다")
     }
 }
