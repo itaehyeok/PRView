@@ -332,6 +332,8 @@ struct OverviewTab: View {
     @State private var mentionFocusTask: Task<Void, Never>?
     /// 대화 머리의 "@me N" 을 누를 때마다 다음 멘션으로 — 지금 몇 번째에 있나.
     @State private var mentionCursor = -1
+    /// 다 본 답글 칩으로 옮겨 온 답글(`MyCommentReply.id`). 그 스레드가 다 펼쳐지고 그 글에 옅은 파랑이 깔린다(ThreadCard).
+    @State private var replyFocusID: String?
 
     var body: some View {
         let entries = PRTimelineBuilder.build(from: pr)
@@ -346,15 +348,19 @@ struct OverviewTab: View {
                 }
                 .padding(16)
             }
+            .environment(\.replyFocusID, replyFocusID)
             .task(id: pr.id) {
                 mentionCursor = -1
+                replyFocusID = nil
                 if DebugLaunch.expandAll { expanded = keys }
             }
-            // 목록의 답글 칩으로 열었다(AppModel.openReplies).
+            // 목록의 답글 칩으로 열었다(AppModel.openReplies). 안 본 답글이 없으면(다 본 칩) 가장 최근 답글로.
             .onChange(of: model.replyJumpPRID, initial: true) { _, id in
                 guard id == pr.id else { return }
                 model.replyJumpPRID = nil
-                scrollToFirstFreshReply(entries, proxy: proxy)
+                if !scrollToFirstFreshReply(entries, proxy: proxy) {
+                    scrollToLatestReply(entries, proxy: proxy)
+                }
             }
             // 목록 활동 줄의 @me 로 열었다(AppModel.openMention).
             .onChange(of: model.mentionJump, initial: true) { _, jump in
@@ -412,12 +418,13 @@ struct OverviewTab: View {
 
     /// 새 답글이 온 내 스레드 가운데 대화에서 먼저 나오는 것의 "새 답글" 줄로 간다. 화면 위쪽 3할 쯤에 둬 그 위의 내
     /// 코멘트도 같이 보이게 한다(AIReviewView 의 돌아오기와 같은 자리).
-    private func scrollToFirstFreshReply(_ entries: [PRTimelineEntry], proxy: ScrollViewProxy) {
+    /// - Returns: 갈 곳이 있었나. 이 PR 의 답글을 이미 다 봤으면 "새 답글" 줄이 없다.
+    private func scrollToFirstFreshReply(_ entries: [PRTimelineEntry], proxy: ScrollViewProxy) -> Bool {
         let target = entries.lazy.compactMap { entry -> (entryID: String, threadID: String)? in
             guard case .thread(let thread, _) = entry, !model.freshReplyKeys(in: thread, of: pr).isEmpty else { return nil }
             return (entry.id, thread.id)
         }.first
-        guard let target else { return }
+        guard let target else { return false }
         // 새 답글이 온 스레드는 열 때 펼쳐지지만(PRDetailView) 그 줄이 있어야 갈 수 있으니 여기서도 펼친다.
         expanded.insert(target.entryID)
         // 막 그려지며 스레드가 펼쳐지는 참이라 줄이 아직 자리를 잡지 않았다. 한 박자 기다렸다가 미끄러지듯 민다 —
@@ -426,6 +433,26 @@ struct OverviewTab: View {
             try? await Task.sleep(for: .milliseconds(120))
             withAnimation(.smooth(duration: 0.35)) {
                 proxy.scrollTo(NewRepliesDivider.anchorID(target.threadID), anchor: UnitPoint(x: 0.5, y: 0.3))
+            }
+        }
+        return true
+    }
+
+    /// 다 본 답글 칩을 눌렀다 — 나에게 온 답글 가운데 가장 최근 글로 간다. "새 답글" 줄이 없으니 그 글에 옅은 파랑을 깔아
+    /// 어느 글인지 보이게 하고(`replyFocusID`), 접힌 "더 보기" 뒤에 있어도 스레드를 다 펼친다(ThreadCard).
+    private func scrollToLatestReply(_ entries: [PRTimelineEntry], proxy: ScrollViewProxy) {
+        guard let reply = MyCommentReplies.replies(in: pr, viewer: model.githubAccount?.login).max(by: { $0.at < $1.at }),
+              let entry = entries.first(where: {
+                  if case .thread(let thread, _) = $0 { return thread.id == reply.threadID }
+                  return false
+              }) else { return }
+        expanded.insert(entry.id)
+        replyFocusID = reply.id
+        // 새 답글로 갈 때와 같다 — 막 펼쳐 자리를 잡는 참이라 한 박자 기다렸다 민다.
+        Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            withAnimation(.smooth(duration: 0.35)) {
+                proxy.scrollTo(ThreadCard.replyAnchorID(reply.id), anchor: UnitPoint(x: 0.5, y: 0.3))
             }
         }
     }
@@ -1782,11 +1809,30 @@ struct ThreadCard: View {
     var pr: PullRequestInfo?
     /// 이 PR 을 열 때 안 봤던 내 코멘트 답글(`MyCommentReplies.key`). 첫 글 앞에 "새 답글" 줄을 긋는다.
     var freshKeys: Set<String> = []
+    /// 다 본 답글 칩으로 옮겨 온 답글(`MyCommentReply.id`, OverviewTab). 이 스레드 글이면 그 글로 스크롤할 자리를 단다.
+    @Environment(\.replyFocusID) private var replyFocusID
     @State private var expanded = false
 
+    /// 다 본 답글 칩이 스크롤해 갈 자리(OverviewTab.scrollToLatestReply).
+    static func replyAnchorID(_ replyID: String) -> String { "reply:\(replyID)" }
+
+    /// 이 스레드에서 다 본 답글 칩으로 옮겨 온 글(`MyCommentReplies.key`).
+    private var focusKey: String? {
+        let prefix = "\(thread.id)|"
+        guard let replyFocusID, replyFocusID.hasPrefix(prefix) else { return nil }
+        return String(replyFocusID.dropFirst(prefix.count))
+    }
+
+    /// 눈에 띄게 할 글 — 새 답글, 그리고 다 본 칩으로 옮겨 온 글.
+    private func isMarked(_ comment: ReviewThreadComment) -> Bool {
+        let key = MyCommentReplies.key(comment)
+        return freshKeys.contains(key) || key == focusKey
+    }
+
     /// 새 답글이 앞 세 글 밖에 있으면 다 펼친다 — 새 답글을 보러 열었는데 "더 보기" 뒤에 숨어 있으면 안 된다.
+    /// 다 본 칩으로 옮겨 온 글도 같다.
     private var freshBeyondFold: Bool {
-        thread.comments.dropFirst(3).contains { freshKeys.contains(MyCommentReplies.key($0)) }
+        thread.comments.dropFirst(3).contains(where: isMarked)
     }
 
     private var showsAll: Bool { expanded || freshBeyondFold }
@@ -1815,7 +1861,9 @@ struct ThreadCard: View {
                         Divider()
                     }
                     CommentBubble(comment: comment, isReply: true)
-                        .background(Color.accentColor.opacity(freshKeys.contains(MyCommentReplies.key(comment)) ? 0.05 : 0))
+                        .background(Color.accentColor.opacity(isMarked(comment) ? 0.05 : 0))
+                        // 다 본 답글 칩이 이 글로 스크롤한다(OverviewTab.scrollToLatestReply) — 키는 `MyCommentReply.id` 와 같은 꼴.
+                        .id(Self.replyAnchorID("\(thread.id)|\(MyCommentReplies.key(comment))"))
                 }
             }
             if thread.comments.count > 3, !freshBeyondFold {
@@ -1833,6 +1881,18 @@ struct ThreadCard: View {
                     .padding(.vertical, 6)
             }
         }
+    }
+}
+
+private struct ReplyFocusIDKey: EnvironmentKey {
+    static var defaultValue: String? { nil }
+}
+
+extension EnvironmentValues {
+    /// 다 본 답글 칩으로 옮겨 온 답글(`MyCommentReply.id`). 개요 탭이 내려 주고 ThreadCard 가 본다.
+    var replyFocusID: String? {
+        get { self[ReplyFocusIDKey.self] }
+        set { self[ReplyFocusIDKey.self] = newValue }
     }
 }
 

@@ -880,9 +880,9 @@ struct PRRow: View {
         .fixedSize(horizontal: true, vertical: false)
         ApprovalPill(count: pr.approvalCount, threshold: model.settings.approvalThreshold(for: pr),
                      changesRequested: pr.reviewDecision == "CHANGES_REQUESTED")
-        let replies = model.unreadReplyCount(for: pr)
-        if replies > 0 {
-            ReplyChip(count: replies) { model.openReplies(of: pr, select: select) }
+        let replies = model.replyCounts(for: pr)
+        if replies.total > 0 {
+            ReplyChip(count: replies.total, unread: replies.unread) { model.openReplies(of: pr, select: select) }
         }
     }
 
@@ -1465,48 +1465,60 @@ struct ApprovalPill: View {
     }
 }
 
-/// 내 코멘트에 온, 아직 안 본 답글 수(AppModel+Replies). PR 을 열면 사라진다(시안 A, 2026-11-02 사용자 결정).
-/// 다른 칩(옅은 바탕)과 달리 꽉 채운다 — 읽으면 없어지는 "확인할 것" 표시라 훑을 때 먼저 걸려야 한다.
-/// 누르면 그 PR 을 열고 개요 탭의 첫 새 답글로 간다(AppModel.openReplies). 올리면 밝아지며 살짝 떠올라 누를 수 있는 것을 알린다.
+/// 내 코멘트에 온 답글 수(AppModel+Replies). 안 본 것이 있으면 꽉 채우고, PR 을 열어 다 보면 테두리만 남는다
+/// (B안, 2026-11-05 사용자 결정 — 예전엔 열면 칩이 사라져 답글이 있었다는 것도 목록에서 지워졌다).
+/// 꽉 찬 칩은 다른 칩(옅은 바탕)보다 무겁다 — "확인할 것" 이라 훑을 때 먼저 걸려야 한다.
+/// 누르면 그 PR 을 열고 개요 탭의 첫 새 답글로, 다 봤으면 가장 최근 답글로 간다(AppModel.openReplies).
+/// 올리면 밝아지며 살짝 떠올라 누를 수 있는 것을 알린다.
 struct ReplyChip: View {
+    /// 나에게 온 답글 전부(본 것 포함).
     let count: Int
+    /// 그중 안 본 것.
+    let unread: Int
     let action: () -> Void
     @State private var isHovering = false
+
+    private var isRead: Bool { unread == 0 }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 3) {
-                Image(systemName: "arrowshape.turn.up.left.fill")
+                Image(systemName: isRead ? "arrowshape.turn.up.left" : "arrowshape.turn.up.left.fill")
                     .font(.system(size: 8, weight: .bold))
                 Text("답글 \(count)")
                     .font(.caption2.weight(.semibold))
             }
             .lineLimit(1)
         }
-        .buttonStyle(ReplyChipStyle(isHovering: isHovering))
+        .buttonStyle(ReplyChipStyle(isHovering: isHovering, isRead: isRead))
         .fixedSize()
         .onHover { inside in
             isHovering = inside
             if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
-        // 누르면 PR 을 열어 읽은 것이 되고 칩이 올린 채로 사라진다 — 나갔다는 알림이 없어 손 모양 커서가 남는다(CodeLink 와 같다).
+        // 내가 다시 답하면 그 앞 답글은 처리한 것이라(MyCommentReplies) 칩이 올린 채로 사라질 수 있다 — 나갔다는 알림이
+        // 없어 손 모양 커서가 남는다(CodeLink 와 같다).
         .onDisappear {
             if isHovering { NSCursor.pop() }
         }
-        .help("내 코멘트에 새 답글 \(count)건 — 누르면 그 답글로 갑니다")
+        .help(isRead ? "내 코멘트에 온 답글 \(count)건, 다 봤습니다 — 누르면 가장 최근 답글로 갑니다"
+                     : "내 코멘트에 새 답글 \(unread)건(전체 \(count)건) — 누르면 그 답글로 갑니다")
     }
 }
 
 /// 답글 칩의 모양. 크기를 바꾸면 같은 줄의 다른 칩이 밀리므로 올렸을 때·눌렀을 때는 밝기·그림자·배율로만 다르게 그린다.
+/// 다 본 칩의 테두리는 안쪽으로 긋는다 — 꽉 찬 칩과 크기가 같아야 읽은 순간 줄이 흔들리지 않는다.
 private struct ReplyChipStyle: ButtonStyle {
     let isHovering: Bool
+    let isRead: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 6)
             .padding(.vertical, 1)
-            .foregroundStyle(.white)
-            .background(Color.accentColor, in: Capsule())
+            .foregroundStyle(isRead ? Color.accentColor : .white)
+            .background(Color.accentColor.opacity(isRead ? (isHovering ? 0.1 : 0) : 1), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.accentColor.opacity(isRead ? 1 : 0), lineWidth: 1))
             .brightness(configuration.isPressed ? -0.08 : (isHovering ? 0.08 : 0))
             .shadow(color: Color.accentColor.opacity(isHovering ? 0.5 : 0), radius: 3, y: 1)
             .scaleEffect(configuration.isPressed ? 0.96 : (isHovering ? 1.06 : 1))

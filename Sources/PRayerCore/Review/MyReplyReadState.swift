@@ -26,6 +26,14 @@ public struct MyReplyReadState: Codable, Sendable, Equatable {
         MyCommentReplies.replies(in: pr, viewer: viewer).filter(isUnread)
     }
 
+    /// 목록 답글 칩의 수 — 나에게 온 답글 전부와 그중 안 본 것. 칩은 전부를 적고, 안 본 것이 있을 때만 꽉 채운다
+    /// (다 보면 테두리만 남는다). 전부를 적어야 다 본 뒤에도 숫자가 줄지 않는다 — 안 본 것만 세면 새 답글이
+    /// 하나 오는 순간 "답글 3" 이 "답글 1" 로 줄었다.
+    public func counts(in pr: PullRequestInfo, viewer: String?) -> (total: Int, unread: Int) {
+        let replies = MyCommentReplies.replies(in: pr, viewer: viewer)
+        return (replies.count, replies.filter(isUnread).count)
+    }
+
     /// PR 을 열어 봤다 — 내가 참여한 스레드는 지금 받아 둔 글까지 본 것이다.
     /// 지금 시각이 아니라 마지막 글의 시각을 적는다: 맥 시계와 GitHub 시계가 어긋나도 열어 본 뒤에 달린 답글을 놓치지 않게.
     /// - Returns: 바뀐 것이 있는가(저장할지 정한다).

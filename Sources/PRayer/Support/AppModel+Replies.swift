@@ -6,10 +6,10 @@ import PRayerCore
 /// 읽음은 PR 을 열 때 적는다. 열어 둔 PR 은 새로고침으로 답글이 들어와도 바로 읽은 것으로 친다 — 화면에 떠 있으니까.
 /// 알림은 이것과 따로 PR 변화 감지(`PRChange.repliesToMyComments`)가 맡는다.
 extension AppModel {
-    /// 이 PR 에서 아직 안 본, 나에게 온 답글 수.
-    func unreadReplyCount(for pr: PullRequestInfo) -> Int {
-        guard let myReplyRead else { return 0 }
-        return myReplyRead.unread(in: pr, viewer: githubAccount?.login).count
+    /// 이 PR 에서 나에게 온 답글 수와 그중 아직 안 본 것(`MyReplyReadState.counts`).
+    func replyCounts(for pr: PullRequestInfo) -> (total: Int, unread: Int) {
+        guard let myReplyRead else { return (0, 0) }
+        return myReplyRead.counts(in: pr, viewer: githubAccount?.login)
     }
 
     /// 이 스레드에서 "새 답글" 로 보일 글의 키(`MyCommentReplies.key`). 이 PR 을 열 때 안 봤던 답글이다.
@@ -30,7 +30,8 @@ extension AppModel {
         }
     }
 
-    /// 목록 행의 답글 칩을 눌렀다 — 행을 누른 것처럼 고르고(`select`), 그 PR 로 옮겨 갔으면 개요 탭을 열어 첫 새 답글로 간다.
+    /// 목록 행의 답글 칩을 눌렀다 — 행을 누른 것처럼 고르고(`select`), 그 PR 로 옮겨 갔으면 개요 탭을 열어 첫 새 답글로 간다
+    /// (다 본 칩이면 가장 최근 답글로 — OverviewTab).
     /// 고르기를 먼저 한다 — 고를 때 안 본 답글이 "새 답글"(`freshReplyIDs`)로 옮겨 와야 개요 탭이 갈 곳을 안다.
     /// ⌘ 클릭처럼 그 PR 로 안 옮겨 갔으면 아무 데도 가지 않는다(남겨 두면 나중에 그 PR 을 열 때 뜬금없이 스크롤한다).
     func openReplies(of pr: PullRequestInfo, select: () -> Void) {
