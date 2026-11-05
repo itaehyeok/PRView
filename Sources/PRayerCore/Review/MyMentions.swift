@@ -57,6 +57,20 @@ public enum MyMentions {
         return posts.first { $0.author.lowercased() != me && mentions($0.body, viewer: viewer) }?.body
     }
 
+    /// 이 PR 어디서든 남이 나를 불렀나 — 본문·리뷰 본문·대화 코멘트·코드 코멘트. 목록 활동 줄에 @me 가 붙는 글과 같은
+    /// 범위다(PRActivityBuilder). 목록의 "@me" 보기(PRWhoFilter)가 PR 마다 부르므로 활동을 만들지 않고 바로 훑는다.
+    public static func anywhere(in pr: PullRequestInfo, viewer: String?) -> Bool {
+        guard let viewer, !viewer.isEmpty else { return false }
+        let me = viewer.lowercased()
+        func byOther(_ author: String, _ body: String) -> Bool {
+            author.lowercased() != me && mentions(body, viewer: viewer)
+        }
+        if bodyMentions(pr, viewer: viewer) { return true }
+        if pr.reviewEvents.contains(where: { byOther($0.author, $0.body) }) { return true }
+        if pr.issueComments.contains(where: { byOther($0.author, $0.body) }) { return true }
+        return pr.threads.contains { $0.comments.contains { byOther($0.author, $0.body) } }
+    }
+
     /// PR 본문이 나를 불렀나. 내 PR 본문은 보지 않는다.
     public static func bodyMentions(_ pr: PullRequestInfo, viewer: String?) -> Bool {
         guard let viewer, pr.author.lowercased() != viewer.lowercased() else { return false }

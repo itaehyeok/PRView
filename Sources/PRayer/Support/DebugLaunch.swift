@@ -89,6 +89,8 @@ enum DebugLaunch {
     static var search: String? { value("PRAYER_DEBUG_SEARCH") }
     /// `PRAYER_DEBUG_ONLY_LABEL=feature,bug` — 라벨만 보기(쉼표로 여럿).
     static var onlyLabels: [String]? { value("PRAYER_DEBUG_ONLY_LABEL").map { $0.split(separator: ",").map(String.init) } }
+    /// `PRAYER_DEBUG_WHO=mentions|replies` — 목록 머리 줄의 @me·답글만 보기.
+    static var who: PRWhoFilter? { value("PRAYER_DEBUG_WHO").flatMap(PRWhoFilter.init(rawValue:)) }
     static var scope: PRListScope? { value("PRAYER_DEBUG_SCOPE").flatMap(PRListScope.init(storageValue:)) }
     static var expandAll: Bool { value("PRAYER_DEBUG_EXPAND_ALL") == "1" }
     /// 고른 PR(PRAYER_DEBUG_SELECT_PR)을 연 뒤 이만큼(초) 있다가 첫 @me 활동을 누른 것처럼 그 글로 간다(AppModel.openMention).
@@ -302,7 +304,7 @@ struct DebugLaunchModifier: ViewModifier {
                 || DebugLaunch.slackRequestCount != nil || DebugLaunch.slackMultiCount != nil
                 || DebugLaunch.listMultiCount != nil || DebugLaunch.teamStats != nil
                 || DebugLaunch.refreshFlightPace != nil || DebugLaunch.search != nil
-                || DebugLaunch.onlyLabels != nil else { return }
+                || DebugLaunch.onlyLabels != nil || DebugLaunch.who != nil else { return }
             if let appearance = DebugLaunch.appearance {
                 NSApp.appearance = appearance
             }
@@ -330,6 +332,9 @@ struct DebugLaunchModifier: ViewModifier {
             if let labels = DebugLaunch.onlyLabels {
                 if DebugLaunch.search == nil, let scope = DebugLaunch.scope { model.listScope = scope }
                 model.filter.onlyLabels = labels
+            }
+            if let who = DebugLaunch.who {
+                model.filter.who = who
             }
             if DebugLaunch.showAbout {
                 AboutPanel.show()

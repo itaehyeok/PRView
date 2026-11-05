@@ -17,7 +17,7 @@ struct PRListView: View {
             Divider()
             searchField
             Divider()
-            // 라벨 단추, 그 아래 건수·갱신 시각·새로고침. 받을 레포가 없으면 셀 것도 받을 것도 없다.
+            // 전체·@me·답글과 라벨 단추, 그 아래 건수·갱신 시각·새로고침. 받을 레포가 없으면 셀 것도 받을 것도 없다.
             if !model.settings.enabledRepos.isEmpty {
                 ListFilterBar()
                 Divider()
@@ -277,12 +277,13 @@ struct PRListView: View {
     @ViewBuilder
     private var hiddenByFilterNote: some View {
         // 레포 탭에서 뺀 레포의 PR 은 세지 않는다. 그건 위 레포 탭이 이미 보여 주고, 여기 섞으면
-        // "필터 완화해서 보기" 를 눌러도(라벨·사람만 푼다) 숫자가 그대로 남는다. 라벨만 보기로 빠진 PR 도 같은 이유로
-        // 세지 않는다 — 목록 위 띠가 말한다.
+        // "필터 완화해서 보기" 를 눌러도(라벨·사람만 푼다) 숫자가 그대로 남는다. 라벨만 보기·@me·답글만 보기로 빠진 PR 도
+        // 같은 이유로 세지 않는다 — 목록 위 띠와 머리 줄이 말한다.
         // 차례를 기다리는 새 행·떠나는 중인 머지된 행은 숨긴 것도 보이는 것도 아니다(AppModel.applyFetched) — 세면
         // 연출하는 1~2초 동안 숫자가 흔들린다.
         let pool = model.prs.filter {
             model.isRepoShown($0.repo) && PRFilterState.hasLabel($0.labels, model.filter.onlyLabels)
+                && model.filter.who.matches($0, viewer: model.githubAccount?.login)
                 && !model.heldBackArrivals.contains($0.id)
         }
         let hidden = pool.count - (model.visiblePRs.count - model.departingRows.count)
@@ -586,11 +587,12 @@ struct PRListView: View {
         }
     }
 
-    /// 빈 화면 줄의 필터 이름. 라벨만 보기는 무슨 라벨인지까지 적는다.
+    /// 빈 화면 줄의 필터 이름. 라벨만 보기는 무슨 라벨인지, @me·답글만 보기는 어느 쪽인지까지 적는다.
     private func filterTitle(_ kind: PRFilterKind) -> String {
         if kind == .onlyLabel, !model.filter.onlyLabels.isEmpty {
             return model.filter.onlyLabels.map { "‘\($0)’" }.joined(separator: ", ") + " 라벨만 보기"
         }
+        if kind == .who, model.filter.who != .all { return "‘\(ListFilterBar.whoName(model.filter.who))’ 만 보기" }
         return kind.label
     }
 
@@ -1565,16 +1567,37 @@ struct Tag: View {
 }
 
 
-/// 목록 머리 줄 — 오른쪽 라벨 단추로 라벨을 여럿 골라 본다(시안 F, 2026-11-05 사용자 결정). 모든 탭에 걸리고, 검색어처럼
+/// 목록 머리 줄 — 왼쪽 "전체 · @me · 답글" 로 나에게 온 것만 보고(하나만 고른다), 오른쪽 라벨 단추로 라벨을 여럿 골라
+/// 본다(시안 F, 2026-11-05 사용자 결정). 숫자는 그것을 고르면 목록에 나올 PR 수다. 둘 다 모든 탭에 걸리고, 검색어처럼
 /// 저장하지 않는다. 예전엔 라벨로 좁히려면 행의 라벨을 눌러야 했고 한 번에 하나뿐이었다.
 struct ListFilterBar: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         HStack(spacing: 8) {
+            Picker("보기", selection: Binding(get: { model.filter.who }, set: { model.setWho($0) })) {
+                ForEach(PRWhoFilter.allCases, id: \.self) { who in
+                    Text(verbatim: "\(Self.whoName(who)) \(model.whoCount(who))").tag(who)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+            .help("전체 · 나를 멘션한 PR · 내 코드 코멘트에 답글이 온 PR")
             Spacer(minLength: 4)
             LabelPickButton()
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
+    }
+
+    static func whoName(_ who: PRWhoFilter) -> String {
+        switch who {
+        case .all: return "전체"
+        case .mentions: return MentionStyle.label
+        case .replies: return "답글"
+        }
     }
 }
 

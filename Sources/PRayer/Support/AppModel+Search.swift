@@ -195,12 +195,12 @@ extension AppModel {
         // 다른 탭에 받아 둔 목록 — 서버를 기다리지 않고 바로 보이고, 단어 검색이 못 잡는 글자 일부도 잡는다.
         // 이 탭 목록(`prs`)에서 필터에 걸려 위에 안 보이는 것도 여기로 온다.
         let local = ([prs] + Array(listCache.values)).joined().filter { PRSearchPlan.matchesLocally($0, needle: needle) }
-        // 라벨만 보기는 위 구역처럼 여기도 건다 — 레포 고르기와 같다.
+        // 라벨만 보기·@me·답글만 보기는 위 구역처럼 여기도 건다 — 레포 고르기와 같다.
         return PRSearchPlan.extra(candidates: extraSearch.server + local,
                                   excluding: Set(searchTopPRs.map(\.id)),
                                   hiddenRepoKeys: hiddenRepoKeys,
                                   olderThan: PRSearchPlan.olderThan(scope: listScope))
-            .filter { PRFilterState.hasLabel($0.labels, filter.onlyLabels) }
+            .filter { PRFilterState.hasLabel($0.labels, filter.onlyLabels) && filter.who.matches($0, viewer: githubAccount?.login) }
     }
 
     // MARK: - 고르기

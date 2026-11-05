@@ -11,6 +11,7 @@ public enum PRFilterKind: String, Sendable, CaseIterable, Identifiable {
     case hideLabels
     case repos
     case onlyLabel
+    case who
     case search
 
     public var id: String { rawValue }
@@ -21,7 +22,26 @@ public enum PRFilterKind: String, Sendable, CaseIterable, Identifiable {
         case .hideLabels: return "특정 라벨 숨기기"
         case .repos: return "일부 레포만 보기"
         case .onlyLabel: return "라벨만 보기"
+        case .who: return "@me·답글만 보기"
         case .search: return "검색어"
+        }
+    }
+}
+
+/// 목록 머리 줄의 "전체 · @me · 답글" — 나에게 온 것만 골라 본다. 하나만 고른다(2026-11-05 사용자 결정, 시안 F):
+/// 둘을 같이 켜는 경우를 두면 "둘 다인지 둘 중 하나인지" 를 따로 알려야 했다.
+public enum PRWhoFilter: String, Sendable, CaseIterable {
+    case all
+    /// 누가 나를 @멘션한 PR(MyMentions — 본문·리뷰·코멘트·코드 코멘트).
+    case mentions
+    /// 내 코드 코멘트에 답글이 온 PR(MyCommentReplies — 다 본 답글도 친다. 목록의 답글 칩이 있는 PR 과 같다).
+    case replies
+
+    public func matches(_ pr: PullRequestInfo, viewer: String?) -> Bool {
+        switch self {
+        case .all: return true
+        case .mentions: return MyMentions.anywhere(in: pr, viewer: viewer)
+        case .replies: return !MyCommentReplies.replies(in: pr, viewer: viewer).isEmpty
         }
     }
 }
@@ -47,6 +67,10 @@ public struct PRFilterState: Sendable, Equatable {
     ///
     /// 레포 고르기·검색어처럼 **모든 탭**에 건다. 무엇을 보느냐를 좁히는 것이라 리뷰 대기만의 조건이 아니다.
     public var onlyLabels: [String]
+    /// @me·답글만 보기. 라벨만 보기와 같이 모든 탭에 건다.
+    public var who: PRWhoFilter
+    /// 내 로그인 — `who` 를 가르는 데 쓴다. 없으면 `who` 가 아무것도 통과시키지 않는다.
+    public var viewer: String?
 
     public init(hideIgnoredAuthors: Bool = false,
                 hideLabels: Bool = false,
@@ -54,7 +78,9 @@ public struct PRFilterState: Sendable, Equatable {
                 hasIgnoredAuthors: Bool = false,
                 hasHiddenLabels: Bool = true,
                 hiddenRepos: Set<String> = [],
-                onlyLabels: [String] = []) {
+                onlyLabels: [String] = [],
+                who: PRWhoFilter = .all,
+                viewer: String? = nil) {
         self.hideIgnoredAuthors = hideIgnoredAuthors
         self.hideLabels = hideLabels
         self.search = search
@@ -62,6 +88,8 @@ public struct PRFilterState: Sendable, Equatable {
         self.hasHiddenLabels = hasHiddenLabels
         self.hiddenRepos = hiddenRepos
         self.onlyLabels = onlyLabels
+        self.who = who
+        self.viewer = viewer
     }
 
     /// 이 PR 이 `onlyLabels` 를 통과하는가 — 고른 라벨 가운데 하나라도 붙었나. 고른 라벨이 없으면 늘 통과한다.
@@ -86,6 +114,7 @@ public struct PRFilterState: Sendable, Equatable {
         }
         if !hiddenRepos.isEmpty { result.append(.repos) }
         if !onlyLabels.isEmpty { result.append(.onlyLabel) }
+        if who != .all { result.append(.who) }
         if !search.trimmingCharacters(in: .whitespaces).isEmpty { result.append(.search) }
         return result
     }
@@ -151,6 +180,7 @@ public enum PRVisibility {
         }
         if state.hiddenRepos.contains(PRFilterState.repoKey(pr.repo)) { reasons.insert(.repos) }
         if !PRFilterState.hasLabel(pr.labels, state.onlyLabels) { reasons.insert(.onlyLabel) }
+        if !state.who.matches(pr, viewer: state.viewer) { reasons.insert(.who) }
         // 아래 구역(전체 PR 검색)이 받아 둔 목록을 거를 때도 같은 규칙을 쓴다 — 위아래 구역의 기준이 갈리지 않게.
         if !PRSearchPlan.matchesLocally(pr, needle: state.search) { reasons.insert(.search) }
         return reasons
