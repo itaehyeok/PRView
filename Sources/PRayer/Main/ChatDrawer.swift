@@ -215,10 +215,8 @@ struct ChatDrawer: View {
                     .lineLimit(1...6)
                     .focused($inputFocused)
                     .onSubmit { send(record: record, sessionID: sessionID) }
+                modelPills(record: record)
                 if !open {
-                    Text(modelLabel(record))
-                        .font(model.fonts.ui(delta: -2))
-                        .foregroundStyle(.tertiary)
                     terminalMenu(record: record, sessionID: sessionID)
                 }
                 if busy {
@@ -281,11 +279,20 @@ struct ChatDrawer: View {
         model.sendChat(text, record: record)
     }
 
-    private func modelLabel(_ record: ReviewRecord) -> String {
-        switch record.engineKind {
-        case .claude: return ClaudeModels.displayName(forModelID: record.model)
-        case .codex: return CodexModels.displayName(forModelID: record.model)
-        }
+    /// 답할 모델·Effort 두 칸 — 리뷰 탭과 같은 모양(2026-11-05 시안 A 사용자 결정). 예전엔 이 자리에 리뷰한 모델
+    /// 이름만 흐린 글자로 있었다. 접혀 있어도 보여서 첫 질문 전에 고를 수 있고, 고른 값은 이 대화에만 쓴다.
+    private func modelPills(record: ReviewRecord) -> some View {
+        let choice = model.chatModelChoice(for: record)
+        return ReviewModelPills(modelID: choice.model,
+                                effort: choice.effort,
+                                scope: "이 대화에만 씁니다",
+                                chooseModel: { model.chooseChatModel($0, for: record) },
+                                chooseEffort: { model.chooseChatEffort($0, for: record) },
+                                chat: .init(engine: record.engineKind,
+                                            reviewedModel: choice.reviewedModel,
+                                            reset: choice.isCustom ? { model.resetChatModel(for: record) } : nil))
+            .font(model.fonts.ui(delta: -2))
+            .controlSize(.small)
     }
 
     private func unavailableReason(record: ReviewRecord, sessionID: String?) -> String {
@@ -348,10 +355,25 @@ private struct ChatMessageRow: View {
                 .padding(.leading, 26)
         case .assistant:
             AssistantRow(engine: engine) {
-                MarkdownText(text: message.text)
-                    .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 4) {
+                    MarkdownText(text: message.text)
+                        .textSelection(.enabled)
+                    if let caption = modelCaption {
+                        Text(caption)
+                            .font(model.fonts.ui(delta: -2))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
         }
+    }
+
+    /// 리뷰와 다른 모델·Effort 로 받은 답에만 "Sonnet 5.5 · Medium" 처럼 단다(`ChatMessage.model`).
+    private var modelCaption: String? {
+        guard message.model != nil || message.effort != nil else { return nil }
+        let name = message.model.map { model.chatModelName($0, engine: engine) }
+        let effort = message.effort.map(EffortLevel.displayName)
+        return [name, effort].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

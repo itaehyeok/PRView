@@ -77,6 +77,8 @@ struct ReviewModelControl: View {
 ///   (두 엔진의 지난 버전 + '모델 이름 직접 입력…').
 /// - Effort: 단계 이름만. Claude 는 CLI 가 `--help` 에 적은 것, Codex 는 그 모델이 받는다고 알려 준 것 — 바뀌거나 늘어도 따라간다.
 ///   고르지 않았으면 CLI 가 밝힌 그 모델의 기본값을, 모르면 "Effort" 를 보인다.
+/// - 상세 화면 맨 아래 대화창도 같은 두 칸을 쓴다(`chat`, 2026-11-05 시안 A 사용자 결정). 그때는 그 대화를 만든 엔진의
+///   모델만 보인다 — 대화 기록이 엔진마다 따로라 Claude 로 리뷰한 대화를 Codex 로 이어 물을 수는 없다.
 struct ReviewModelPills: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
@@ -86,7 +88,19 @@ struct ReviewModelPills: View {
     let scope: String
     let chooseModel: (String) -> Void
     let chooseEffort: (String) -> Void
+    /// 대화창에서 쓸 때. nil 이면 리뷰 모델 칸(AI 리뷰 탭·설정)이다.
+    var chat: ChatContext?
     @State private var enteringModelName = false
+
+    /// 대화창 두 칸이 메뉴에 더 다는 것.
+    struct ChatContext {
+        /// 그 대화를 만든 엔진 — 이 엔진의 모델만 고를 수 있다.
+        let engine: ReviewEngineKind
+        /// 리뷰한 모델의 칸 저장값. 메뉴의 그 줄에 "리뷰한 모델" 을 단다.
+        let reviewedModel: String
+        /// 리뷰와 다르게 골라 둔 것이 있을 때만 — "리뷰한 설정으로 되돌리기".
+        let reset: (() -> Void)?
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -96,7 +110,7 @@ struct ReviewModelPills: View {
                 Text(model.reviewModelName(modelID))
             }
             .modifier(PillStyle())
-            .help("리뷰 모델 — Claude Code·Codex 중에서 고릅니다. diff 리뷰와 전체 리뷰가 같이 씁니다. \(scope).")
+            .help(modelHelp)
             Menu {
                 effortMenu
             } label: {
@@ -110,25 +124,59 @@ struct ReviewModelPills: View {
         }
     }
 
+    private var modelHelp: String {
+        guard chat != nil else {
+            return "리뷰 모델 — Claude Code·Codex 중에서 고릅니다. diff 리뷰와 전체 리뷰가 같이 씁니다. \(scope)."
+        }
+        return "답할 모델 — \(scope). 리뷰와 다른 모델로 바꾸면 그다음 질문은 지금까지의 대화를 처음부터 다시 읽어 토큰이 더 듭니다."
+    }
+
     private var currentEffort: String? {
         model.shownEffort(model: modelID, effort: effort)
     }
 
+    private func shows(_ engine: ReviewEngineKind) -> Bool {
+        chat.map { $0.engine == engine } ?? true
+    }
+
     @ViewBuilder
     private var modelMenu: some View {
-        engineSection(.claude, options: model.modelOptions)
-        engineSection(.codex, options: model.codexModelOptions)
-        Divider()
-        Menu("과거 버전 고르기") {
-            let past = model.pastModelOptions + model.codexPastModelOptions
-            if !past.isEmpty {
-                ForEach(past) { option in
-                    checkItem(option.label, isOn: modelID == option.id) { chooseModel(option.id) }
-                }
-                Divider()
-            }
-            Button("모델 이름 직접 입력…") { enteringModelName = true }
+        if shows(.claude) {
+            engineSection(.claude, options: model.modelOptions)
         }
+        if shows(.codex) {
+            engineSection(.codex, options: model.codexModelOptions)
+        }
+        let past = (shows(.claude) ? model.pastModelOptions : []) + (shows(.codex) ? model.codexPastModelOptions : [])
+        // '모델 이름 직접 입력' 은 Claude 이름만 받는다(`claude --model` 에 물어 확인한다).
+        let canEnterName = shows(.claude)
+        if !past.isEmpty || canEnterName {
+            Divider()
+            Menu("과거 버전 고르기") {
+                if !past.isEmpty {
+                    ForEach(past) { option in
+                        checkItem(title(for: option), isOn: modelID == option.id) { chooseModel(option.id) }
+                    }
+                    if canEnterName {
+                        Divider()
+                    }
+                }
+                if canEnterName {
+                    Button("모델 이름 직접 입력…") { enteringModelName = true }
+                }
+            }
+        }
+        if chat != nil {
+            // 실측(2026-11-05): 모델을 바꾼 첫 질문은 대화 전체를 캐시에 새로 쓴다. Effort 만 바꾸면 캐시가 이어진다.
+            Divider()
+            Text("다른 모델로 바꾸면 그다음 질문은 대화를 다시 읽어 토큰이 더 듭니다")
+        }
+    }
+
+    /// 대화창에서는 리뷰한 모델 줄에 표시를 단다 — 바꿨다가 돌아올 자리를 찾게.
+    private func title(for option: ReviewModelOption) -> String {
+        guard let chat, option.id == chat.reviewedModel else { return option.label }
+        return "\(option.label) · 리뷰한 모델"
     }
 
     /// 엔진 하나의 구역. 연결 안 됐으면(확인을 마쳤는데 준비 안 됨) 모델 대신 "연결하기…" 한 줄 — 지금 고른 모델이
@@ -148,7 +196,7 @@ struct ReviewModelPills: View {
                 Text("모델 목록을 받는 중…")
             } else {
                 ForEach(options) { option in
-                    checkItem(option.label, isOn: modelID == option.id) { chooseModel(option.id) }
+                    checkItem(title(for: option), isOn: modelID == option.id) { chooseModel(option.id) }
                 }
             }
         }
@@ -157,8 +205,15 @@ struct ReviewModelPills: View {
     @ViewBuilder
     private var effortMenu: some View {
         let shown = currentEffort
+        // 대화창에서는 고르지 않았을 때 답할 단계(그 모델의 CLI 기본값)를 짚어 준다. 리뷰 칸은 예전 그대로 둔다.
+        let fallback = chat == nil ? nil : model.shownEffort(model: modelID, effort: "")
         ForEach(model.effortLevels(forModel: modelID), id: \.self) { level in
-            checkItem(EffortLevel.displayName(level), isOn: shown == level) { chooseEffort(level) }
+            let name = EffortLevel.displayName(level)
+            checkItem(level == fallback ? "\(name) · 기본" : name, isOn: shown == level) { chooseEffort(level) }
+        }
+        if let reset = chat?.reset {
+            Divider()
+            Button("리뷰한 설정으로 되돌리기", action: reset)
         }
     }
 
