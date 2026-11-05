@@ -47,11 +47,11 @@ enum PRLabels {
 extension PRLabels {
     /// 보일 라벨 — `limit` 개까지(nil 이면 전부). 고른 라벨(`kept`)이 넘친 쪽에 있으면 마지막 자리에 대신 넣는다 —
     /// 그 라벨만 보는 중인데 행마다 "외 N" 에 숨어 있으면 왜 이 행이 남았는지 안 보인다.
-    static func shown(_ labels: [String], limit: Int?, keeping kept: String?) -> [String] {
+    static func shown(_ labels: [String], limit: Int?, keeping kept: [String]) -> [String] {
         guard let limit, limit > 0, labels.count > limit else { return labels }
         var shown = Array(labels.prefix(limit))
-        if let kept, !PRFilterState.hasLabel(shown, kept),
-           let match = labels.first(where: { $0.caseInsensitiveCompare(kept) == .orderedSame }) {
+        // 고른 라벨이 하나도 안 보이면 마지막 자리를 그 라벨에 내준다 — 왜 이 행이 남았는지 보이게.
+        if !PRFilterState.hasLabel(shown, kept), let match = labels.first(where: { PRFilterState.hasLabel([$0], kept) }) {
             shown[limit - 1] = match
         }
         return shown
@@ -72,7 +72,7 @@ struct PRLabelLinks: View {
     var limit: Int?
 
     var body: some View {
-        let shown = PRLabels.shown(labels, limit: limit, keeping: model.filter.onlyLabel)
+        let shown = PRLabels.shown(labels, limit: limit, keeping: model.filter.onlyLabels)
         let more = labels.count - shown.count
         FlowRow(spacing: 3, lineSpacing: 2) {
             ForEach(Array(shown.enumerated()), id: \.offset) { index, label in

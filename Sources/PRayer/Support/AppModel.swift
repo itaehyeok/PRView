@@ -107,8 +107,11 @@ struct PRFilter: Codable, Equatable {
     var hiddenRepos: [String] = []
     /// 검색어는 저장하지 않는다. 다시 켰을 때 목록이 비어 있으면 원인을 찾기 어렵다.
     var search = ""
-    /// 목록 행의 라벨을 눌러 고른 라벨 — 이 라벨이 붙은 PR 만 보인다(`PRFilterState.onlyLabel`). 검색어처럼 저장하지 않는다.
-    var onlyLabel: String?
+    /// 고른 라벨 — 이 가운데 하나라도 붙은 PR 만 보인다(`PRFilterState.onlyLabels`). 목록 행의 라벨을 누르면 그 하나로,
+    /// 머리 줄의 라벨 단추로는 여럿을 고른다. 검색어처럼 저장하지 않는다.
+    var onlyLabels: [String] = []
+    /// 머리 줄의 "전체 · @me · 답글"(`PRWhoFilter`). 검색어처럼 저장하지 않는다 — 다시 켰을 때 목록이 좁아져 있으면 원인을 찾기 어렵다.
+    var who = PRWhoFilter.all
 
     private static let storageKey = "prFilter"
 
@@ -551,7 +554,9 @@ final class AppModel {
                       hasIgnoredAuthors: !settings.ignoredAuthors.isEmpty,
                       hasHiddenLabels: !settings.hiddenLabels.isEmpty,
                       hiddenRepos: hiddenRepoKeys,
-                      onlyLabel: filter.onlyLabel)
+                      onlyLabels: filter.onlyLabels,
+                      who: filter.who,
+                      viewer: githubAccount?.login)
     }
 
     /// 레포 탭에서 뺀 레포 중 **지금 켜져 있는 것만**(`PRFilterState.repoKey`).
@@ -656,22 +661,62 @@ final class AppModel {
     /// 있는 조건이라 내 PR 에는 뜻이 없고, 그 필터가 켜져 있을 때가 바로 이 그룹이 필요한 때다.
     ///
     /// 검색어만은 받는다 — 검색은 "찾기" 라, 찾는 것이 내 PR 일 때 그룹이 안 걸러지면
-    /// 검색 결과 위에 엉뚱한 줄이 계속 남는다. 레포 고르기·라벨 하나만 보기도 같은 이유로 받는다 — 레포 하나만
-    /// 보려는데 다른 레포의 내 PR 이 맨 위에 남으면 좁힌 보람이 없다.
-    var myOpenPRs: [PullRequestInfo] {
+    /// 검색 결과 위에 엉뚱한 줄이 계속 남는다. 레포 고르기·라벨만 보기·@me·답글만 보기도 같은 이유로 받는다 — 레포
+    /// 하나만 보려는데 다른 레포의 내 PR 이 맨 위에 남으면 좁힌 보람이 없다.
+    var myOpenPRs: [PullRequestInfo] { myOpenPRs(who: filter.who, labels: filter.onlyLabels) }
+
+    /// `myOpenPRs` 를 @me·답글·라벨 조건만 바꿔 본다 — 머리 줄의 숫자·라벨 고를거리가 "그것을 고르면 나올 것" 을 센다.
+    private func myOpenPRs(who: PRWhoFilter, labels: [String]) -> [PullRequestInfo] {
         guard listScope.kind == .open else { return [] }
         let needle = filter.search.trimmingCharacters(in: .whitespaces).lowercased()
         let hiddenRepos = hiddenRepoKeys
+        let viewer = githubAccount?.login
         return prs
             .filter { pr in
                 guard isMineInOpenTab(pr) else { return false }
                 if hiddenRepos.contains(PRFilterState.repoKey(pr.repo)) { return false }
-                if !PRFilterState.hasLabel(pr.labels, filter.onlyLabel) { return false }
+                if !PRFilterState.hasLabel(pr.labels, labels) { return false }
+                if !who.matches(pr, viewer: viewer) { return false }
                 if PRVisibility.isDismissed(pr: pr, dismissals: dismissedPRs) { return false }
                 guard !needle.isEmpty else { return true }
                 return "\(pr.number) \(pr.title) \(pr.headRefName)".lowercased().contains(needle)
             }
             .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// 머리 줄 "전체 · @me · 답글" 의 숫자 — 그것을 고르면 목록에 나올 PR 수. 맨 위 내가 올린 PR 묶음은 세지 않는다 —
+    /// 바로 아래 "To review N건" 과 같은 잣대여야 "전체" 의 숫자가 그 건수와 맞는다(묶음은 제 머리에 건수가 있다).
+    func whoCount(_ who: PRWhoFilter) -> Int {
+        var state = filterState
+        state.who = who
+        // 헤더처럼 떠나는 칩은 빼고 차례를 기다리는 새 행은 센다 — 연출 동안 숫자가 오르내리지 않게.
+        return prs.filter { pr in
+            guard !isFlightSource(pr) else { return false }
+            if heldBackArrivals.contains(pr.id) { return passesScopeAndFilters(pr, state: state) }
+            return isListed(pr, state: state)
+        }.count
+    }
+
+    /// 라벨 단추의 고를거리 — 라벨만 보기를 빼고 지금 탭·필터로 보일 PR 에 붙은 라벨과 그 PR 수, 많은 것부터.
+    /// 고른 라벨은 0건이어도 남긴다 — 다른 필터를 바꿔 0건이 됐어도 풀 수 있어야 한다.
+    var labelChoices: [(label: String, count: Int)] {
+        var state = filterState
+        state.onlyLabels = []
+        let pool = prs.filter { isListed($0, state: state) } + myOpenPRs(who: filter.who, labels: [])
+        var counts: [String: (label: String, count: Int)] = [:]
+        for pr in pool {
+            // 한 PR 에 대소문자만 다른 라벨이 둘 붙어도 한 번만 센다.
+            for key in Set(pr.labels.map { $0.lowercased() }) {
+                let label = pr.labels.first { $0.lowercased() == key } ?? key
+                counts[key, default: (label, 0)].count += 1
+            }
+        }
+        for picked in filter.onlyLabels where counts[picked.lowercased()] == nil {
+            counts[picked.lowercased()] = (picked, 0)
+        }
+        return counts.values.sorted {
+            $0.count != $1.count ? $0.count > $1.count : $0.label.localizedStandardCompare($1.label) == .orderedAscending
+        }
     }
 
     /// 숨김을 빼고 탭·필터만으로 보일 PR 인가.
@@ -943,7 +988,8 @@ final class AppModel {
         case .hideIgnoredAuthors: filter.hideIgnoredAuthors = false
         case .hideLabels: filter.hideLabels = false
         case .repos: filter.hiddenRepos = []
-        case .onlyLabel: filter.onlyLabel = nil
+        case .onlyLabel: filter.onlyLabels = []
+        case .who: filter.who = .all
         case .search: filter.search = ""
         }
     }
@@ -952,24 +998,42 @@ final class AppModel {
         filter.hideIgnoredAuthors = false
         filter.hideLabels = false
         filter.hiddenRepos = []
-        filter.onlyLabel = nil
+        filter.onlyLabels = []
+        filter.who = .all
         filter.search = ""
     }
 
-    /// 목록 행의 라벨을 누르면 그 라벨이 붙은 PR 만 보인다. 이미 고른 라벨을 다시 누르면 푼다.
+    /// 목록 행의 라벨을 누르면 그 라벨이 붙은 PR 만 보인다(여럿 골라 둔 것도 그 하나로 바꾼다). 그 하나만 골라 둔 라벨을
+    /// 다시 누르면 푼다. 여럿을 더해 고르는 것은 머리 줄의 라벨 단추가 맡는다(`togglePickedLabel`).
     func toggleOnlyLabel(_ label: String) {
-        if let current = filter.onlyLabel, current.caseInsensitiveCompare(label) == .orderedSame {
-            filter.onlyLabel = nil
+        if filter.onlyLabels.count == 1, isOnlyLabel(label) {
+            filter.onlyLabels = []
         } else {
-            filter.onlyLabel = label
+            filter.onlyLabels = [label]
             recordUsage(.onlyLabel)
         }
     }
 
-    /// 이 라벨이 지금 "라벨 하나만 보기" 로 고른 라벨인가.
+    /// 머리 줄 라벨 단추에서 라벨 하나를 더하거나 뺀다.
+    func togglePickedLabel(_ label: String) {
+        if isOnlyLabel(label) {
+            filter.onlyLabels.removeAll { $0.caseInsensitiveCompare(label) == .orderedSame }
+        } else {
+            filter.onlyLabels.append(label)
+            recordUsage(.labelPick)
+        }
+    }
+
+    /// 머리 줄 "전체 · @me · 답글" 을 골랐다.
+    func setWho(_ who: PRWhoFilter) {
+        guard filter.who != who else { return }
+        filter.who = who
+        if who != .all { recordUsage(.whoFilter) }
+    }
+
+    /// 이 라벨이 지금 "라벨만 보기" 로 고른 라벨인가.
     func isOnlyLabel(_ label: String) -> Bool {
-        guard let current = filter.onlyLabel else { return false }
-        return current.caseInsensitiveCompare(label) == .orderedSame
+        filter.onlyLabels.contains { $0.caseInsensitiveCompare(label) == .orderedSame }
     }
 
     var activeJobCount: Int { jobs.filter(\.isActive).count }
