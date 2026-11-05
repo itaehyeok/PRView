@@ -142,6 +142,14 @@ final class PRListScopeQueryTests: XCTestCase {
         XCTAssertNil(PRListWindow.week.longer, "가장 긴 기간인데 더 넓히라고 한다")
     }
 
+    /// 옛 30일 탭의 지난 목록은 쓸 탭이 없다 — 읽어서 다시 쓴 값이 원래와 달라야 앱이 그 파일을 지운다(AppModel 기동).
+    func testRemovedMonthCacheKeyDoesNotRoundTrip() {
+        XCTAssertNotEqual(PRListScope(storageValue: "recentAll:720")?.storageValue, "recentAll:720")
+        for scope in [PRListScope.open, .myApprovals(.day), .myApprovals(.week), .recentAll(.day), .recentAll(.week)] {
+            XCTAssertEqual(PRListScope(storageValue: scope.storageValue)?.storageValue, scope.storageValue)
+        }
+    }
+
     /// 저장했다 읽으면 그대로 돌아와야 한다.
     func testStorageRoundTrip() {
         for scope in everyScope {

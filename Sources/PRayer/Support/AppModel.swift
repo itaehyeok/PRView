@@ -1220,6 +1220,12 @@ final class AppModel {
         // 탭이 다른 목록은 쓰지 않는다 — 엉뚱한 목록을 보여 주는 것보다 비어 있는 게 낫다.
         // 다른 탭의 지난 목록도 들고 있다가 그 탭으로 옮길 때 먼저 보인다(listScope didSet).
         for cached in await store.loadLists() {
+            // 없어진 기간(30일, 2026-11-05 뺌)의 목록은 열 탭이 없다. 들고 있으면 그 PR 들을 잊지 못하고(`pruneKnownPRs`)
+            // 수 MB 파일도 계속 남으니 파일째 지운다. 다른 기간으로 옮겨 쓰지 않는다 — 7일 밖 PR 이 섞인다.
+            guard PRListScope(storageValue: cached.scope)?.storageValue == cached.scope else {
+                await store.removeLists(scopes: [cached.scope])
+                continue
+            }
             listCache[cached.scope] = cached.prs
             listFetchedAt[cached.scope] = cached.savedAt
         }
