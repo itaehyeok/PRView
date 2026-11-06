@@ -347,7 +347,33 @@ struct StatusToolbarMenu: View {
     /// "Codex 로그인이 필요합니다" 카드가 떴다. 다른 엔진을 붙이는 곳은 설정 › 연결이다.
     private var shownEngines: [ReviewEngineKind] { model.settings.watchedEngines }
     private var githubOK: Bool { model.githubAccount != nil }
+    /// 켜고 아직 한 번도 확인하지 않았으면 계정도 오류도 없다.
+    private var githubChecked: Bool { githubOK || model.githubError != nil }
     private var refreshFailing: Bool { model.consecutiveRefreshFailures > 0 }
+
+    private var iconLevel: ConnectionHealth {
+        ConnectionHealth.level(primary: primaryEngine,
+                               watched: shownEngines,
+                               status: { model.engineStatus($0) },
+                               githubChecked: githubChecked,
+                               githubConnected: githubOK,
+                               refreshFailing: refreshFailing)
+    }
+
+    /// 채운 심볼에 색을 칠하면 체크·느낌표 자리가 비쳐 보인다(.monochrome).
+    @ViewBuilder
+    private var statusIcon: some View {
+        switch iconLevel {
+        case .checking:
+            Image(systemName: "circle.dashed").foregroundStyle(.secondary)
+        case .ok:
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .warning:
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        case .error:
+            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
+        }
+    }
 
     private struct Problem: Identifiable {
         enum Fix {
@@ -375,7 +401,10 @@ struct StatusToolbarMenu: View {
             }
         }
         if !githubOK {
-            result.append(Problem(id: "github", message: "GitHub 에 연결되어 있지 않습니다", fix: .settings))
+            // 켜고 처음 확인하기 전에는 문제로 치지 않는다 — 아이콘도 그동안은 "확인 중" 이다.
+            if githubChecked {
+                result.append(Problem(id: "github", message: "GitHub 에 연결되어 있지 않습니다", fix: .settings))
+            }
         } else if refreshFailing {
             // 고칠 버튼은 달지 않는다 — 잠시 뒤 알아서 다시 받는다.
             result.append(Problem(id: "refresh",
@@ -387,13 +416,11 @@ struct StatusToolbarMenu: View {
 
     var body: some View {
         ToolbarPopover(debugID: "status") {
-            // 색점만으로는 무슨 버튼인지 알 수 없다. 이름을 아래에 붙인다.
-            // (점 = 엔진·GitHub 연결 상태 요약, 상시로 색만은 보이게 둔다.)
-            ToolbarButtonLabel(title: "상태", tint: .primary, showsChevron: true) {
-                HStack(spacing: 3) {
-                    dot(primaryOK)
-                    dot(githubOK && !refreshFailing, warning: githubOK && refreshFailing)
-                }
+            // 아이콘 하나로 엔진·GitHub 연결을 요약한다(2026-11-06 사용자 선택, 시안 A — 정상도 초록 체크로).
+            // 문제가 있으면 주황·빨강으로 바뀌고, 무엇이 문제인지는 팝오버 맨 위 카드가 말한다.
+            // 예전에는 색점 두 개(엔진·GitHub)에 ▾ 를 달았다 — 옆 SF 심볼 아이콘과 결이 달랐다.
+            ToolbarButtonLabel(title: "상태", tint: .primary) {
+                statusIcon
             }
         } content: {
             VStack(alignment: .leading, spacing: 8) {
@@ -584,12 +611,6 @@ struct StatusToolbarMenu: View {
         return refreshFailing ? "갱신 실패 \(model.consecutiveRefreshFailures)회" : account.login
     }
 
-    private func dot(_ ok: Bool, warning: Bool = false) -> some View {
-        Circle()
-            .fill(warning ? Color.orange : (ok ? Color.green : Color.red))
-            .frame(width: 7, height: 7)
-    }
-
     private func statusRow(title: String, color: Color, detail: String) -> some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 7, height: 7)
@@ -637,14 +658,13 @@ private struct PreviewSample: Identifiable {
     var tint: Color = .primary
     var symbolTint: Color?
     var chevron = false
-    /// 상태 버튼은 아이콘 자리에 색점 두 개가 들어간다. 높이가 달라 따로 본다.
-    var dots = false
 
     static let all: [PreviewSample] = [
         .init(title: "목록", symbol: "sidebar.left"),
         .init(title: "레포 2개", symbol: "shippingbox", chevron: true),
         .init(title: "리뷰 1", symbol: "bolt.fill", symbolTint: .orange, chevron: true),
-        .init(title: "상태", symbol: "circle", chevron: true, dots: true),
+        .init(title: "상태", symbol: "checkmark.circle.fill", symbolTint: .green),
+        .init(title: "상태", symbol: "exclamationmark.triangle.fill", symbolTint: .orange),
         .init(title: "일부만", symbol: "tray.full", tint: .orange),
     ]
 }
@@ -654,15 +674,8 @@ private struct PreviewSampleLabel: View {
 
     var body: some View {
         ToolbarButtonLabel(title: sample.title, tint: sample.tint, showsChevron: sample.chevron) {
-            if sample.dots {
-                HStack(spacing: 3) {
-                    Circle().fill(Color.green).frame(width: 7, height: 7)
-                    Circle().fill(Color.red).frame(width: 7, height: 7)
-                }
-            } else {
-                Image(systemName: sample.symbol)
-                    .foregroundStyle(sample.symbolTint ?? sample.tint)
-            }
+            Image(systemName: sample.symbol)
+                .foregroundStyle(sample.symbolTint ?? sample.tint)
         }
     }
 }
