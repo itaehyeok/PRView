@@ -352,12 +352,15 @@ struct StatusToolbarMenu: View {
     private var refreshFailing: Bool { model.consecutiveRefreshFailures > 0 }
 
     private var iconLevel: ConnectionHealth {
-        ConnectionHealth.level(primary: primaryEngine,
-                               watched: shownEngines,
-                               status: { model.engineStatus($0) },
-                               githubChecked: githubChecked,
-                               githubConnected: githubOK,
-                               refreshFailing: refreshFailing)
+        #if DEBUG
+        if let forced = DebugLaunch.statusIcon { return forced }
+        #endif
+        return ConnectionHealth.level(primary: primaryEngine,
+                                      watched: shownEngines,
+                                      status: { model.engineStatus($0) },
+                                      githubChecked: githubChecked,
+                                      githubConnected: githubOK,
+                                      refreshFailing: refreshFailing)
     }
 
     /// 채운 심볼에 색을 칠하면 체크·느낌표 자리가 비쳐 보인다(.monochrome).
