@@ -1990,11 +1990,9 @@ struct IssueRow: View {
     let onUnclear: () -> Void
     let onJump: () -> Void
     let onJumpToEvidence: (CodeEvidence) -> Void
-    /// 달기 버튼 옆 버튼(AI 리뷰 탭의 "코드에서 보기"). nil 이면 없다.
-    var link: Link? = nil
     /// "리뷰에 담기" 상태. nil 이면 담을 수 없다(리뷰를 이미 올렸다) — 그때는 예전처럼 바로 달기만 있다.
     var basket: Basket? = nil
-    /// false 면 달기 버튼을 두지 않는다 — 내 PR(게시하지 않음). 코드에서 보기·근거만 남는다.
+    /// false 면 달기 버튼을 두지 않는다 — 내 PR(게시하지 않음). 근거 보기만 남는다.
     var allowsPosting = true
 
     struct Basket {
@@ -2005,14 +2003,28 @@ struct IssueRow: View {
         let onToggle: (Bool) -> Void
     }
 
-    struct Link {
-        let title: String
-        let systemImage: String
-        let help: String
-        let action: () -> Void
-    }
-
     @State private var showWhy = false
+    /// 코드 조각 위에 마우스가 있는가. 있으면 "코드에서 보기 →" 알약을 띄운다.
+    @State private var isHoveringCode = false
+
+    /// 달았거나 정리한 카드는 흐리게 잠겨 있어 알약을 띄우지 않는다.
+    private var showsCodeJump: Bool { isHoveringCode && !isDone }
+
+    /// 코드 조각에 마우스를 올렸을 때 오른쪽 위에 뜨는 "코드에서 보기 →". 누르는 것은 코드 조각 버튼 전체다.
+    private var codeJumpPill: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+            Text("코드에서 보기")
+            Image(systemName: "arrow.right")
+                .imageScale(.small)
+        }
+        .font(.caption)
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 2)
+        .background(.background, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.secondary.opacity(0.4), lineWidth: 0.5))
+    }
 
     private var isDone: Bool { posted != nil || clearedNote != nil }
     private var hasWhy: Bool { !(rationale ?? "").isEmpty || !(evidence ?? []).isEmpty }
@@ -2080,15 +2092,31 @@ struct IssueRow: View {
             }
             if !snippet.isEmpty {
                 // 코드를 누르면 변경 파일 탭에서 그 파일의 그 줄을 연다. 위 경로 링크보다 누를 자리가 넓다.
+                // 버튼 줄의 "코드에서 보기" 를 빼고 이 자리로 모았다 — 올리면 테두리가 진해지고 오른쪽 위에
+                // "코드에서 보기 →" 알약이 뜬다(2026-11-06 사용자 결정, 시안 A).
                 Button(action: onJump) {
                     CodeSnippetView(lines: snippet, targetLine: targetLine, side: side)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 5)
+                                .strokeBorder(Color.secondary.opacity(showsCodeJump ? 0.45 : 0), lineWidth: 1)
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            if showsCodeJump {
+                                codeJumpPill
+                                    .padding(5)
+                                    .transition(.opacity)
+                            }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .onHover { inside in
+                    isHoveringCode = inside
                     if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
                 }
-                .help("변경 파일 탭에서 이 파일의 이 줄을 엽니다")
+                .animation(.easeOut(duration: 0.12), value: showsCodeJump)
+                .accessibilityLabel("코드에서 보기")
+                .accessibilityHint("변경 파일 탭에서 이 파일의 이 줄을 엽니다")
             }
             if let anchorNote {
                 Label(anchorNote, systemImage: "wand.and.stars")
@@ -2103,32 +2131,27 @@ struct IssueRow: View {
                 if allowsPosting {
                     postButtons
                 }
-                // 달기 바로 옆 — 달기 전에 그 줄을 다른 탭에서 확인하고 돌아오는 흐름이라(사용자 피드백).
-                // AI 리뷰 탭은 "코드에서 보기". 변경 파일 탭은 없다 — 돌아가기는 상세 탭 줄의 돌아가기 버튼(DetailTabRow).
-                // 글자 없이 아이콘만 둔다 — 카드마다 버튼 셋이 글자로 늘어서 칸이 붐볐다(2026-10-27 시안 4번). 이름은 마우스를 올리면.
-                if let link {
-                    Button(action: link.action) {
-                        Image(systemName: link.systemImage)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("\(link.title) — \(link.help)")
-                    .accessibilityLabel(link.title)
-                }
+                // 버튼마다 글자를 붙인다. 10-27 시안 4번에 아이콘만 남겼더니 ⓘ 가 버튼 설명으로 읽혀
+                // 무엇을 하는 버튼인지 안 보였다 — 10-20 모양으로 되돌렸다(2026-11-06 사용자 결정).
+                // "코드에서 보기" 는 위 코드 조각으로 옮겼다. 변경 파일 탭에서 돌아가는 길은 상세 탭 줄의 돌아가기 버튼(DetailTabRow).
+                Spacer()
+                if isEdited { ResetTextButton(action: onReset) }
                 if hasWhy {
                     Button {
                         showWhy.toggle()
                     } label: {
-                        Image(systemName: "info.circle")
+                        // Label 은 아이콘과 글자 사이를 넓게 벌려 둘이 따로 노는 것처럼 보였다(사용자 피드백).
+                        HStack(spacing: 3) {
+                            Image(systemName: "info.circle")
+                            Text("근거 보기")
+                        }
+                        .font(.caption)
                     }
                     .buttonStyle(.borderless)
-                    .help("근거 보기 — AI 가 왜 이렇게 봤는지와 근거가 되는 코드 줄")
-                    .accessibilityLabel("근거 보기")
+                    .help("AI 가 왜 이렇게 봤는지와 근거가 되는 코드 줄")
                     .popover(isPresented: $showWhy, arrowEdge: .bottom) { whyPopover }
                 }
-                Spacer()
-                if isEdited { ResetTextButton(action: onReset) }
             }
-            .foregroundStyle(.secondary)
             if let codeBlockedReason {
                 Text(codeBlockedReason)
                     .font(.caption2)
@@ -2181,12 +2204,12 @@ struct IssueRow: View {
                         Image(systemName: "text.bubble")
                     }
                     // 아이콘 자리 빙글이만으로는 눌렸는지가 안 읽혔다. 하는 일을 글로 말한다(시안 A).
-                    Text(isPosting ? "GitHub 에 다는 중…" : "코멘트 달기")
+                    Text(isPosting ? "GitHub 에 다는 중…" : "코드 옆에 코멘트 달기")
                 }
             }
-            // 파란 강조는 화면 위 게시 버튼 하나에만 둔다 — 카드마다 파란 버튼이 있어 칸이 붐볐다(2026-10-27 시안 4번).
-            .buttonStyle(.bordered)
-            .foregroundStyle(.primary)
+            // 이름은 하는 일 그대로, 파란 버튼. 10-27 시안 4번의 회색 "코멘트 달기" 는 바로 GitHub 에 달린다는 게
+            // 안 읽혀 되돌렸다(2026-11-06 사용자 결정).
+            .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .disabled(codeBlockedReason != nil || isPosting || basket?.isPostingReview == true)
             .help(codeBlockedReason ?? (basket == nil
