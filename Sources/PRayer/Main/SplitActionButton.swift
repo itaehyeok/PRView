@@ -31,6 +31,9 @@ struct SplitActionButton: View {
     var busyTitle: String?
     /// 몸통 색. nil 이면 강조 버튼은 강조색, 아니면 회색 바탕. 실패한 게시의 "다시 시도" 가 빨강을 쓴다.
     var tint: Color?
+    /// 강조가 아닌 버튼의 글자·아이콘만 물들일 색. 바탕은 회색 그대로 둔다 — `tint` 는 바탕·테두리까지 물들여
+    /// 옆의 채운 버튼과 무게가 비슷해진다.
+    var textTint: Color?
     /// nil 이면 누를 수 있다.
     var disabledReason: String?
     let choices: [Choice]
@@ -94,7 +97,7 @@ struct SplitActionButton: View {
                 showChoices = true
             }
         }
-        .foregroundStyle(prominent && !isDimmed ? Color.white : (tint ?? Color.primary))
+        .foregroundStyle(prominent && !isDimmed ? Color.white : (tint ?? textTint ?? Color.primary))
         .opacity(isDimmed ? 0.5 : 1)
         .background {
             RoundedRectangle(cornerRadius: 6)
@@ -173,6 +176,9 @@ struct ReviewLaunchSplitButton: View {
     @Environment(AppModel.self) private var model
     let pr: PullRequestInfo
     let hasRecord: Bool
+    /// 글자·아이콘을 강조색으로. 리뷰한 뒤 화면에서 쓴다 — 리뷰 전 화면의 파란 "전체 리뷰 시작" 과 같은 일을 하는
+    /// 버튼으로 읽히게 하되, 채운 버튼은 게시 하나로 남긴다(2026-11-06 사용자 결정, 시안 c).
+    var accentText = false
 
     /// 고른 적이 없으면 nil — 전체 리뷰로 시작한다. 클론이 없는 레포도 처음 한 번 PR 스냅샷을 받으면 된다.
     @State private var chosenDeep: Bool?
@@ -193,6 +199,7 @@ struct ReviewLaunchSplitButton: View {
             systemImage: deep ? ReviewLaunch.worktree.symbol : ReviewLaunch.diff.symbol,
             prominent: false,
             isBusy: model.isReviewing(pr),
+            textTint: accentText ? Color.accentColor : nil,
             disabledReason: model.isReviewing(pr) ? "이미 리뷰 중입니다." : nil,
             choices: [
                 SplitActionButton.Choice(id: "worktree",

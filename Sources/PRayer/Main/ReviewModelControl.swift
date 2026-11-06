@@ -10,16 +10,21 @@ import PRayerCore
 /// - 고르면 **이 PR 에만** 쓴다(그 PR 을 다시 리뷰할 때도). 그러면 아래에 스위치 줄이 나와,
 ///   켜면 그 값이 앞으로 모든 PR 의 기본값이 된다. 되돌리면 이 PR 도 기본값을 쓴다.
 /// diff 리뷰와 전체 리뷰는 같은 모델을 쓴다(사용자 결정 — 둘로 나눌 이유가 없다).
-struct ReviewModelControl: View {
+///
+/// `leading` 은 두 칸 앞에 붙는 것 — 리뷰한 뒤 화면은 여기에 "다시 리뷰" 버튼을 둔다. 스위치 줄이 버튼까지
+/// 포함한 한 덩어리 아래에 오게 하려고 바깥에서 나란히 놓지 않고 안에 받는다.
+struct ReviewModelControl<Leading: View>: View {
     @Environment(AppModel.self) private var model
     let pr: PullRequestInfo
     /// 빈 화면(가운데)과 초안 화면(왼쪽 정렬)에서 함께 쓴다.
     var alignment: HorizontalAlignment = .center
+    @ViewBuilder let leading: Leading
 
     var body: some View {
         let choice = model.reviewModelChoice(for: pr)
         VStack(alignment: alignment, spacing: 5) {
             HStack(spacing: 6) {
+                leading
                 ReviewModelPills(modelID: choice.model,
                                  effort: choice.effort,
                                  scope: "여기서 고르면 이 PR 에만 씁니다",
@@ -65,6 +70,27 @@ struct ReviewModelControl: View {
         .font(.caption)
         // 스위치 앞 글자가 두 줄로 접히면 무엇을 켜는 스위치인지 끊겨 읽힌다(실측). 한 줄로 둔다.
         .fixedSize()
+    }
+}
+
+extension ReviewModelControl where Leading == EmptyView {
+    /// 리뷰 전 화면 — 시작 버튼은 위 카드에 있어 두 칸만.
+    init(pr: PullRequestInfo, alignment: HorizontalAlignment = .center) {
+        self.init(pr: pr, alignment: alignment) { EmptyView() }
+    }
+}
+
+/// 리뷰한 뒤 다시 돌리는 묶음 — `[전체로 다시 리뷰 ▾] [모델 ⌄] [Effort ⌄]`. 무엇을 할지(버튼)가 앞, 어떻게(모델)가
+/// 뒤다(2026-11-06 사용자 결정). AI 리뷰 탭 판정 줄 아래 한 줄과 새 커밋 안내 줄이 같이 쓴다 — 두 자리에 같은
+/// 모양으로 떠야 같은 일을 하는 줄로 읽힌다.
+struct ReviewRelaunchControls: View {
+    let pr: PullRequestInfo
+
+    var body: some View {
+        ReviewModelControl(pr: pr, alignment: .leading) {
+            ReviewLaunchSplitButton(pr: pr, hasRecord: true, accentText: true)
+                .fixedSize()
+        }
     }
 }
 

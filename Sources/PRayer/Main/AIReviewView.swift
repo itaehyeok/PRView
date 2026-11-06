@@ -356,10 +356,22 @@ struct AIReviewView: View {
     @ViewBuilder
     private func headerArea(record: ReviewRecord, stacked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            verdictHeader(record: record, stacked: stacked)
-            if record.headSha != pr.headRefOid {
-                // 한 줄로 줄인 안내(NewCommitsCallout 주석). 예전 상자는 버튼·모델 칸·설명줄을 세로로 쌓아 세 줄이었다.
-                NewCommitsCallout(pr: pr, reviewedHead: record.shortHead)
+            // 다시 리뷰 줄은 판정 줄에 붙인다 — 판정 줄이 "이 리뷰를 어떤 모델로 만들었나" 를 말하고, 바로 아래가
+            // "다시 만들기" 다. 예전엔 게시 버튼 옆·아래에 있어 모델 칸이 게시에 딸린 것처럼 읽혔다(2026-11-06 사용자 피드백).
+            VStack(alignment: .leading, spacing: 8) {
+                verdictHeader(record: record, stacked: stacked)
+                // 새 커밋이 오면 같은 자리가 주황 안내 줄이 된다 — 둘 다 두면 같은 버튼이 한 화면에 두 벌이었다.
+                Group {
+                    if record.headSha != pr.headRefOid {
+                        // 한 줄로 줄인 안내(NewCommitsCallout 주석). 예전 상자는 버튼·모델 칸·설명줄을 세로로 쌓아 세 줄이었다.
+                        NewCommitsCallout(pr: pr, reviewedHead: record.shortHead)
+                    } else {
+                        relaunchRow
+                    }
+                }
+                // 올리는 동안 다시 리뷰하면 올리는 초안이 발밑에서 바뀐다.
+                .disabled(isPosting)
+                .opacity(isPosting ? 0.45 : 1)
             }
             if !record.validationIssues.isEmpty {
                 calloutBox(kind: .warning, icon: "exclamationmark.triangle", text: validationText(record)) {
@@ -370,6 +382,30 @@ struct AIReviewView: View {
                 ApprovalHint(pr: pr, record: record, onShowBlockers: { showBlockers(in: record) })
             }
         }
+    }
+
+    /// 다시 리뷰 줄 — 버튼·모델·Effort 를 옅은 상자 하나로 묶는다(시안 c). 바로 아래 Approve 안내 줄과 섞이지 않게
+    /// 상자로 가른다. 버튼은 채우지 않는다 — 이 화면에서 채운 버튼은 게시 하나다.
+    private var relaunchRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            ReviewRelaunchControls(pr: pr)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 5)
+                .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color(nsColor: .separatorColor))
+                }
+            InfoHint(text: """
+                전체로 다시 리뷰: diff와 연관된 코드(호출부, 프로토콜 등)까지 확인합니다. \
+                비용·시간은 diff와 비슷합니다.
+
+                diff 로 다시 리뷰: diff만 봅니다. 클론 없이 바로 시작합니다.
+
+                둘 다 지금 초안을 새 결과로 대체합니다.
+                """)
+        }
+        .fixedSize()
     }
 
     /// 넓은 창 — 왼쪽 리뷰 본문 · 오른쪽 코드 코멘트가 **각자 스크롤된다**(사용자 요청, 2026-10-27). 예전엔 스크롤 하나에
@@ -813,7 +849,7 @@ struct AIReviewView: View {
             // 마지막 방어선이다 — 그래서 "게시" 가 아니라 "코멘트+승인 게시" 라고 적는다.
             // 게시한 뒤에는 회색으로 잠긴 게시 버튼 대신 무엇으로 올렸는지를 그 자리에 둔다. 잠긴 버튼은 이름이
             // 다음 권장 동작("코멘트만 게시")으로 바뀌어, 아직 안 올린 것처럼 읽혔다(2026-10-22 시안 A).
-            // 결과는 따로 한 줄이다 — 다시 리뷰 버튼까지 한 줄에 두면 좁은 상세(460pt)에서 넘쳤다.
+            // 다시 리뷰 버튼·모델 칸은 판정 줄 아래로 옮겼다(headerArea) — 여기는 올리는 일만 둔다.
             if let posted = record.posted, !isPosting {
                 HStack(alignment: .center, spacing: 8) {
                     PostedStatusLabel(text: "\(PostedStatusLabel.postedAs(posted.event)) 게시됨",
@@ -828,7 +864,7 @@ struct AIReviewView: View {
                     .help("GitHub 에 올라간 이 리뷰를 엽니다")
                 }
             }
-            HStack(alignment: .center, spacing: 8) {
+            Group {
                 if pr.viewerDidAuthor {
                     // 내 PR 리뷰는 이미 올린 PR 을 스스로 확인하는 용도다 — 게시 버튼 자리에 점선 칩을 둔다
                     // (시안 B, 2026-10-29 사용자 결정 — 꺼 둔 버튼(D)·위 띠(C)는 고르지 않았다).
@@ -874,25 +910,9 @@ struct AIReviewView: View {
                             Text("작성자가 다시 리뷰를 요청해야 Approve 절차가 진행됩니다.")
                         }
                 }
-
-                // 올리는 동안 다시 리뷰하면 올리는 초안이 발밑에서 바뀐다.
-                ReviewLaunchSplitButton(pr: pr, hasRecord: true)
-                    .disabled(isPosting)
-                    .opacity(isPosting ? 0.45 : 1)
-
-                Spacer()
-
-                // "전송 내용 자세히"·"폐기" 는 뺐다 — 본문은 왼쪽 상자가 곧 게시될 모양이고, 줄 코멘트는 오른쪽에서
-                // 따로 단다. 글자 링크 둘이 게시 버튼 옆에서 눈만 끌었다(사용자 피드백).
-                InfoHint(text: """
-                    전체로 다시 리뷰: diff와 연관된 코드(호출부, 프로토콜 등)까지 확인합니다. \
-                    비용·시간은 diff와 비슷합니다.
-
-                    diff 로 다시 리뷰: diff만 봅니다. 클론 없이 바로 시작합니다.
-
-                    둘 다 지금 초안을 새 결과로 대체합니다.
-                    """)
             }
+            // "전송 내용 자세히"·"폐기" 는 뺐다 — 본문은 왼쪽 상자가 곧 게시될 모양이고, 줄 코멘트는 오른쪽에서
+            // 따로 단다. 글자 링크 둘이 게시 버튼 옆에서 눈만 끌었다(사용자 피드백).
             if let failure = postFailure, !isPosting {
                 Text(failure)
                     .font(.caption)
@@ -901,12 +921,7 @@ struct AIReviewView: View {
             }
             // "본문 포함 · Approve 1표" 요약 줄과 예상 토큰 안내 줄은 뺐다 — 무엇이 올라가는지는 바로 위 본문 상자가
             // 보여 주고, 버튼 이름이 리뷰 종류를 말한다(사용자 피드백).
-            // 다시 리뷰할 때 쓸 모델. 여기서 바꾸면 위 '다시 리뷰' 버튼이 그 모델로 돈다.
             // 오른쪽 끝에 있던 "끝에 붙이기 · 없음/👥/by Claude" 메뉴는 없앴다 — 보이는 표기는 늘 안 붙인다(2026-10-20 사용자 결정).
-            HStack(alignment: .center, spacing: 8) {
-                ReviewModelControl(pr: pr, alignment: .leading)
-                Spacer(minLength: 8)
-            }
         }
     }
 
