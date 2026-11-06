@@ -10,7 +10,7 @@ struct IssueCard: View {
     @Environment(AppModel.self) private var model
     let pr: PullRequestInfo
     let issue: ReviewIssue
-    /// 파일 경로·코드 조각·"코드에서 보기" 를 보일지. 변경 파일 탭은 그 줄 바로 아래라 뺀다.
+    /// 파일 경로·코드 조각을 보일지(코드 조각을 누르면 변경 파일 탭의 그 줄로 간다). 변경 파일 탭은 그 줄 바로 아래라 뺀다.
     var showsLocation = true
     var onJump: () -> Void = {}
     var onJumpToEvidence: (CodeEvidence) -> Void = { _ in }
@@ -72,7 +72,6 @@ struct IssueCard: View {
                         onUnclear: { change { $0.setCleared(nil, for: issue.key) } },
                         onJump: onJump,
                         onJumpToEvidence: onJumpToEvidence,
-                        link: link,
                         basket: basket(record),
                         allowsPosting: !pr.viewerDidAuthor)
     }
@@ -86,14 +85,6 @@ struct IssueCard: View {
         return IssueRow.Basket(isIn: record.isInBasket(issue),
                                isPostingReview: model.postingKeys.contains(PostingKey.review(pr)),
                                onToggle: onBasket ?? { isOn in model.setInBasket(isOn, issue: issue, pr: pr) })
-    }
-
-    /// 달기 버튼 옆 "코드에서 보기" — AI 리뷰 탭에만 있다. 변경 파일 탭에서 돌아가는 길은 카드마다 두지 않고
-    /// 상세 탭 줄의 돌아가기 버튼(DetailTabRow) 하나로 모았다(사용자 결정, 2026-10-23).
-    private var link: IssueRow.Link? {
-        guard showsLocation else { return nil }
-        return IssueRow.Link(title: "코드에서 보기", systemImage: "arrow.up.right.square",
-                             help: "변경 파일 탭에서 이 파일의 이 줄을 엽니다", action: onJump)
     }
 
     /// 그 줄 앞뒤 한 줄씩. 초안이 있으면 초안 자리, 없으면 지적의 자리. 두 줄씩 다섯 줄이던 것을 줄였다 —
