@@ -339,14 +339,13 @@ struct StatusToolbarMenu: View {
         ProblemLog.shared.entries(since: Date().addingTimeInterval(-30 * 86_400)).count
     }
 
-    /// 기본 리뷰 모델의 엔진이 준비됐는가 — 리뷰 버튼을 누르면 그 엔진으로 돈다.
-    private var primaryOK: Bool { model.engineReady(ReviewEngineKind(model: model.settings.model)) }
+    private var primaryEngine: ReviewEngineKind { model.settings.primaryEngine }
+    private var primaryOK: Bool { model.engineReady(primaryEngine) }
 
-    /// 줄로 보일 엔진 — 깔려 있는 것. 둘 다 없으면 Claude 줄 하나로 무엇이 없는지 알린다.
-    private var shownEngines: [ReviewEngineKind] {
-        let installed = ReviewEngineKind.allCases.filter { model.engineStatus($0)?.isInstalled == true }
-        return installed.isEmpty ? [.claude] : installed
-    }
+    /// 줄로 보이고 문제로 칠 엔진 — 기본 엔진과, 이 앱에서 연결된 것을 본 적 있는 엔진(`Settings.watchedEngines`).
+    /// 맥에 깔려 있기만 한 엔진은 빠진다 — 예전에는 깔린 엔진을 다 봐서, Claude 만 쓰는 사람도 Codex 를 깔아 두면
+    /// "Codex 로그인이 필요합니다" 카드가 떴다. 다른 엔진을 붙이는 곳은 설정 › 연결이다.
+    private var shownEngines: [ReviewEngineKind] { model.settings.watchedEngines }
     private var githubOK: Bool { model.githubAccount != nil }
     private var refreshFailing: Bool { model.consecutiveRefreshFailures > 0 }
 

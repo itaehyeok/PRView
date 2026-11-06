@@ -20,6 +20,7 @@ extension AppModel {
         }
         let status = await codex.status(path: path)
         codexStatus = status
+        await noteEngineConnected(.codex, status: status)
         if status.isInstalled {
             Log.info("codex 상태: 로그인=\(status.loginKnown ? String(status.loggedIn) : "모름") 계정=\(status.accountLabel ?? "-") 버전=\(status.version ?? "-")", "app")
         }
@@ -67,6 +68,14 @@ extension AppModel {
 
     func engineReady(_ engine: ReviewEngineKind) -> Bool {
         engineStatus(engine)?.isReady ?? false
+    }
+
+    /// 연결된 것을 봤으면 기록한다 — 이 뒤로 끊기면 툴바 "상태" 가 문제로 친다(`Settings.watchedEngines`).
+    /// 온보딩·설정에서 로그인해 붙인 것이든, 이미 로그인돼 있어 앱이 "연결됨" 으로 보인 것이든 같다.
+    func noteEngineConnected(_ engine: ReviewEngineKind, status: EngineStatus) async {
+        guard status.isReady, settings.noteEngineConnected(engine) else { return }
+        Log.info("\(engine.displayName) 연결을 기록함 — 이제 끊기면 상태에 문제로 뜬다", "app")
+        await save()
     }
 
     /// 지금 리뷰를 돌릴 수 있는 엔진. 화면이 연결 안 된 쪽을 "연결하기" 로 바꿔 보인다.
