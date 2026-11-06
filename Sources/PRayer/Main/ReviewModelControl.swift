@@ -88,7 +88,7 @@ struct ReviewRelaunchControls: View {
 
     var body: some View {
         ReviewModelControl(pr: pr, alignment: .leading) {
-            ReviewLaunchSplitButton(pr: pr, hasRecord: true)
+            ReviewLaunchSplitButton(pr: pr, hasRecord: true, accentText: true)
                 .fixedSize()
         }
     }
