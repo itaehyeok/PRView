@@ -4,9 +4,10 @@ import PRayerCore
 /// AI 리뷰 탭 위쪽 "리뷰한 커밋 이후 새 커밋이 올라왔습니다" 한 줄.
 ///
 /// 예전에는 경고 상자 오른쪽에 버튼 두 개 · 모델 칸 · 토큰 설명줄을 세로로 쌓아 상자가 세 줄 높이였다
-/// (사용자 피드백: 높이가 너무 길다). 다시 리뷰는 하단 조작부와 같은 분할 버튼 하나로, 모델은 알약 두 칸으로
-/// 줄여 한 줄에 둔다. "앞으로 모든 PR 에도" 스위치와 토큰 설명줄은 하단 조작부(ReviewModelControl ·
-/// ReviewLaunchCaption)에 그대로 있어 여기서는 뺀다 — 토큰 설명은 마우스를 올리면 보인다.
+/// (사용자 피드백: 높이가 너무 길다). 다시 리뷰는 분할 버튼 하나로, 모델은 알약 두 칸으로 줄여 한 줄에 둔다.
+/// 이 줄은 판정 줄 아래 다시 리뷰 줄 자리에 대신 뜬다 — 그래서 같은 묶음(`ReviewRelaunchControls`)을 쓴다.
+/// 이 PR 에만 다른 모델을 골랐을 때의 "앞으로 모든 PR 에도" 스위치도 그 묶음을 따라 여기 온다.
+/// 토큰 설명줄(ReviewLaunchCaption)은 뺀다 — 마우스를 올리면 보인다.
 /// 한 줄에 안 들어가면 먼저 권하는 문장("게시 전 다시 리뷰를 권합니다")을 마우스를 올렸을 때 보이는 설명으로
 /// 돌리고(버튼 이름이 이미 그 말을 한다), 그래도 안 되면 버튼 줄만 아래로 내린다(ViewThatFits).
 /// 실측(AI 리뷰 탭 안쪽 폭 약 540pt): 두 문장은 140pt 남짓, 해시를 넣은 앞 문장만도 3pt 쯤 넘쳤다 —
@@ -61,16 +62,7 @@ struct NewCommitsCallout: View {
     }
 
     private var controls: some View {
-        let choice = model.reviewModelChoice(for: pr)
-        return HStack(spacing: 6) {
-            ReviewModelPills(modelID: choice.model,
-                             effort: choice.effort,
-                             scope: "여기서 고르면 이 PR 에만 씁니다",
-                             chooseModel: { model.chooseReviewModel($0, for: pr) },
-                             chooseEffort: { model.chooseReviewModel(effort: $0, for: pr) })
-            ReviewLaunchSplitButton(pr: pr, hasRecord: true)
-                .fixedSize()
-        }
-        .fixedSize()
+        ReviewRelaunchControls(pr: pr)
+            .fixedSize()
     }
 }
