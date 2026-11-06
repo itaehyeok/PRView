@@ -69,6 +69,9 @@ public struct Settings: Codable, Sendable, Equatable {
     public var claudePath: String
     /// Codex CLI 경로. 못 찾으면 앱이 셸에 묻는다(`CodexRunner.discoverPath`). 옛 대체 엔진 시절의 같은 키도 그대로 읽는다.
     public var codexPath: String
+    /// 이 맥에서 앱이 연결된 것을 본 엔진(`watchedEngines`). 깔려만 있고 로그인한 적 없는 엔진은 들지 않는다.
+    /// 여기 든 엔진이 끊기면 툴바 "상태" 가 문제로 친다. 그 맥의 로그인 이야기라 설정 공유에 담지 않는다.
+    public var connectedEngines: [ReviewEngineKind]
     public var ghPath: String
     /// 물어볼 GitHub 호스트. 회사 계정이면 `github.mycorp.com` 처럼 바뀐다.
     /// `gh` 는 호스트별로 따로 로그인하므로 어느 쪽인지 앱이 정해 줘야 한다.
@@ -335,7 +338,7 @@ public struct Settings: Codable, Sendable, Equatable {
 
 
     enum CodingKeys: String, CodingKey {
-        case onboardingCompleted, claudePath, codexPath, ghPath, githubHost, repos
+        case onboardingCompleted, claudePath, codexPath, connectedEngines, ghPath, githubHost, repos
         case model, effort, prReviewModels, reviewRules
         case excludedPathPatterns, autoSizeCapLines, manualSizeWarnLines
         case hiddenLabels
@@ -373,6 +376,7 @@ public struct Settings: Codable, Sendable, Equatable {
         onboardingCompleted = v(.onboardingCompleted, d.onboardingCompleted)
         claudePath = v(.claudePath, d.claudePath)
         codexPath = v(.codexPath, d.codexPath)
+        connectedEngines = v(.connectedEngines, d.connectedEngines)
         ghPath = v(.ghPath, d.ghPath)
         githubHost = v(.githubHost, d.githubHost)
         repos = v(.repos, d.repos)
@@ -423,7 +427,8 @@ public struct Settings: Codable, Sendable, Equatable {
         slack = v(.slack, d.slack)
     }
 
-    public init(onboardingCompleted: Bool, claudePath: String, codexPath: String = "/opt/homebrew/bin/codex", ghPath: String,
+    public init(onboardingCompleted: Bool, claudePath: String, codexPath: String = "/opt/homebrew/bin/codex",
+                connectedEngines: [ReviewEngineKind] = [], ghPath: String,
                 githubHost: String = GitHubHost.dotCom, repos: [RepoConfig],
                 model: String,
                 excludedPathPatterns: [String], autoSizeCapLines: Int,
@@ -445,6 +450,7 @@ public struct Settings: Codable, Sendable, Equatable {
         self.onboardingCompleted = onboardingCompleted
         self.claudePath = claudePath
         self.codexPath = codexPath
+        self.connectedEngines = connectedEngines
         self.ghPath = ghPath
         self.githubHost = githubHost
         self.repos = repos

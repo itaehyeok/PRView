@@ -82,6 +82,7 @@ import PRayerCore
 ///   `PRAYER_DEBUG_SCOPE=open:0|myApprovals:168|recentAll:168` 를 같이 주면 그 탭에서 친다(`PRListScope.storageValue` 꼴).
 /// - `PRAYER_DEBUG_ONLY_LABEL=라벨` — 행의 그 라벨을 누른 것처럼 그 라벨이 붙은 PR 만 보인다(목록 위 띠·고른 라벨 모양 확인).
 ///   `PRAYER_DEBUG_SCOPE` 를 같이 주면 그 탭에서.
+/// - `PRAYER_DEBUG_STATUS_ICON=checking|ok|warning|error` — 툴바 "상태" 아이콘만 그 단계로 그린다(팝오버 내용은 실제 상태 그대로).
 ///
 /// `open --env PRAYER_DEBUG_SELECT_PR=o/r#1 <앱>`. 툴바 팝오버는 `PRAYER_DEBUG_OPEN_POPOVER`(ToolbarPopover), 목록 필터 창은 그 값을 `filter` 로(FilterButton, 켜고 6초 뒤).
 enum DebugLaunch {
@@ -93,6 +94,9 @@ enum DebugLaunch {
     static var who: PRWhoFilter? { value("PRAYER_DEBUG_WHO").flatMap(PRWhoFilter.init(rawValue:)) }
     static var scope: PRListScope? { value("PRAYER_DEBUG_SCOPE").flatMap(PRListScope.init(storageValue:)) }
     static var expandAll: Bool { value("PRAYER_DEBUG_EXPAND_ALL") == "1" }
+    static var statusIcon: ConnectionHealth? {
+        value("PRAYER_DEBUG_STATUS_ICON").flatMap(ConnectionHealth.init(rawValue:))
+    }
     /// 고른 PR(PRAYER_DEBUG_SELECT_PR)을 연 뒤 이만큼(초) 있다가 첫 @me 활동을 누른 것처럼 그 글로 간다(AppModel.openMention).
     static var mentionJumpDelay: Double? { value("PRAYER_DEBUG_MENTION_JUMP").flatMap(Double.init) }
     /// 켜자마자 "@me 모양 조절" 창(MentionTunerPanel)을 본창 옆에 띄운다.

@@ -1323,6 +1323,7 @@ final class AppModel {
             lastKnownLogin = status.loggedIn
         }
         claudeStatus = status
+        await noteEngineConnected(.claude, status: status)
         Log.info("claude 상태: 설치=\(status.isInstalled) 로그인=\(status.loginKnown ? String(status.loggedIn) : "모름") 계정=\(status.accountLabel ?? "-") 버전=\(status.version ?? "-")", "app")
         refreshModelCatalogIfNeeded(path: path, status: status)
         if recovered {
