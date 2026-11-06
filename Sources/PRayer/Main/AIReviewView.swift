@@ -356,22 +356,10 @@ struct AIReviewView: View {
     @ViewBuilder
     private func headerArea(record: ReviewRecord, stacked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            // 다시 리뷰 줄은 판정 줄에 붙인다 — 판정 줄이 "이 리뷰를 어떤 모델로 만들었나" 를 말하고, 바로 아래가
-            // "다시 만들기" 다. 예전엔 게시 버튼 옆·아래에 있어 모델 칸이 게시에 딸린 것처럼 읽혔다(2026-11-06 사용자 피드백).
-            VStack(alignment: .leading, spacing: 8) {
-                verdictHeader(record: record, stacked: stacked)
-                // 새 커밋이 오면 같은 자리가 주황 안내 줄이 된다 — 둘 다 두면 같은 버튼이 한 화면에 두 벌이었다.
-                Group {
-                    if record.headSha != pr.headRefOid {
-                        // 한 줄로 줄인 안내(NewCommitsCallout 주석). 예전 상자는 버튼·모델 칸·설명줄을 세로로 쌓아 세 줄이었다.
-                        NewCommitsCallout(pr: pr, reviewedHead: record.shortHead)
-                    } else {
-                        relaunchRow
-                    }
-                }
-                // 올리는 동안 다시 리뷰하면 올리는 초안이 발밑에서 바뀐다.
-                .disabled(isPosting)
-                .opacity(isPosting ? 0.45 : 1)
+            verdictHeader(record: record, stacked: stacked)
+            if record.headSha != pr.headRefOid {
+                // 알리기만 한다 — 다시 리뷰 버튼은 게시 버튼 아래 한 곳에만 둔다(relaunchRow 주석).
+                NewCommitsCallout(pr: pr, reviewedHead: record.shortHead)
             }
             if !record.validationIssues.isEmpty {
                 calloutBox(kind: .warning, icon: "exclamationmark.triangle", text: validationText(record)) {
@@ -384,18 +372,14 @@ struct AIReviewView: View {
         }
     }
 
-    /// 다시 리뷰 줄 — 버튼·모델·Effort 를 옅은 상자 하나로 묶는다(시안 c). 바로 아래 Approve 안내 줄과 섞이지 않게
-    /// 상자로 가른다. 버튼은 채우지 않는다 — 이 화면에서 채운 버튼은 게시 하나다.
-    private var relaunchRow: some View {
-        HStack(alignment: .center, spacing: 8) {
+    /// 다시 리뷰 줄 — 게시 버튼 바로 아래 `[전체로 다시 리뷰 ▾] [모델 ⌄] [Effort ⌄]` ⓘ(시안 B-2, 2026-11-06 사용자 결정).
+    /// 상자·구분선·"다시 리뷰" 머리말은 두지 않는다 — 버튼 이름이 이미 그 말을 하고, 버튼이 앞에 와서 모델 칸이 게시가
+    /// 아니라 다시 리뷰에 붙는다. 판정 줄 아래에 둔 안(v0.6.6-beta.14)도 써 봤다가 이리로 옮겼다 — 읽고 나서 하는 일
+    /// (올리기·다시 만들기)이 본문 끝 한 곳에 모인다. 새 커밋이 오면 위 주황 줄은 알리기만 하고, 이 줄 끝에 주황
+    /// "새 커밋" 을 단다 — 같은 버튼을 두 곳에 두지 않는다.
+    private func relaunchRow(record: ReviewRecord) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             ReviewRelaunchControls(pr: pr)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 5)
-                .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color(nsColor: .separatorColor))
-                }
             InfoHint(text: """
                 전체로 다시 리뷰: diff와 연관된 코드(호출부, 프로토콜 등)까지 확인합니다. \
                 비용·시간은 diff와 비슷합니다.
@@ -404,8 +388,17 @@ struct AIReviewView: View {
 
                 둘 다 지금 초안을 새 결과로 대체합니다.
                 """)
+            if record.headSha != pr.headRefOid {
+                Label("새 커밋", systemImage: "clock.arrow.circlepath")
+                    .font(.caption)
+                    .foregroundStyle(Color.orange)
+                    .help("리뷰한 커밋(\(record.shortHead)) 이후 새 커밋이 올라왔습니다. 게시 전 다시 리뷰를 권합니다.")
+            }
         }
         .fixedSize()
+        // 올리는 동안 다시 리뷰하면 올리는 초안이 발밑에서 바뀐다.
+        .disabled(isPosting)
+        .opacity(isPosting ? 0.45 : 1)
     }
 
     /// 넓은 창 — 왼쪽 리뷰 본문 · 오른쪽 코드 코멘트가 **각자 스크롤된다**(사용자 요청, 2026-10-27). 예전엔 스크롤 하나에
@@ -849,7 +842,7 @@ struct AIReviewView: View {
             // 마지막 방어선이다 — 그래서 "게시" 가 아니라 "코멘트+승인 게시" 라고 적는다.
             // 게시한 뒤에는 회색으로 잠긴 게시 버튼 대신 무엇으로 올렸는지를 그 자리에 둔다. 잠긴 버튼은 이름이
             // 다음 권장 동작("코멘트만 게시")으로 바뀌어, 아직 안 올린 것처럼 읽혔다(2026-10-22 시안 A).
-            // 다시 리뷰 버튼·모델 칸은 판정 줄 아래로 옮겼다(headerArea) — 여기는 올리는 일만 둔다.
+            // 결과는 따로 한 줄이다 — 다시 리뷰 버튼까지 한 줄에 두면 좁은 상세(460pt)에서 넘쳤다.
             if let posted = record.posted, !isPosting {
                 HStack(alignment: .center, spacing: 8) {
                     PostedStatusLabel(text: "\(PostedStatusLabel.postedAs(posted.event)) 게시됨",
@@ -922,6 +915,9 @@ struct AIReviewView: View {
             // "본문 포함 · Approve 1표" 요약 줄과 예상 토큰 안내 줄은 뺐다 — 무엇이 올라가는지는 바로 위 본문 상자가
             // 보여 주고, 버튼 이름이 리뷰 종류를 말한다(사용자 피드백).
             // 오른쪽 끝에 있던 "끝에 붙이기 · 없음/👥/by Claude" 메뉴는 없앴다 — 보이는 표기는 늘 안 붙인다(2026-10-20 사용자 결정).
+            // 게시와 다시 리뷰는 다른 일이라 줄 간격을 조금 더 둔다(구분선 없이 간격만으로 가른다, 시안 B-2).
+            relaunchRow(record: record)
+                .padding(.top, 6)
         }
     }
 

@@ -81,8 +81,7 @@ extension ReviewModelControl where Leading == EmptyView {
 }
 
 /// 리뷰한 뒤 다시 돌리는 묶음 — `[전체로 다시 리뷰 ▾] [모델 ⌄] [Effort ⌄]`. 무엇을 할지(버튼)가 앞, 어떻게(모델)가
-/// 뒤다(2026-11-06 사용자 결정). AI 리뷰 탭 판정 줄 아래 한 줄과 새 커밋 안내 줄이 같이 쓴다 — 두 자리에 같은
-/// 모양으로 떠야 같은 일을 하는 줄로 읽힌다.
+/// 뒤다(2026-11-06 사용자 결정). AI 리뷰 탭 게시 버튼 아래 다시 리뷰 줄(`AIReviewView.relaunchRow`)이 쓴다.
 struct ReviewRelaunchControls: View {
     let pr: PullRequestInfo
 
