@@ -134,10 +134,11 @@ final class ListCacheSeedingTests: XCTestCase {
     /// 같은 종류에서 기간을 늘릴 때만 넓힌 것이다. 줄이거나, 종류가 바뀌거나, 리뷰 대기가 끼면 아니다.
     func testWidensOnlyWhenSameKindLongerWindow() {
         XCTAssertTrue(PRListScope.recentAll(.week).widens(from: .recentAll(.day)))
-        XCTAssertTrue(PRListScope.myApprovals(.week).widens(from: .myApprovals(.day)))
+        XCTAssertTrue(PRListScope.recentAll(.month).widens(from: .recentAll(.day)))
+        XCTAssertTrue(PRListScope.myApprovals(.month).widens(from: .myApprovals(.week)))
         XCTAssertFalse(PRListScope.recentAll(.day).widens(from: .recentAll(.week)))
         XCTAssertFalse(PRListScope.recentAll(.week).widens(from: .recentAll(.week)))
-        XCTAssertFalse(PRListScope.recentAll(.week).widens(from: .myApprovals(.day)))
+        XCTAssertFalse(PRListScope.recentAll(.month).widens(from: .myApprovals(.day)))
         XCTAssertFalse(PRListScope.recentAll(.week).widens(from: .open))
         XCTAssertFalse(PRListScope.open.widens(from: .recentAll(.day)))
     }
@@ -165,7 +166,7 @@ final class ListCacheSeedingTests: XCTestCase {
     func testWidenedKeepsApprovedLongAgoWithNews() {
         var old = pr(1, updatedHoursAgo: 2)
         old.reviewEvents = [PRReviewEvent(author: me, state: "APPROVED", submittedAt: now.addingTimeInterval(-40 * 86_400), body: "")]
-        XCTAssertNil(merge([old], into: [], .myApprovals(.week)))
+        XCTAssertNil(merge([old], into: [], .myApprovals(.month)))
         XCTAssertEqual(ListCacheSeeding.widened([old], into: []).map(\.number), [1])
     }
 }

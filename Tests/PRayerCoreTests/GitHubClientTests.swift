@@ -95,7 +95,7 @@ final class PRListScopeQueryTests: XCTestCase {
         for kind in PRListScopeKind.allCases where kind.usesWindow {
             XCTAssertNotNil(PRListScope(kind: kind, window: nil).window, "\(kind) 에 기본 기간이 없다")
         }
-        XCTAssertNil(PRListScope(kind: .open, window: .week).window, "열린 PR 탭에 기간이 붙었다")
+        XCTAssertNil(PRListScope(kind: .open, window: .month).window, "열린 PR 탭에 기간이 붙었다")
     }
 
     func testApprovalScopeFiltersByReviewer() {
@@ -114,9 +114,9 @@ final class PRListScopeQueryTests: XCTestCase {
         XCTAssertNil(PRListScope.open.windowHours)
         XCTAssertEqual(PRListScope.myApprovals(.day).windowHours, 24)
         XCTAssertEqual(PRListScope.myApprovals(.week).windowHours, 168)
-        XCTAssertEqual(PRListScope.recentAll(.week).windowHours, 168)
+        XCTAssertEqual(PRListScope.recentAll(.month).windowHours, 720)
         XCTAssertTrue(PRListScope.myApprovals(.week).requiresMyApproval)
-        XCTAssertFalse(PRListScope.recentAll(.week).requiresMyApproval)
+        XCTAssertFalse(PRListScope.recentAll(.month).requiresMyApproval)
     }
 
     /// 옛 저장값을 읽어 새 형식으로 옮긴다. 이게 깨지면 업데이트한 사람의 탭 선택이 초기화된다.
@@ -124,30 +124,8 @@ final class PRListScopeQueryTests: XCTestCase {
         XCTAssertEqual(PRListScope(storageValue: "open"), .open)
         XCTAssertEqual(PRListScope(storageValue: "myApprovals24h"), .myApprovals(.day))
         XCTAssertEqual(PRListScope(storageValue: "myApprovals7d"), .myApprovals(.week))
-        // 옛 All PRs 는 30일 고정이었다. 30일을 뺀 뒤에는 남은 가장 긴 기간으로.
-        XCTAssertEqual(PRListScope(storageValue: "recentAll"), .recentAll(.week))
+        XCTAssertEqual(PRListScope(storageValue: "recentAll"), .recentAll(.month))
         XCTAssertNil(PRListScope(storageValue: "복구할 수 없는 값"))
-    }
-
-    /// 30일을 고른 채 업데이트한 사람은 7일로 옮겨 간다 — 기본값(24h)으로 소리 없이 줄어들면 안 된다.
-    func testRemovedMonthWindowMigratesToWeek() {
-        XCTAssertEqual(PRListScope(storageValue: "recentAll:720"), .recentAll(.week))
-        XCTAssertEqual(PRListScope(storageValue: "myApprovals:720"), .myApprovals(.week))
-        XCTAssertEqual(PRListScope(storageValue: "open:0"), .open)
-        XCTAssertEqual(PRListWindow(storedHours: 720), .week)
-        XCTAssertEqual(PRListWindow(storedHours: 168), .week)
-        XCTAssertEqual(PRListWindow(storedHours: 24), .day)
-        XCTAssertNil(PRListWindow(storedHours: 0))
-        XCTAssertEqual(PRListWindow.allCases, [.day, .week])
-        XCTAssertNil(PRListWindow.week.longer, "가장 긴 기간인데 더 넓히라고 한다")
-    }
-
-    /// 옛 30일 탭의 지난 목록은 쓸 탭이 없다 — 읽어서 다시 쓴 값이 원래와 달라야 앱이 그 파일을 지운다(AppModel 기동).
-    func testRemovedMonthCacheKeyDoesNotRoundTrip() {
-        XCTAssertNotEqual(PRListScope(storageValue: "recentAll:720")?.storageValue, "recentAll:720")
-        for scope in [PRListScope.open, .myApprovals(.day), .myApprovals(.week), .recentAll(.day), .recentAll(.week)] {
-            XCTAssertEqual(PRListScope(storageValue: scope.storageValue)?.storageValue, scope.storageValue)
-        }
     }
 
     /// 저장했다 읽으면 그대로 돌아와야 한다.
@@ -225,7 +203,7 @@ final class ListPagingTests: XCTestCase {
         XCTAssertFalse(open.contains("sort:updated-desc"), open)
 
         let scoped = GitHubClient.searchQuery(repos: repos,
-                                              scope: PRListScope(kind: .recentAll, window: .week),
+                                              scope: PRListScope(kind: .recentAll, window: .month),
                                               viewerLogin: "alex-kim")
         XCTAssertTrue(scoped.contains("sort:created-desc"), scoped)
     }
@@ -233,7 +211,7 @@ final class ListPagingTests: XCTestCase {
     /// 기간은 여전히 활동 기준으로 거른다 — 거르는 기준과 줄 세우는 기준은 별개다.
     func testWindowStillFiltersByActivity() {
         let scoped = GitHubClient.searchQuery(repos: repos,
-                                              scope: PRListScope(kind: .recentAll, window: .week),
+                                              scope: PRListScope(kind: .recentAll, window: .month),
                                               viewerLogin: "alex-kim")
         XCTAssertTrue(scoped.contains("updated:>="), scoped)
     }
@@ -249,7 +227,7 @@ final class ListPagingTests: XCTestCase {
     /// 닫힘을 포함하면 한 건당 받는 것이 많아 페이지를 절반으로 잡는다.
     func testClosedScopeUsesSmallerPages() {
         let open = GitHubClient.defaultPageSize(scope: PRListScope.open, includeClosed: false)
-        let closed = GitHubClient.defaultPageSize(scope: PRListScope(kind: .recentAll, window: .week),
+        let closed = GitHubClient.defaultPageSize(scope: PRListScope(kind: .recentAll, window: .month),
                                                   includeClosed: true)
         XCTAssertGreaterThan(open, closed)
     }
