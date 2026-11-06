@@ -79,7 +79,7 @@ import PRayerCore
 /// - `PRAYER_DEBUG_REPO_QUERY=말` — 레포 고르기 검색칸에 그 말을 넣는다(걸린 레포·줄 수 제한 모양 확인).
 ///   `PRAYER_DEBUG_ONBOARDING_STEP=repos` 나 `PRAYER_DEBUG_OPEN_POPOVER=repos` 와 같이 준다.
 /// - `PRAYER_DEBUG_SEARCH=검색어` — 목록 검색칸에 그 말을 넣는다(전체 PR 검색 아래 구역 확인용).
-///   `PRAYER_DEBUG_SCOPE=open:0|myApprovals:168|recentAll:168` 를 같이 주면 그 탭에서 친다(`PRListScope.storageValue` 꼴).
+///   `PRAYER_DEBUG_SCOPE=open:0|myApprovals:168|recentAll:720` 를 같이 주면 그 탭에서 친다(`PRListScope.storageValue` 꼴).
 /// - `PRAYER_DEBUG_ONLY_LABEL=라벨` — 행의 그 라벨을 누른 것처럼 그 라벨이 붙은 PR 만 보인다(목록 위 띠·고른 라벨 모양 확인).
 ///   `PRAYER_DEBUG_SCOPE` 를 같이 주면 그 탭에서.
 ///
