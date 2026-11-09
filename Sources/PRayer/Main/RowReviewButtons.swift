@@ -14,7 +14,7 @@ import PRayerCore
 struct RowReviewButtons: View {
     @Environment(AppModel.self) private var model
     let pr: PullRequestInfo
-    /// 좁은 목록에서 "전체 리뷰" 를 "전체" 로 줄인다 — 번호가 밀려 두 줄로 접히지 않게(PRRow 가 자리를 보고 고른다).
+    /// 좁은 목록에서 "전체 리뷰" 를 "전체" 로 줄인다 — 번호가 밀려 두 줄로 접히지 않게(목록 행의 RowTrailingSlot 이 자리를 보고 고른다).
     var compact = false
 
     var body: some View {
