@@ -708,14 +708,14 @@ struct PRRow: View {
     let pr: PullRequestInfo
     /// 행을 누른 것과 같은 고르기. 행 안의 답글 칩이 PR 을 열 때 쓴다 — 칩이 누르기를 가져가 행의 누르기가 불리지 않는다.
     var select: () -> Void = {}
-    @State private var isHovering = false
+    /// 마우스가 올라와 있나. 본문은 읽지 않고 첫 줄 오른쪽 자리(RowTrailingSlot)만 읽는다 — 그 주석 참고.
+    @State private var hover = RowHover()
 
     var body: some View {
         let badge = model.badge(for: pr)
         let activeJob = model.job(for: pr).flatMap { $0.isActive ? $0 : nil }
-        // 마우스를 올린 행의 버튼 — 도는 중·대기 중이면 취소, 리뷰 전이면 리뷰. 좁아서 시각을 뺀 행에도 띄운다.
-        let rowAction: RowAction? = !showsRowActions ? nil
-            : activeJob.map { .cancel(jobID: $0.id, isQueued: $0.state == .queued) }
+        // 마우스를 올리면 띄울 행 버튼 — 도는 중·대기 중이면 취소, 리뷰 전이면 리뷰. 좁아서 시각을 뺀 행에도 띄운다.
+        let rowAction: RowAction? = activeJob.map { .cancel(jobID: $0.id, isQueued: $0.state == .queued) }
             ?? (badge.badge == .notReviewed && pr.isOpen ? .review : nil)
         // 작성자 아바타를 행의 첫 요소로 둔다 — 이름을 읽지 않아도 색과 머리글자로 잡히게.
         // 높이는 **상태 칩 줄 + 제목을 합친 덩어리의 가운데**에 맞춘다(사용자 결정, 2026-10-20).
@@ -759,31 +759,9 @@ struct PRRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize()
-                // 마우스를 올리면 시각 자리에 리뷰 버튼(리뷰 전)이나 취소 버튼(도는 중·대기 중)을 띄운다(RowReviewButtons).
-                // 자리가 모자라면 버튼 글자를 줄인다("전체 리뷰" → "전체") — 배지·번호는 줄이지 않는다(PRRowDensity).
-                // 폭으로 고르는 배치(ViewThatFits)는 마우스를 올린 행 하나에만 걸린다 — 목록 폭을 끄는 동안 행마다 다시 재는
-                // 비용(PRRowFactsLayout 주석)이 그 행 하나뿐이다. 두 배치는 높이가 같아 스크롤 막대 유무와 맞물려 돌지 않는다.
-                if let rowAction {
-                    ViewThatFits(in: .horizontal) {
-                        rowActionSlot(rowAction, compact: false)
-                        rowActionSlot(rowAction, compact: true)
-                    }
-                } else {
-                    Spacer(minLength: 4)
-                }
+                // 시각 자리 — 마우스를 올리면 그 위에 리뷰 버튼(리뷰 전)이나 취소 버튼(도는 중·대기 중)을 겹쳐 띄운다(RowTrailingSlot).
                 // 마지막 활동 시각은 따로 찍지 않는다 — 아래 Recent activity 첫 줄이 곧 그 시각이다.
-                if rowAction == nil, density.showsCreatedAt {
-                    // "최근 승인" 탭은 승인 시각으로 거른다. 그 탭에서 PR 올린 시각을 보여 주면
-                    // 거르는 기준과 보이는 값이 달라 "24h 탭인데 1d ago" 로 읽힌다(실측).
-                    let approvedAt = model.listScope.requiresMyApproval ? model.viewerApprovedAt(pr) : nil
-                    RelativeTimeText(date: approvedAt ?? pr.createdAt,
-                                     style: .ago,
-                                     prefix: approvedAt == nil ? "Created" : "내가 Approve")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
+                RowTrailingSlot(pr: pr, action: rowAction, hover: hover, time: createdTime)
                 // 처리를 마쳐 곧 빠지는 PR. 사라질 때까지 줄어드는 고리를 보여 준다.
                 if let deadline = model.leavingDeadline(for: pr) {
                     RemovalCountdown(deadline: deadline, total: AppModel.removalGrace)
@@ -832,31 +810,22 @@ struct PRRow: View {
             }
         }
         .padding(.vertical, 3)
-        .onHover { isHovering = $0 }
+        .onHover { hover.isOn = $0 }
     }
 
-    /// 행에 마우스가 올라와 있다 — 시각 자리에 행 버튼을 띄운다. 리뷰가 돌기 시작하면 리뷰 버튼이 취소 버튼으로 바로 바뀐다.
-    private enum RowAction: Equatable {
+    /// 마우스를 올리면 첫 줄 시각 자리에 띄우는 행 버튼. 리뷰가 돌기 시작하면 리뷰 버튼이 취소 버튼으로 바로 바뀐다.
+    fileprivate enum RowAction: Equatable {
         case cancel(jobID: String, isQueued: Bool)
         case review
     }
 
-    /// 첫 줄 오른쪽의 버튼 자리. 빈 자리(Spacer)를 안에 둔다 — 밖에 두면 HStack 이 남은 폭을 빈 자리와 반씩 나눠 줘서
-    /// ViewThatFits 가 들어갈 자리가 있어도 좁은 쪽을 고른다.
-    private func rowActionSlot(_ action: RowAction, compact: Bool) -> some View {
-        HStack(spacing: 6) {
-            Spacer(minLength: 4)
-            switch action {
-            case .cancel(let jobID, let isQueued):
-                RowCancelReviewButton(jobID: jobID, isQueued: isQueued, compact: compact)
-            case .review:
-                RowReviewButtons(pr: pr, compact: compact)
-            }
-        }
-    }
-
-    private var showsRowActions: Bool {
-        isHovering || DebugLaunch.rowReviewButtons == pr.number
+    /// 첫 줄 오른쪽 시각. 좁은 목록(PRRowDensity.tight)에서는 뺀다.
+    /// "최근 승인" 탭은 승인 시각으로 거른다. 그 탭에서 PR 올린 시각을 보여 주면 거르는 기준과 보이는 값이 달라
+    /// "24h 탭인데 1d ago" 로 읽힌다(실측).
+    private var createdTime: RowTrailingSlot.Time? {
+        guard density.showsCreatedAt else { return nil }
+        let approvedAt = model.listScope.requiresMyApproval ? model.viewerApprovedAt(pr) : nil
+        return RowTrailingSlot.Time(date: approvedAt ?? pr.createdAt, prefix: approvedAt == nil ? "Created" : "내가 Approve")
     }
 
     /// 라벨은 몇 개까지 보이는가(PRLabels — 라벨이 나오는 곳은 다 이 모양). 넘치면 "외 N". 넘치면 아랫줄로 흐르므로 폭이
@@ -946,6 +915,71 @@ struct PRRow: View {
                 // 자리가 부족하면 접히지 말고 뒤를 자른다. 잘린 이름은 툴팁으로 본다.
                 .fixedSize(horizontal: false, vertical: true)
                 .help(pr.repo.name)
+        }
+    }
+}
+
+/// 행 위에 마우스가 있나. PRRow 가 쥐고 RowTrailingSlot 만 읽는다(그 주석).
+@MainActor
+@Observable
+final class RowHover {
+    var isOn = false
+}
+
+/// 목록 행 첫 줄 오른쪽 — 평소엔 만든(승인한) 시각, 마우스를 올리면 그 자리에 행 버튼(리뷰 전이면 리뷰 · 도는 중이면 취소).
+///
+/// 마우스 상태는 이 뷰만 읽고, 버튼은 줄 배치에 끼우지 않고 위에 겹쳐(overlay) 그린다. 예전에는 행 본문이 호버를 읽고 시각 자리를
+/// 버튼으로 바꿔 끼웠는데, 그러면 마우스가 행을 드나들 때마다 — 스크롤하면 커서 아래로 행이 지나가며 계속 드나든다 — 행 본문이 다시
+/// 돌고 목록 전체 배치를 다시 재서 스크롤이 행마다 끊겼다(2026-11-09 실측: 리뷰 전 행에 들어갈 때 80~470ms, 다른 행 6~17ms).
+/// 겹쳐 그리면 줄의 폭·높이가 그대로라 이 자리만 다시 그린다. 버튼은 상태 칩보다 낮아(RowReviewButtonStyle) 줄 밖으로 나가지 않는다.
+private struct RowTrailingSlot: View {
+    struct Time {
+        let date: Date
+        let prefix: String
+    }
+
+    let pr: PullRequestInfo
+    let action: PRRow.RowAction?
+    let hover: RowHover
+    let time: Time?
+
+    var body: some View {
+        let showsAction = action != nil && (hover.isOn || DebugLaunch.rowReviewButtons == pr.number)
+        HStack(spacing: 6) {
+            Spacer(minLength: 4)
+            if let time {
+                // 버튼이 뜨면 시각은 자리만 남기고 감춘다 — 빼면 줄 배치가 바뀐다.
+                RelativeTimeText(date: time.date, style: .ago, prefix: time.prefix)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .opacity(showsAction ? 0 : 1)
+                    .accessibilityHidden(showsAction)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if showsAction, let action {
+                // 자리가 모자라면 버튼 글자를 줄인다("전체 리뷰" → "전체") — 배지·번호는 줄이지 않는다(PRRowDensity).
+                ViewThatFits(in: .horizontal) {
+                    slot(action, compact: false)
+                    slot(action, compact: true)
+                }
+            }
+        }
+    }
+
+    /// 버튼 자리. 빈 자리(Spacer)를 안에 둔다 — 밖에 두면 HStack 이 남은 폭을 빈 자리와 반씩 나눠 줘서
+    /// ViewThatFits 가 들어갈 자리가 있어도 좁은 쪽을 고른다.
+    private func slot(_ action: PRRow.RowAction, compact: Bool) -> some View {
+        HStack(spacing: 6) {
+            Spacer(minLength: 4)
+            switch action {
+            case .cancel(let jobID, let isQueued):
+                RowCancelReviewButton(jobID: jobID, isQueued: isQueued, compact: compact)
+            case .review:
+                RowReviewButtons(pr: pr, compact: compact)
+            }
         }
     }
 }
