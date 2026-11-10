@@ -708,7 +708,8 @@ struct PRRow: View {
     let pr: PullRequestInfo
     /// 행을 누른 것과 같은 고르기. 행 안의 답글 칩이 PR 을 열 때 쓴다 — 칩이 누르기를 가져가 행의 누르기가 불리지 않는다.
     var select: () -> Void = {}
-    /// 마우스가 올라와 있나. 본문은 읽지 않고 첫 줄 오른쪽 자리(RowTrailingSlot)만 읽는다 — 그 주석 참고.
+    /// 마우스가 올라와 있나. 행 본문도 첫 줄 오른쪽 자리(RowTrailingSlot)도 읽지 않고, 그 안의 투명도 감싸개(HoverReveal)만
+    /// 읽는다 — RowTrailingSlot 주석 참고.
     @State private var hover = RowHover()
 
     var body: some View {
@@ -919,7 +920,7 @@ struct PRRow: View {
     }
 }
 
-/// 행 위에 마우스가 있나. PRRow 가 쥐고 RowTrailingSlot 만 읽는다(그 주석).
+/// 행 위에 마우스가 있나. PRRow 가 쥐고 HoverReveal 만 읽는다(RowTrailingSlot 주석).
 @MainActor
 @Observable
 final class RowHover {
@@ -928,10 +929,20 @@ final class RowHover {
 
 /// 목록 행 첫 줄 오른쪽 — 평소엔 만든(승인한) 시각, 마우스를 올리면 그 자리에 행 버튼(리뷰 전이면 리뷰 · 도는 중이면 취소).
 ///
-/// 마우스 상태는 이 뷰만 읽고, 버튼은 줄 배치에 끼우지 않고 위에 겹쳐(overlay) 그린다. 예전에는 행 본문이 호버를 읽고 시각 자리를
-/// 버튼으로 바꿔 끼웠는데, 그러면 마우스가 행을 드나들 때마다 — 스크롤하면 커서 아래로 행이 지나가며 계속 드나든다 — 행 본문이 다시
-/// 돌고 목록 전체 배치를 다시 재서 스크롤이 행마다 끊겼다(2026-11-09 실측: 리뷰 전 행에 들어갈 때 80~470ms, 다른 행 6~17ms).
-/// 겹쳐 그리면 줄의 폭·높이가 그대로라 이 자리만 다시 그린다. 버튼은 상태 칩보다 낮아(RowReviewButtonStyle) 줄 밖으로 나가지 않는다.
+/// 버튼은 행을 그릴 때 미리 만들어 시각 위에 겹쳐(overlay) 두고, 마우스가 올라오면 시각과 버튼의 **투명도만** 맞바꾼다. 마우스
+/// 상태는 이 뷰도 읽지 않는다 — 투명도를 바꾸는 감싸개(HoverReveal)만 읽는다. 버튼은 상태 칩보다 낮아(RowReviewButtonStyle) 줄
+/// 밖으로 나가지 않는다.
+///
+/// 스크롤하면 커서 아래로 행이 지나가며 마우스가 계속 드나든다. 그때 행 안에서 배치를 가진 뷰의 본문이 다시 돌면 — 버튼을 넣고
+/// 빼든, 투명도 값만 바꾸든 — SwiftUI 가 목록 전체를 다시 잰다. 목록은 지연 스택이 아니라(PRListView 주석) 행이 많을수록 비싸서
+/// 버튼이 뜨는 행을 지날 때마다 스크롤이 끊겼다. 2026-11-09 실측(들어갈 때·나올 때 각각):
+/// - 행 본문이 호버를 읽고 시각 자리를 버튼으로 바꿔 끼움: 80~470ms
+/// - 이 뷰가 호버를 읽고 버튼을 겹쳐 넣음(0.6.6-beta.16): All PRs 88행 84~88ms, To review 7행 12~17ms
+/// - 감싸개만 읽고 투명도만 바꿈(지금): 같은 목록 16~20ms, 2.5~3.5ms. 남은 것은 다시 재기가 아니라 창을 다시 그리는 값이다 —
+///   행이 다 그려져 있어서 목록 밖에서 점 하나만 바뀌어도 같다.
+///
+/// 안 보이는 버튼에 키보드 초점이 가지 않게 하는 것은 버튼 쪽 `.focusable(false)` 다(RowReviewButtons). 여기서 `.disabled` 로 막으면
+/// 마우스가 드나들 때마다 버튼까지 다시 그린다.
 private struct RowTrailingSlot: View {
     struct Time {
         let date: Date
@@ -944,27 +955,28 @@ private struct RowTrailingSlot: View {
     let time: Time?
 
     var body: some View {
-        let showsAction = action != nil && (hover.isOn || DebugLaunch.rowReviewButtons == pr.number)
+        let forced = DebugLaunch.rowReviewButtons == pr.number
         HStack(spacing: 6) {
             Spacer(minLength: 4)
             if let time {
                 // 버튼이 뜨면 시각은 자리만 남기고 감춘다 — 빼면 줄 배치가 바뀐다.
+                // 버튼이 없는 행은 마우스와 무관하다 — 감싸개에 hover 를 넘기지 않아 아예 읽지 않는다.
                 RelativeTimeText(date: time.date, style: .ago, prefix: time.prefix)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-                    .opacity(showsAction ? 0 : 1)
-                    .accessibilityHidden(showsAction)
+                    .modifier(HoverReveal(hover: action == nil ? nil : hover, forced: forced, showsOnHover: false))
             }
         }
         .overlay(alignment: .trailing) {
-            if showsAction, let action {
+            if let action {
                 // 자리가 모자라면 버튼 글자를 줄인다("전체 리뷰" → "전체") — 배지·번호는 줄이지 않는다(PRRowDensity).
                 ViewThatFits(in: .horizontal) {
                     slot(action, compact: false)
                     slot(action, compact: true)
                 }
+                .modifier(HoverReveal(hover: hover, forced: forced, showsOnHover: true))
             }
         }
     }
@@ -981,6 +993,26 @@ private struct RowTrailingSlot: View {
                 RowReviewButtons(pr: pr, compact: compact)
             }
         }
+    }
+}
+
+/// 마우스가 행 위에 있는지에 따라 감싼 것을 보이거나 감춘다. 투명도·누르기·접근성만 바꾸고 감싼 내용과 배치는 그대로 둔다 —
+/// 그래야 목록을 다시 재지 않는다(RowTrailingSlot 주석). 감출 때는 누르기도 막는다 — 안 보이는 버튼이 클릭·호버를 가져가면 안 된다.
+private struct HoverReveal: ViewModifier {
+    /// nil 이면 마우스와 무관하게 늘 보인다(버튼이 없는 행의 시각).
+    let hover: RowHover?
+    /// 이 행의 버튼을 늘 띄운다 — 확인 캡처용(PRAYER_DEBUG_ROW_REVIEW).
+    let forced: Bool
+    /// 참이면 마우스가 올라왔을 때 보이고(버튼), 거짓이면 그때 감춘다(시각).
+    let showsOnHover: Bool
+
+    func body(content: Content) -> some View {
+        let hovered = hover.map { forced || $0.isOn } ?? false
+        let visible = hovered == showsOnHover
+        content
+            .opacity(visible ? 1 : 0)
+            .allowsHitTesting(visible)
+            .accessibilityHidden(!visible)
     }
 }
 
