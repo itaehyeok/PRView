@@ -41,6 +41,9 @@ struct RowReviewButtons: View {
             }
         }
         .buttonStyle(RowReviewButtonStyle())
+        // 마우스를 올려야 보이는 버튼인데 안 보일 때도 행에 그려 둔다(RowTrailingSlot) — 키보드 탐색이 안 보이는 버튼에 머물지 않게
+        // 초점을 받지 않는다.
+        .focusable(false)
         // 무엇이 다른지·어느 모델로 도는지·어디에 남는지는 버튼에 다 못 적어 툴팁으로(리뷰 전 카드와 같은 말).
         .help("\(launch.cardPoints.first?.text ?? "") · \(model.reviewModelLabel(model.reviewModelChoice(for: pr))) · 초안만 이 맥에 만듭니다")
     }
@@ -69,6 +72,8 @@ struct RowCancelReviewButton: View {
             }
         }
         .buttonStyle(RowReviewButtonStyle(tint: .red))
+        // 안 보일 때도 행에 그려 두는 버튼이라 초점을 받지 않는다(RowReviewButtons 와 같다).
+        .focusable(false)
         .fixedSize()
         .help(isQueued ? "큐에서 뺍니다 — 아직 시작하지 않았습니다" : "도는 리뷰를 멈춥니다 — 이번 리뷰의 초안은 만들어지지 않습니다")
     }
