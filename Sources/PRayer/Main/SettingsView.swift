@@ -83,6 +83,9 @@ struct ConnectionSettings: View {
             // 데이터 폴더와 두 탭에 흩어져 있었다(2026-11-03 사용자 결정).
         }
         .formStyle(.grouped)
+        // 열 때 툴바 "상태" 팝오버와 같은 다시 확인을 돌린다. 지난 결과를 보이다가 툴바와 어긋나지 않게,
+        // 그리고 여기서 고친 결과가 툴바 아이콘에도 바로 걸리게(같은 값을 고친다).
+        .task { await model.recheckConnections() }
     }
 }
 

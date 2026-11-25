@@ -192,6 +192,8 @@ final class AppModel {
     var githubError: String?
     /// 연속 갱신 실패 횟수. 한 번 흔들린 것으로 빨간 토스트를 띄우지 않는다.
     var consecutiveRefreshFailures = 0
+    /// 엔진·GitHub·(실패 중이면) 목록을 다시 보는 중(`recheckConnections`). 상태 팝오버가 문제 카드에 돌림표를 단다.
+    var isRecheckingConnections = false
     var prs: [PullRequestInfo] = []
     /// 목록을 아직 이어 받는 중인가. 첫 페이지를 그린 뒤에도 뒤가 더 남아 있을 수 있다.
     /// 이때의 "필터로 N건 숨김" 은 최종 숫자가 아니므로 화면이 단정하지 않게 한다.

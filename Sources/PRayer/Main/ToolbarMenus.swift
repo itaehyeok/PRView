@@ -323,12 +323,14 @@ struct HoverHint: View {
 ///
 /// 정상이면 "모두 정상" 한 줄·연결 줄·5시간 토큰 막대·버전만 보인다. 문제 기록은 1건 이상일 때만,
 /// GitHub API 잔여는 적게 남았을 때만 보인다. 엔진 로그인이 풀렸거나 GitHub 이 끊겼거나 갱신이 계속 실패하면
-/// 맨 위가 주황 카드가 되고, 고칠 버튼(다시 로그인·연결 설정)을 그 문제 줄에 단다.
+/// 맨 위가 주황 카드가 되고, 고칠 버튼(다시 로그인·연결 설정·다시 시도)을 그 문제 줄에 단다.
 ///
+/// 열 때마다 엔진·GitHub·(갱신이 실패 중이면) 목록을 다시 본다(`recheckConnections`) — 상태가 이상해서 누른 사람에게
+/// 지난 결과를 보이지 않고 지금 결과를 보인다(2026-11-26 사용자 요청). 보는 동안 문제 카드에 돌림표가 돈다.
 /// 판정은 설정 › 연결과 같은 함수(`AppModel.connectionHealth`·`githubHealth`·`engineHealth`)로 낸다.
 ///
 /// 예전에 있다가 뺀 것: 앱 이름·설명(정보 창에 있다), 갱신 시각(목록 머리 줄에 있다), 로그 열기(설정 → 연결 탭에 있다),
-/// 연결 다시 확인(앱으로 돌아올 때 이미 돌고, 이 팝오버를 열 때도 돈다), 보고 복사(문제 기록 창에 있다).
+/// 연결 다시 확인 버튼(앱으로 돌아올 때 이미 돌고, 이 팝오버를 열 때도 돈다), 보고 복사(문제 기록 창에 있다).
 struct StatusToolbarMenu: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
@@ -367,6 +369,8 @@ struct StatusToolbarMenu: View {
             case login(ReviewEngineKind)
             case install(ReviewEngineKind)
             case settings
+            /// 엔진·GitHub·목록을 지금 다시 본다 — 갱신 실패처럼 사람이 고칠 게 없고 다시 받아 보면 되는 문제.
+            case retry
         }
 
         let id: String
@@ -393,10 +397,10 @@ struct StatusToolbarMenu: View {
                 result.append(Problem(id: "github", message: "GitHub 에 연결되어 있지 않습니다", fix: .settings))
             }
         } else if refreshFailing {
-            // 고칠 버튼은 달지 않는다 — 잠시 뒤 알아서 다시 받는다.
+            // 다음 폴링(2분)에 알아서 다시 받지만, 누른 사람은 지금 다시 받아 보고 싶다 — "다시 시도" 를 단다.
             result.append(Problem(id: "refresh",
                                   message: "갱신 실패 \(model.consecutiveRefreshFailures)회 연속 — \(model.githubError ?? "원인 불명")",
-                                  fix: nil))
+                                  fix: .retry))
         }
         return result
     }
@@ -483,8 +487,9 @@ struct StatusToolbarMenu: View {
                         .font(.caption)
                 }
             }
-            // 열 때마다 엔진 로그인을 다시 본다(`claude auth status` 한 번). 그래서 "연결 다시 확인" 버튼이 없다.
-            .task { await model.checkEngines() }
+            // 열 때마다 엔진 로그인·GitHub 계정을 다시 보고, 갱신이 실패 중이면 목록도 다시 받는다.
+            // 그래서 "연결 다시 확인" 버튼이 없다 — 상태가 이상해서 눌렀으면 여는 것이 곧 다시 확인이다.
+            .task { await model.recheckConnections() }
         }
         .help(statusHelp)
     }
@@ -500,6 +505,15 @@ struct StatusToolbarMenu: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
+                // 열자마자 다시 보는 중이다. 끝나면 카드가 걷히거나(정상) 새 결과로 바뀐다.
+                if model.isRecheckingConnections {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("다시 확인하는 중…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 ForEach(problems) { problem in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
@@ -532,6 +546,9 @@ struct StatusToolbarMenu: View {
             Button("설치하기") { model.openEngineInstall(engine) }
         case .settings:
             SettingsLink { Text("연결 설정…") }
+        case .retry:
+            Button("다시 시도") { Task { await model.recheckConnections() } }
+                .disabled(model.isRecheckingConnections)
         }
     }
 
