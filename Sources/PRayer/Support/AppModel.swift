@@ -2247,6 +2247,11 @@ final class AppModel {
                 Task { [store] in await store.save(list: cached) }
             }
             consecutiveRefreshFailures = 0
+            // 목록을 받았으면 GitHub 은 닿는다. 네트워크가 끊긴 동안 계정 확인이 실패해 "미연결"(빨강)로 남아 있으면
+            // 다시 확인한다 — 그대로 두면 목록은 도는데 툴바·설정은 계속 빨강이다.
+            if githubAccount == nil {
+                Task { await checkGitHub() }
+            }
             pruneKnownPRs()
             loadSinceApprovals()
             Log.info("PR 조회 \(prs.count)건 — \(result.summary) (전체 \(total.map(String.init) ?? "?"), rate 잔여 \(rateRemaining.map(String.init) ?? "?"))", "app")
