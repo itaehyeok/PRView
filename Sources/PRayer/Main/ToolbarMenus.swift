@@ -325,6 +325,8 @@ struct HoverHint: View {
 /// GitHub API 잔여는 적게 남았을 때만 보인다. 엔진 로그인이 풀렸거나 GitHub 이 끊겼거나 갱신이 계속 실패하면
 /// 맨 위가 주황 카드가 되고, 고칠 버튼(다시 로그인·연결 설정)을 그 문제 줄에 단다.
 ///
+/// 판정은 설정 › 연결과 같은 함수(`AppModel.connectionHealth`·`githubHealth`·`engineHealth`)로 낸다.
+///
 /// 예전에 있다가 뺀 것: 앱 이름·설명(정보 창에 있다), 갱신 시각(목록 머리 줄에 있다), 로그 열기(설정 → 연결 탭에 있다),
 /// 연결 다시 확인(앱으로 돌아올 때 이미 돌고, 이 팝오버를 열 때도 돈다), 보고 복사(문제 기록 창에 있다).
 struct StatusToolbarMenu: View {
@@ -347,35 +349,17 @@ struct StatusToolbarMenu: View {
     /// "Codex 로그인이 필요합니다" 카드가 떴다. 다른 엔진을 붙이는 곳은 설정 › 연결이다.
     private var shownEngines: [ReviewEngineKind] { model.settings.watchedEngines }
     private var githubOK: Bool { model.githubAccount != nil }
-    /// 켜고 아직 한 번도 확인하지 않았으면 계정도 오류도 없다.
-    private var githubChecked: Bool { githubOK || model.githubError != nil }
     private var refreshFailing: Bool { model.consecutiveRefreshFailures > 0 }
 
     private var iconLevel: ConnectionHealth {
         #if DEBUG
         if let forced = DebugLaunch.statusIcon { return forced }
         #endif
-        return ConnectionHealth.level(primary: primaryEngine,
-                                      watched: shownEngines,
-                                      status: { model.engineStatus($0) },
-                                      githubChecked: githubChecked,
-                                      githubConnected: githubOK,
-                                      refreshFailing: refreshFailing)
+        return model.connectionHealth
     }
 
-    /// 채운 심볼에 색을 칠하면 체크·느낌표 자리가 비쳐 보인다(.monochrome).
-    @ViewBuilder
     private var statusIcon: some View {
-        switch iconLevel {
-        case .checking:
-            Image(systemName: "circle.dashed").foregroundStyle(.secondary)
-        case .ok:
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-        case .warning:
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-        case .error:
-            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red)
-        }
+        Image(systemName: iconLevel.symbolName).foregroundStyle(iconLevel.tint)
     }
 
     private struct Problem: Identifiable {
@@ -405,7 +389,7 @@ struct StatusToolbarMenu: View {
         }
         if !githubOK {
             // 켜고 처음 확인하기 전에는 문제로 치지 않는다 — 아이콘도 그동안은 "확인 중" 이다.
-            if githubChecked {
+            if model.githubChecked {
                 result.append(Problem(id: "github", message: "GitHub 에 연결되어 있지 않습니다", fix: .settings))
             }
         } else if refreshFailing {
@@ -437,10 +421,10 @@ struct StatusToolbarMenu: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(shownEngines) { engine in
-                        let status = model.engineStatus(engine)
-                        statusRow(title: engine.displayName, color: engineColor(status), detail: engineDetail(status))
+                        statusRow(title: engine.displayName, color: engineColor(engine),
+                                  detail: engineDetail(model.engineStatus(engine)))
                     }
-                    statusRow(title: "GitHub", color: githubColor, detail: githubDetail)
+                    statusRow(title: "GitHub", color: model.githubHealth.tint, detail: githubDetail)
                 }
                 Divider()
                 tokenUsage
@@ -591,10 +575,9 @@ struct StatusToolbarMenu: View {
         return parts.joined(separator: " · ")
     }
 
-    /// 아직 확인하는 중이면 회색 — 빨강은 확인한 뒤 안 된 것에만 쓴다.
-    private func engineColor(_ status: EngineStatus?) -> Color {
-        guard let status else { return .secondary }
-        return status.isReady ? .green : .red
+    /// 설정 › 연결의 같은 엔진 칸과 같은 색 — 아직 확인하는 중이면 회색, 기본 엔진이 안 되면 빨강, 연결해 둔 다른 엔진이 끊기면 주황.
+    private func engineColor(_ engine: ReviewEngineKind) -> Color {
+        model.engineHealth(engine)?.tint ?? .secondary
     }
 
     private func engineDetail(_ status: EngineStatus?) -> String {
@@ -604,13 +587,8 @@ struct StatusToolbarMenu: View {
         return status.isInstalled ? "로그인 필요" : "설치 안 됨"
     }
 
-    private var githubColor: Color {
-        guard githubOK else { return .red }
-        return refreshFailing ? .orange : .green
-    }
-
     private var githubDetail: String {
-        guard let account = model.githubAccount else { return "미연결" }
+        guard let account = model.githubAccount else { return model.githubChecked ? "미연결" : "확인 중" }
         return refreshFailing ? "갱신 실패 \(model.consecutiveRefreshFailures)회" : account.login
     }
 
