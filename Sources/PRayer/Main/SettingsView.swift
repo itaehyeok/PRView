@@ -69,18 +69,7 @@ struct ConnectionSettings: View {
             Section("GitHub") {
                 // 엔진 섹션과 같은 모양이어야 두 번 읽지 않는다: 상태 → 고를 것 → 버튼.
                 LabeledContent("상태") {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.githubAccount == nil ? "확인 필요" : "사용 가능")
-                            .foregroundStyle(model.githubAccount == nil ? .orange : .green)
-                        if let account = model.githubAccount {
-                            Text("\(account.login) · \(model.settings.githubHost)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let error = model.githubError {
-                            Text(error).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
+                    GitHubStatusLine()
                 }
                 // 호스트가 하나뿐이면 위 상태 줄("아이디 · 호스트")과 같은 말이라 뺀다. 로그인이 안 돼 상태 줄에
                 // 호스트가 안 보일 때는 남긴다(2026-10-23 사용자 결정 — 아래 안내 문구도 같이 뺐다).
@@ -94,6 +83,47 @@ struct ConnectionSettings: View {
             // 데이터 폴더와 두 탭에 흩어져 있었다(2026-11-03 사용자 결정).
         }
         .formStyle(.grouped)
+        // 열 때 툴바 "상태" 팝오버와 같은 다시 확인을 돌린다. 지난 결과를 보이다가 툴바와 어긋나지 않게,
+        // 그리고 여기서 고친 결과가 툴바 아이콘에도 바로 걸리게(같은 값을 고친다).
+        .task { await model.recheckConnections() }
+    }
+}
+
+/// 설정 › 연결의 GitHub 상태 줄 — 엔진 줄(`EngineStatusLine`)과 같은 모양, 툴바 "상태" 와 같은 판정(`AppModel.githubHealth`).
+///
+/// 예전에는 계정만 보고 초록 "사용 가능" 을 그려서, 목록 갱신이 계속 실패해 툴바가 주황인데도 여기는 정상으로 보였다.
+private struct GitHubStatusLine: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let health = model.githubHealth
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: health.symbolName)
+                Text(headline(health))
+            }
+            .foregroundStyle(health.tint)
+            if let account = model.githubAccount {
+                Text("\(account.login) · \(model.settings.githubHost)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let error = model.githubError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func headline(_ health: ConnectionHealth) -> String {
+        switch health {
+        case .checking: return "확인 중"
+        case .ok: return "사용 가능"
+        case .warning: return "갱신 실패 \(model.consecutiveRefreshFailures)회"
+        case .error: return "연결 안 됨"
+        }
     }
 }
 

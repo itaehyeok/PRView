@@ -192,6 +192,8 @@ final class AppModel {
     var githubError: String?
     /// 연속 갱신 실패 횟수. 한 번 흔들린 것으로 빨간 토스트를 띄우지 않는다.
     var consecutiveRefreshFailures = 0
+    /// 엔진·GitHub·(실패 중이면) 목록을 다시 보는 중(`recheckConnections`). 상태 팝오버가 문제 카드에 돌림표를 단다.
+    var isRecheckingConnections = false
     var prs: [PullRequestInfo] = []
     /// 목록을 아직 이어 받는 중인가. 첫 페이지를 그린 뒤에도 뒤가 더 남아 있을 수 있다.
     /// 이때의 "필터로 N건 숨김" 은 최종 숫자가 아니므로 화면이 단정하지 않게 한다.
@@ -2247,6 +2249,11 @@ final class AppModel {
                 Task { [store] in await store.save(list: cached) }
             }
             consecutiveRefreshFailures = 0
+            // 목록을 받았으면 GitHub 은 닿는다. 네트워크가 끊긴 동안 계정 확인이 실패해 "미연결"(빨강)로 남아 있으면
+            // 다시 확인한다 — 그대로 두면 목록은 도는데 툴바·설정은 계속 빨강이다.
+            if githubAccount == nil {
+                Task { await checkGitHub() }
+            }
             pruneKnownPRs()
             loadSinceApprovals()
             Log.info("PR 조회 \(prs.count)건 — \(result.summary) (전체 \(total.map(String.init) ?? "?"), rate 잔여 \(rateRemaining.map(String.init) ?? "?"))", "app")

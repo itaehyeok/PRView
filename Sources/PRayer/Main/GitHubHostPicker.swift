@@ -61,7 +61,8 @@ struct GitHubLoginControls: View {
                 Button("다시 확인") {
                     isChecking = true
                     Task {
-                        await model.checkGitHub()
+                        // 계정만 보지 않고, 갱신이 실패 중이면 목록도 다시 받는다 — 그래야 툴바 주황(갱신 실패)도 같이 걷힌다.
+                        await model.recheckGitHub()
                         isChecking = false
                     }
                 }

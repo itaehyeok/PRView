@@ -6,18 +6,25 @@ import SwiftUI
 ///
 /// 둘 중 하나만 있어도 된다. 그래서 쓰지 않는 쪽이 "설치 안 됨" 이어도 빨갛게 그리지 않는다 —
 /// 다른 쪽이 준비돼 있으면 회색 "연결 안 됨" 이고, 둘 다 안 됐을 때만 경고색이다.
+///
+/// 설정 › 연결(`followsToolbar`)은 툴바 "상태" 와 같은 판정(`AppModel.engineHealth`)으로 그린다 — 기본 엔진이 안 되면
+/// 빨강, 연결해 둔 다른 엔진이 끊기면 주황, 지켜보지 않는 엔진은 회색. 온보딩은 아직 기본 엔진을 고르기 전이라 예전 규칙 그대로다.
 struct EngineStatusLine: View {
     @Environment(AppModel.self) private var model
     let engine: ReviewEngineKind
+    var followsToolbar = false
 
     var body: some View {
         let status = model.engineStatus(engine)
+        let health = followsToolbar ? model.engineHealth(engine) : nil
+        // 툴바를 따를 때 health 가 nil 이면 지켜보지 않는 엔진이 안 되는 것 — 툴바가 문제로 치지 않으니 회색.
+        let tint = followsToolbar ? (health?.tint ?? .secondary) : color(status)
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                Image(systemName: symbol(status))
-                    .foregroundStyle(color(status))
+                Image(systemName: health?.symbolName ?? symbol(status))
+                    .foregroundStyle(tint)
                 Text(headline(status))
-                    .foregroundStyle(color(status))
+                    .foregroundStyle(tint)
             }
             if let detail = detail(status) {
                 Text(detail)
@@ -146,7 +153,7 @@ struct EngineConnectionSection: View {
         let status = model.engineStatus(engine)
         Section {
             LabeledContent("상태") {
-                EngineStatusLine(engine: engine)
+                EngineStatusLine(engine: engine, followsToolbar: true)
             }
             // 경로는 글자로만 보이고 바꾸는 곳은 "경로 변경…" 하나다. 예전의 경로 입력칸은 그 버튼과 같은 일을 했고,
             // Return 을 쳐야 다시 확인해서 고치고 그냥 닫으면 확인을 건너뛰었다(2026-11-03 사용자 결정).
